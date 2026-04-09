@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+python-jose
+passlib
+opencv-python
+mediapipe
+scikit-learn
+sqlalchemy
