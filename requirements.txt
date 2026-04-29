@@ -1,9 +1,30 @@
+# --- Core Web Framework ---
 fastapi
 uvicorn
 pydantic
 python-jose
 passlib
+
+# --- Agentic Orchestration ---
+langgraph
+langchain
+langchain-openai
+langchain-core
+
+# --- Vector Database & AI ---
+chromadb
+openai
+python-dotenv
+scikit-learn
+
+# --- Vision & CLIP ---
+torch
+transformers
+pillow
 opencv-python
 mediapipe
-scikit-learn
+
+# --- Caching & Tools ---
+
+# --- Database ---
 sqlalchemy

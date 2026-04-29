@@ -10,9 +10,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Paths
-BASE_DIR = Path(__file__).parent
-CHROMA_DIR = BASE_DIR / "chromadb_store"
-ARCHIVE_DIR = BASE_DIR / "Data/Food-dataset/food/archive (7)/Indian Food Images/Indian Food Images"
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+CHROMA_DIR = ROOT_DIR / "chromadb_store"
+ARCHIVE_DIR = ROOT_DIR / "Data/Food-dataset/food/archive (7)/Indian Food Images/Indian Food Images"
 
 # Connect to DB
 chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))

@@ -11,9 +11,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Paths
-BASE_DIR = Path(__file__).parent
-CHROMA_DIR = BASE_DIR / "chromadb_store"
-SINGLE_IMAGES_DIR = BASE_DIR / "Data/Food-dataset/food/data/data"
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+CHROMA_DIR = ROOT_DIR / "chromadb_store"
+SINGLE_IMAGES_DIR = ROOT_DIR / "Data/Food-dataset/food/data/data"
 
 # Connect to DB
 chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))

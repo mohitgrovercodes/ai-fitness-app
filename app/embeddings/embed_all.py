@@ -41,12 +41,13 @@ if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY not found in .env file!")
 
 # ── Paths ─────────────────────────────────────────────────
-BASE_DIR        = Path(__file__).parent
-DATA_DIR        = BASE_DIR / "Data"
+# Root directory is 2 levels up from app/embeddings/
+ROOT_DIR        = Path(__file__).resolve().parent.parent.parent
+DATA_DIR        = ROOT_DIR / "Data"
 FOOD_JSON       = DATA_DIR / "final_master_food.json"
 EXERCISE_JSON   = DATA_DIR / "final_master_exercises.json"
 FOOD_IMG_DIR    = DATA_DIR / "Food-dataset" / "food" / "Dataset"
-CHROMA_DIR      = BASE_DIR / "chromadb_store"
+CHROMA_DIR      = ROOT_DIR / "chromadb_store"
 
 # ── Imports ───────────────────────────────────────────────
 import chromadb
