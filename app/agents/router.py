@@ -35,13 +35,14 @@ STRICT POLICIES:
         return {
             "is_safe": res.is_safe,
             "safety_reason": res.reason,
+            "safety_response": res.suggested_response,
             "next_node": "orchestrator" if res.is_safe else "safe_response_node"
         }
 
 class AgentRouter:
     """
     Step 6: PRODUCTION ROUTER
-    Supports complex intent mapping.
+    Supports complex intent mapping and parallel tasking.
     """
     def __init__(self):
         self.intent_map = {
@@ -53,15 +54,20 @@ class AgentRouter:
         }
 
     def route(self, state: AgentState) -> Dict[str, Any]:
-        intent = state.get("intent")
+        intents = state.get("intent", [])
         
-        # Parallel Tasking Loophole Fix:
-        # If the user asks about food AND exercise, we could return a list of nodes.
-        # For now, we fetch the primary specialist.
-        target_node = self.intent_map.get(intent, "domain_agent")
+        # Determine all target nodes for parallel execution
+        target_nodes = []
+        for intent in intents:
+            if intent in self.intent_map:
+                target_nodes.append(self.intent_map[intent])
         
-        print(f"🔀 [Router] Redirecting to: {target_node}")
+        # If no specific intent matched, default to domain agent
+        if not target_nodes:
+            target_nodes = ["domain_agent"]
+            
+        print(f"🔀 [Router] Parallel Nodes: {target_nodes}")
         
         return {
-            "next_node": target_node
+            "next_node": target_nodes
         }

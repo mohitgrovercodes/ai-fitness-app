@@ -15,11 +15,12 @@ class AgentState(TypedDict):
     user_context: UserContext
     
     # Orchestration State
-    intent: str
+    intent: List[str] # Changed to List for parallel tasks
     is_fitness_domain: bool
     next_node: Union[str, List[str]] # Supports parallel routing
     
     # Internal Specialist Data
-    specialist_results: Dict[str, Any]
+    specialist_results: Dict[str, Any] = {}
     is_safe: bool
     safety_reason: Optional[str]
+    safety_response: Optional[str] # Added for the polite rejection message

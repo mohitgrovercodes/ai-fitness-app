@@ -14,7 +14,13 @@ class UserContext(BaseModel):
 
 class IntentResponse(BaseModel):
     """Strict schema for Orchestrator output."""
-    intent: str = Field(description="The classified intent: workout, nutrition, progress, image, general, out_of_scope")
+    intents: List[str] = Field(description="List of classified intents: workout, nutrition, progress, image, general, out_of_scope")
     is_fitness_domain: bool = Field(description="Is this related to the fitness gym domain?")
     reasoning: str = Field(description="Short explanation of the classification")
     confidence: float = Field(ge=0, le=1)
+
+class SafetyResult(BaseModel):
+    """Schema for safety guardrail results."""
+    is_safe: bool
+    reason: str
+    suggested_response: str

@@ -32,17 +32,17 @@ Check if the query is in the fitness domain."""),
     async def run(self, state: AgentState) -> Dict[str, Any]:
         last_message = state['messages'][-1].content
         
-        # Invoke with structured output - No more parsing errors!
+        # Invoke with structured output
         chain = self.prompt | self.model
         res: IntentResponse = await chain.ainvoke({"input": last_message})
         
         # Logic for domain checking
         route = "agent_router" if res.is_fitness_domain else "out_of_scope_handler"
         
-        print(f"✅ [Orchestrator] Intent: {res.intent} | Domain: {res.is_fitness_domain}")
+        print(f"✅ [Orchestrator] Intents: {res.intents} | Domain: {res.is_fitness_domain}")
         
         return {
-            "intent": res.intent,
+            "intent": res.intents,
             "is_fitness_domain": res.is_fitness_domain,
             "next_node": route
         }
