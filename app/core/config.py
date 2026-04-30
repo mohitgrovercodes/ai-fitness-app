@@ -11,10 +11,13 @@ class Settings(BaseSettings):
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-super-secret-key-for-production")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    
+
     # OpenAI Config
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    
+
+    # Tavily Web Search
+    TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
+
     # Cultural & Safety Restrictions
     RESTRICTED_FOODS: List[str] = ["beef"]
     

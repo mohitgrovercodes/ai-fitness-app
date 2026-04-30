@@ -1,9 +1,15 @@
-from typing import Annotated, Sequence, TypedDict, List, Dict, Any, Union
+from typing import Annotated, Sequence, TypedDict, List, Dict, Any, Union, Optional
 from langchain_core.messages import BaseMessage
 from app.schema.orchestration import UserContext
 
 def merge_messages(left: list, right: list) -> list:
     return left + right
+
+def merge_dicts(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
+    """Reducer to safely merge dictionaries from parallel agents."""
+    merged = left.copy()
+    merged.update(right)
+    return merged
 
 class AgentState(TypedDict):
     """
@@ -19,8 +25,10 @@ class AgentState(TypedDict):
     is_fitness_domain: bool
     next_node: Union[str, List[str]] # Supports parallel routing
     
-    # Internal Specialist Data
-    specialist_results: Dict[str, Any] = {}
+    # Internal Specialist Data - safely handles parallel updates
+    specialist_results: Annotated[Dict[str, Any], merge_dicts]
+    
+    # Safety
     is_safe: bool
     safety_reason: Optional[str]
     safety_response: Optional[str] # Added for the polite rejection message

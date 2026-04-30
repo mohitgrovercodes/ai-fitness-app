@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 from app.core.state import AgentState
 from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 class SafetyResult(BaseModel):
