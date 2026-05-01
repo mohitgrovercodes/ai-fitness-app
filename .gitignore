@@ -218,3 +218,7 @@ data/
 
 chromadb_store/
 chromadb_store
+
+
+.DS_Store/
+.DS_Store

@@ -4,23 +4,36 @@ from app.core.state import AgentState
 from app.agents.orchestrator import Orchestrator
 from app.agents.router import AgentRouter, SafetyGuardrail
 from app.agents.nutrition_agent import NutritionAgent
+from app.agents.training_agent import TrainingAgent
 from langchain_core.messages import AIMessage
+
+from app.agents.memory_agent import MemoryManager
 
 # Initialize Nodes
 orchestrator = Orchestrator()
 router = AgentRouter()
 nutrition_agent = NutritionAgent()
+training_agent = TrainingAgent()
 safety_guardrail = SafetyGuardrail()
+memory_manager = MemoryManager()
 
 async def synthesis_node(state: AgentState):
     """
     Step 8: SYNTHESIS LAYER
     Merges outputs from all active agents into a unified response.
     """
-    nutrition_out = state.get("specialist_results", {}).get("nutrition", {}).get("answer", "")
+    results = state.get("specialist_results", {})
+    nutrition_out = results.get("nutrition", {}).get("answer", "")
+    training_out = results.get("training", {}).get("answer", "")
     
-    # In a full system, we merge outputs from multiple agents here
-    final_response = nutrition_out if nutrition_out else "I've analyzed your request but couldn't find a specific answer in my database."
+    # Merge outputs from multiple agents if both were triggered
+    responses = []
+    if nutrition_out:
+        responses.append(nutrition_out)
+    if training_out:
+        responses.append(training_out)
+        
+    final_response = "\n\n---\n\n".join(responses) if responses else "I've analyzed your request but couldn't find a specific answer in my database."
     
     print("✨ [Synthesis] Finalizing response.")
     return {
@@ -45,21 +58,17 @@ async def safe_response_node(state: AgentState):
     }
 
 # --- Placeholder Nodes ---
-async def dummy_training_agent(state: AgentState):
-    print("🚧 [Training Agent] Placeholder reached.")
-    return {"specialist_results": {"training": {"answer": "Training Agent is under construction."}}, "next_node": "synthesis_layer"}
-
 async def dummy_vision_agent(state: AgentState):
     print("🚧 [Vision Agent] Placeholder reached.")
-    return {"specialist_results": {"vision": {"answer": "Vision Agent is under construction."}}, "next_node": "synthesis_layer"}
+    return {"specialist_results": {"vision": {"answer": "Vision Agent is under construction."}}}
 
 async def dummy_progress_agent(state: AgentState):
     print("🚧 [Progress Agent] Placeholder reached.")
-    return {"specialist_results": {"progress": {"answer": "Progress Agent is under construction."}}, "next_node": "synthesis_layer"}
+    return {"specialist_results": {"progress": {"answer": "Progress Agent is under construction."}}}
 
 async def dummy_domain_agent(state: AgentState):
     print("🚧 [Domain Agent] Placeholder reached.")
-    return {"specialist_results": {"domain": {"answer": "Domain Agent is under construction."}}, "next_node": "synthesis_layer"}
+    return {"specialist_results": {"domain": {"answer": "Domain Agent is under construction."}}}
 
 def build_graph():
     workflow = StateGraph(AgentState)
@@ -71,10 +80,11 @@ def build_graph():
     workflow.add_node("agent_router", router.route)
     workflow.add_node("nutrition_agent", nutrition_agent.run)
     workflow.add_node("synthesis_layer", synthesis_node)
+    workflow.add_node("memory_manager", memory_manager.run)
     workflow.add_node("out_of_scope_handler", out_of_scope_handler)
     
     # Placeholders
-    workflow.add_node("training_agent", dummy_training_agent)
+    workflow.add_node("training_agent", training_agent.run)
     workflow.add_node("vision_agent", dummy_vision_agent)
     workflow.add_node("progress_agent", dummy_progress_agent)
     workflow.add_node("domain_agent", dummy_domain_agent)
@@ -131,9 +141,10 @@ def build_graph():
     workflow.add_edge("progress_agent", "synthesis_layer")
     workflow.add_edge("domain_agent", "synthesis_layer")
     
-    workflow.add_edge("synthesis_layer", END)
-    workflow.add_edge("out_of_scope_handler", END)
-    workflow.add_edge("safe_response_node", END)
+    workflow.add_edge("synthesis_layer", "memory_manager")
+    workflow.add_edge("out_of_scope_handler", "memory_manager")
+    workflow.add_edge("safe_response_node", "memory_manager")
+    workflow.add_edge("memory_manager", END)
 
     # Compile with MemorySaver
     memory = MemorySaver()

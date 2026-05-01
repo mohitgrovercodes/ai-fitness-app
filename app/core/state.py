@@ -2,8 +2,13 @@ from typing import Annotated, Sequence, TypedDict, List, Dict, Any, Union, Optio
 from langchain_core.messages import BaseMessage
 from app.schema.orchestration import UserContext
 
-def merge_messages(left: list, right: list) -> list:
-    return left + right
+def merge_messages(left: list, right: Any) -> list:
+    """Reducer that appends messages by default, but allows full list replacement for memory pruning."""
+    if isinstance(right, dict) and right.get("type") == "replace":
+        return right.get("messages", [])
+    if isinstance(right, list):
+        return left + right
+    return left + [right]
 
 def merge_dicts(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
     """Reducer to safely merge dictionaries from parallel agents."""
@@ -16,6 +21,8 @@ class AgentState(TypedDict):
     Production-grade state management.
     """
     messages: Annotated[Sequence[BaseMessage], merge_messages]
+    conversation_summary: str  # Stores the rolling summary of past messages
+
     
     # Validated User Context
     user_context: UserContext

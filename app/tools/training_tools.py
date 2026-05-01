@@ -5,10 +5,11 @@ from openai import AsyncOpenAI
 from typing import List, Dict, Any
 from app.core.config import settings
 
-class NutritionRAGTool:
+class TrainingRAGTool:
     """
-    Step 7.2: ADAPTIVE RAG TOOL for Nutrition.
-    Queries the 39,358 food items in ChromaDB safely.
+    Step 7.3: TRAINING RAG TOOL.
+    Queries the 2,800+ exercise items in ChromaDB safely.
+    Maintains strict structural compatibility with NutritionRAGTool.
     """
     def __init__(self):
         # Root directory logic to find the DB
@@ -18,13 +19,13 @@ class NutritionRAGTool:
         # Connect to ChromaDB with Error Handling
         try:
             self.client = chromadb.PersistentClient(path=str(self.chroma_dir))
-            self.collection = self.client.get_collection("food_text")
+            self.collection = self.client.get_collection("exercise_text")
             self.is_connected = True
         except Exception as e:
-            print(f"❌ [Nutrition Tool] Database Connection Error: {e}")
+            print(f"❌ [Training Tool] Database Connection Error: {e}")
             self.is_connected = False
             
-        # 1. FIX: Use AsyncOpenAI to prevent blocking the event loop
+        # Async OpenAI for non-blocking API calls
         self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     async def get_embedding(self, text: str) -> List[float]:
@@ -36,20 +37,18 @@ class NutritionRAGTool:
             )
             return res.data[0].embedding
         except Exception as e:
-            print(f"❌ [Nutrition Tool] Embedding Error: {e}")
+            print(f"❌ [Training Tool] Embedding Error: {e}")
             return []
 
-    # 2. FIX: Added multiplier for safe, code-based math calculation
-    async def search(self, query: str, n_results: int = 5, multiplier: float = 1.0) -> List[Dict[str, Any]]:
+    async def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
         """
-        ADAPTIVE RAG: Phase 1 — Single Semantic Search.
+        Single Semantic Search for exercises.
         """
         if not self.is_connected:
             return []
             
-        print(f"🔍 [Nutrition Tool] Searching DB for: '{query}'")
+        print(f"🏋️ [Training Tool] Searching DB for: '{query}'")
         try:
-            # FIX: Await the async embedding call
             query_vector = await self.get_embedding(query)
             if not query_vector:
                 return []
@@ -58,20 +57,19 @@ class NutritionRAGTool:
                 query_embeddings=[query_vector],
                 n_results=n_results
             )
-            return self._process_results(results, multiplier)
+            return self._process_results(results)
         except Exception as e:
-            print(f"❌ [Nutrition Tool] Search Error: {e}")
+            print(f"❌ [Training Tool] Search Error: {e}")
             return []
 
-    async def multi_query_search(self, query: str, sub_queries: List[str], multiplier: float = 1.0) -> List[Dict[str, Any]]:
+    async def multi_query_search(self, query: str, sub_queries: List[str]) -> List[Dict[str, Any]]:
         """
-        ADAPTIVE RAG: Phase 2 — Multi-Query Expansion.
-        Runs multiple semantic searches and merges results for complex queries.
+        Multi-Query Expansion for complex workout requests (e.g., full body routine).
         """
         if not self.is_connected:
             return []
             
-        print(f"🔍 [Nutrition Tool] Multi-Query Search with {len(sub_queries)} variations...")
+        print(f"🏋️ [Training Tool] Multi-Query Search with {len(sub_queries)} variations...")
         all_results = {}
 
         try:
@@ -80,18 +78,18 @@ class NutritionRAGTool:
                 if not q_vec:
                     continue
                 results = self.collection.query(query_embeddings=[q_vec], n_results=3)
-                for item in self._process_results(results, multiplier):
-                    # Deduplicate by food ID
+                for item in self._process_results(results):
+                    # Deduplicate by exercise ID
                     all_results[item['id']] = item
 
             print(f"  → Merged {len(all_results)} unique results from multi-query")
             return list(all_results.values())
         except Exception as e:
-            print(f"❌ [Nutrition Tool] Multi-Query Search Error: {e}")
+            print(f"❌ [Training Tool] Multi-Query Search Error: {e}")
             return []
 
-    def _process_results(self, results, multiplier: float = 1.0) -> List[Dict[str, Any]]:
-        """Process, filter ChromaDB results, and apply math multipliers safely."""
+    def _process_results(self, results) -> List[Dict[str, Any]]:
+        """Process and structure ChromaDB results for the LLM."""
         cleaned = []
         if not results or 'ids' not in results or not results['ids']:
             return cleaned
@@ -99,27 +97,15 @@ class NutritionRAGTool:
         for i in range(len(results['ids'][0])):
             meta = results['metadatas'][0][i]
             dist = results['distances'][0][i]
-            food_name = meta.get('food_name', '').lower()
-
-            # Policy Check: Restrict flagged foods
-            if any(r in food_name for r in settings.RESTRICTED_FOODS):
-                print(f"  ⚠️ Policy Alert: Skipping restricted item '{food_name}'")
-                continue
-
-            # 2. FIX: Safe math calculation outside the LLM
-            def safe_calc(val):
-                try:
-                    return round(float(val) * multiplier, 2)
-                except (ValueError, TypeError):
-                    return "N/A"
 
             cleaned.append({
                 "id": results['ids'][0][i],
-                "food_name": meta.get('food_name'),
-                "calories": safe_calc(meta.get('calories_kcal')),
-                "protein": safe_calc(meta.get('protein_g')),
-                "fat": safe_calc(meta.get('fat_g')),
-                "carbs": safe_calc(meta.get('carbohydrates_g')),
+                "name": meta.get('name', 'Unknown Exercise'),
+                "main_muscle": meta.get('main_muscle', 'N/A'),
+                "equipment": meta.get('equipment', 'Bodyweight'),
+                "preparation": meta.get('preparation', ''),
+                "execution": meta.get('execution', ''),
+                "target_muscles": meta.get('target_muscles', 'N/A'),
                 "score": round(1 - dist, 3)
             })
         return cleaned
