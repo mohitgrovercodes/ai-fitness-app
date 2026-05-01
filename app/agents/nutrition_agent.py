@@ -129,8 +129,7 @@ USER GOAL: {goal}"""),
                     "answer": analysis.final_answer,
                     "status": "success" if analysis.is_accurate else "expert_knowledge"
                 }
-            },
-            "next_node": "synthesis_layer"
+            }
         }
 
     def _format_context(self, results: List[Dict]) -> str:
