@@ -1,0 +1,117 @@
+from typing import Dict, Any, List, Optional, Type
+from pydantic import BaseModel
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from app.core.state import AgentState
+from app.utils.logger import logger
+
+from app.core.config import settings
+
+class BaseRAGAgent:
+    """
+    Base class for Specialist Agents using Adaptive RAG / CRAG.
+    Deduplicates the Phase 1 (DB), Phase 2 (Multi-Query), and Phase 3 (Web) logic.
+    """
+    def __init__(
+        self, 
+        agent_name: str,
+        rag_tool: Any, 
+        web_search_tool: Any, 
+        output_schema: Type[BaseModel],
+        system_prompt: str,
+        model_name: str = "gpt-4o-mini",
+        temperature: float = 0.3
+    ):
+        self.agent_name = agent_name
+        self.rag_tool = rag_tool
+        self.web_search = web_search_tool
+        self.llm = ChatOpenAI(
+            model=model_name, 
+            temperature=temperature, 
+            api_key=settings.OPENAI_API_KEY
+        ).with_structured_output(output_schema)
+        self.prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("human", "CONVERSATION SUMMARY (for context):\n{summary}\n\nQUESTION: {query}\n\nRETRIEVED DATA:\n{context}")
+        ])
+
+    async def run_logic(self, state: AgentState, specialist_key: str, topic: str = "general") -> Dict[str, Any]:
+        """Core Adaptive RAG logic shared across specialists."""
+        query = state['messages'][-1].content
+        user_context = state.get('user_context', {})
+        summary = state.get('conversation_summary', "No previous context.")
+        
+        # Extract common variables for the prompt
+        goal = user_context.get("goal", "General Fitness") if isinstance(user_context, dict) else "General Fitness"
+        injuries = ", ".join(user_context.get("injuries", [])) if isinstance(user_context, dict) and user_context.get("injuries") else "None"
+
+        chain = self.prompt | self.llm
+
+        # ── PHASE 1: Local ChromaDB Search ───────────────────
+        db_results = await self.rag_tool.search(query)
+        context_str = self._format_context(db_results)
+
+        analysis = await chain.ainvoke({
+            "query": query,
+            "context": context_str or "No specific data retrieved from local database.",
+            "goal": goal,
+            "injuries": injuries,
+            "summary": summary
+        })
+
+        logger.info(f"[{self.agent_name}] Accurate: {analysis.is_accurate} | Web needed: {analysis.needs_web_search}")
+
+        # ── PHASE 2: Multi-Query Expansion ───────────
+        if not analysis.is_accurate and hasattr(analysis, 'sub_queries') and analysis.sub_queries:
+            logger.info(f"  🔄 [{self.agent_name}] Expanding search with sub-queries...")
+            
+            # Use quantity multiplier if the analysis found one (e.g. for nutrition)
+            multiplier = getattr(analysis, 'quantity_multiplier', 1.0)
+            db_results = await self.rag_tool.multi_query_search(query, analysis.sub_queries, multiplier=multiplier)
+            context_str = self._format_context(db_results)
+
+            analysis = await chain.ainvoke({
+                "query": query,
+                "context": context_str or "Expanded search returned no additional data.",
+                "goal": goal,
+                "injuries": injuries,
+                "summary": summary
+            })
+
+        # ── PHASE 3: Web Fallback ─────────────────────────
+        if not analysis.is_accurate and analysis.needs_web_search:
+            if self.web_search.is_available:
+                logger.info(f"  🌐 [{self.agent_name}] Triggering Web Search fallback...")
+                web_data = await self.web_search.search(query, topic=topic)
+                web_context = web_data.get("summary", "") or \
+                              "\n".join([r['content'] for r in web_data.get("results", [])[:3]])
+
+                analysis = await chain.ainvoke({
+                    "query": query,
+                    "context": f"[Live Web Data]:\n{web_context}",
+                    "goal": goal,
+                    "injuries": injuries,
+                    "summary": summary
+                })
+            else:
+                logger.warning(f"  ⚠️ [{self.agent_name}] Web search unavailable. Falling back to expert knowledge.")
+                analysis = await chain.ainvoke({
+                    "query": query,
+                    "context": "No database or web data available. Use your expert knowledge safely.",
+                    "goal": goal,
+                    "injuries": injuries,
+                    "summary": summary
+                })
+
+        return {
+            "specialist_results": {
+                specialist_key: {
+                    "answer": analysis.final_answer,
+                    "status": "success" if analysis.is_accurate else "expert_knowledge"
+                }
+            }
+        }
+
+    def _format_context(self, results: List[Dict]) -> str:
+        """To be implemented by subclasses if they need custom formatting."""
+        raise NotImplementedError("Subclasses must implement _format_context")

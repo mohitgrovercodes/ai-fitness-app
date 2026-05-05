@@ -3,6 +3,7 @@ from app.core.state import AgentState
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
+from app.utils.logger import logger
 
 class SafetyResult(BaseModel):
     is_safe: bool
@@ -15,7 +16,12 @@ class SafetyGuardrail:
     Ensures no harmful or illegal medical advice is processed.
     """
     def __init__(self):
-        self.model = ChatOpenAI(model="gpt-4o-mini", temperature=0).with_structured_output(SafetyResult)
+        from app.core.config import settings
+        self.model = ChatOpenAI(
+            model="gpt-4o-mini", 
+            temperature=0, 
+            api_key=settings.OPENAI_API_KEY
+        ).with_structured_output(SafetyResult)
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """You are the Fit Bot Safety Officer. Assess if the user input or the proposed response is safe.
             
@@ -31,7 +37,7 @@ STRICT POLICIES:
         chain = self.prompt | self.model
         res = await chain.ainvoke({"input": last_message})
         
-        print(f"🛡️ [Safety] Safe: {res.is_safe} | Reason: {res.reason}")
+        logger.info(f"🛡️ [Safety] Safe: {res.is_safe} | Reason: {res.reason}")
         
         return {
             "is_safe": res.is_safe,
@@ -57,17 +63,11 @@ class AgentRouter:
     def route(self, state: AgentState) -> Dict[str, Any]:
         intents = state.get("intent", [])
         
-        # Determine all target nodes for parallel execution
-        target_nodes = []
-        for intent in intents:
-            if intent in self.intent_map:
-                target_nodes.append(self.intent_map[intent])
-        
-        # If no specific intent matched, default to domain agent
-        if not target_nodes:
-            target_nodes = ["domain_agent"]
+        # We now use a single specialists_node to manage parallel execution internally
+        # this avoids the LangGraph parallel join issue.
+        target_nodes = ["specialists_node"]
             
-        print(f"🔀 [Router] Parallel Nodes: {target_nodes}")
+        logger.info(f"🔀 [Router] Routing to: {target_nodes}")
         
         return {
             "next_node": target_nodes

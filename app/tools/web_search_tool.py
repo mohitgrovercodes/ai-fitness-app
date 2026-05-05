@@ -1,5 +1,7 @@
+import asyncio
 from typing import List, Dict, Any, Optional
 from app.core.config import settings
+from app.utils.logger import logger
 
 
 class WebSearchTool:
@@ -19,11 +21,11 @@ class WebSearchTool:
                 from tavily import TavilyClient
                 self._client = TavilyClient(api_key=settings.TAVILY_API_KEY)
                 self._available = True
-                print("✅ [WebSearchTool] Tavily client initialized.")
+                logger.info("✅ [WebSearchTool] Tavily client initialized.")
             except Exception as e:
-                print(f"⚠️ [WebSearchTool] Tavily init failed: {e}")
+                logger.error(f"⚠️ [WebSearchTool] Tavily init failed: {e}")
         else:
-            print("⚠️ [WebSearchTool] No TAVILY_API_KEY found. Web search disabled.")
+            logger.warning("⚠️ [WebSearchTool] No TAVILY_API_KEY found. Web search disabled.")
 
     @property
     def is_available(self) -> bool:
@@ -37,14 +39,7 @@ class WebSearchTool:
     ) -> Dict[str, Any]:
         """
         Performs a fitness-scoped web search and returns structured results.
-        
-        Args:
-            query: The user's search query.
-            topic: Domain scope for the query ('nutrition' or 'fitness').
-            max_results: Max number of web results to fetch.
-            
-        Returns:
-            Dict with 'results' list and 'summary' string.
+        Unblocked using asyncio.to_thread for the synchronous Tavily client.
         """
         if not self._available:
             return {
@@ -55,35 +50,35 @@ class WebSearchTool:
 
         # Scope the query to the fitness/nutrition domain
         scoped_query = f"{query} {topic} nutritional information health"
-        print(f"🌐 [WebSearchTool] Searching web for: '{scoped_query}'")
+        logger.info(f"🌐 [WebSearchTool] Searching web for: '{scoped_query}'")
 
         try:
-            response = self._client.search(
+            # Unblock the event loop for the synchronous Tavily API call
+            response = await asyncio.to_thread(
+                self._client.search,
                 query=scoped_query,
                 search_depth="advanced",
                 max_results=max_results,
-                include_answer=True  # Tavily provides a direct answer summary
+                include_answer=True
             )
 
             # Extract structured results
             results = []
             for r in response.get("results", []):
                 content = r.get("content", "")
-                # Apply policy filter: skip beef-related content
+                # Apply policy filter: skip restricted content
                 if any(food in content.lower() for food in settings.RESTRICTED_FOODS):
-                    print(f"  ⚠️ Policy: Skipping web result containing restricted food")
+                    logger.warning(f"  ⚠️ Policy: Skipping web result containing restricted food")
                     continue
                 results.append({
                     "title": r.get("title", ""),
                     "url": r.get("url", ""),
-                    "content": content[:500],  # Truncate for context window efficiency
+                    "content": content[:500],
                     "score": r.get("score", 0)
                 })
 
-            # Tavily's direct answer (highest quality summary)
             direct_answer = response.get("answer", "")
-
-            print(f"  → Found {len(results)} web results. Direct answer: {'Yes' if direct_answer else 'No'}")
+            logger.info(f"  → Found {len(results)} web results. Direct answer: {'Yes' if direct_answer else 'No'}")
 
             return {
                 "results": results,
@@ -92,7 +87,7 @@ class WebSearchTool:
             }
 
         except Exception as e:
-            print(f"  ❌ [WebSearchTool] Search failed: {e}")
+            logger.error(f"  ❌ [WebSearchTool] Search failed: {e}")
             return {
                 "results": [],
                 "summary": f"Web search encountered an error: {str(e)}",

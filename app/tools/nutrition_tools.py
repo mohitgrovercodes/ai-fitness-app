@@ -1,9 +1,11 @@
 import os
 import chromadb
+import asyncio
 from pathlib import Path
 from openai import AsyncOpenAI
 from typing import List, Dict, Any
 from app.core.config import settings
+from app.utils.logger import logger
 
 class NutritionRAGTool:
     """
@@ -20,11 +22,11 @@ class NutritionRAGTool:
             self.client = chromadb.PersistentClient(path=str(self.chroma_dir))
             self.collection = self.client.get_collection("food_text")
             self.is_connected = True
+            logger.info("✅ [Nutrition Tool] Connected to ChromaDB.")
         except Exception as e:
-            print(f"❌ [Nutrition Tool] Database Connection Error: {e}")
+            logger.error(f"❌ [Nutrition Tool] Database Connection Error: {e}")
             self.is_connected = False
             
-        # 1. FIX: Use AsyncOpenAI to prevent blocking the event loop
         self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     async def get_embedding(self, text: str) -> List[float]:
@@ -36,58 +38,67 @@ class NutritionRAGTool:
             )
             return res.data[0].embedding
         except Exception as e:
-            print(f"❌ [Nutrition Tool] Embedding Error: {e}")
+            logger.error(f"❌ [Nutrition Tool] Embedding Error: {e}")
             return []
 
-    # 2. FIX: Added multiplier for safe, code-based math calculation
     async def search(self, query: str, n_results: int = 5, multiplier: float = 1.0) -> List[Dict[str, Any]]:
         """
         ADAPTIVE RAG: Phase 1 — Single Semantic Search.
+        Unblocked using asyncio.to_thread for ChromaDB's sync query method.
         """
         if not self.is_connected:
             return []
             
-        print(f"🔍 [Nutrition Tool] Searching DB for: '{query}'")
+        logger.info(f"🔍 [Nutrition Tool] Searching DB for: '{query}'")
         try:
-            # FIX: Await the async embedding call
             query_vector = await self.get_embedding(query)
             if not query_vector:
                 return []
                 
-            results = self.collection.query(
+            # Unblock the event loop for the synchronous ChromaDB call
+            results = await asyncio.to_thread(
+                self.collection.query,
                 query_embeddings=[query_vector],
                 n_results=n_results
             )
             return self._process_results(results, multiplier)
         except Exception as e:
-            print(f"❌ [Nutrition Tool] Search Error: {e}")
+            logger.error(f"❌ [Nutrition Tool] Search Error: {e}")
             return []
 
     async def multi_query_search(self, query: str, sub_queries: List[str], multiplier: float = 1.0) -> List[Dict[str, Any]]:
         """
         ADAPTIVE RAG: Phase 2 — Multi-Query Expansion.
-        Runs multiple semantic searches and merges results for complex queries.
         """
         if not self.is_connected:
             return []
             
-        print(f"🔍 [Nutrition Tool] Multi-Query Search with {len(sub_queries)} variations...")
+        logger.info(f"🔍 [Nutrition Tool] Multi-Query Search with {len(sub_queries)} variations...")
         all_results = {}
 
         try:
-            for sub_query in sub_queries:
-                q_vec = await self.get_embedding(sub_query)
-                if not q_vec:
-                    continue
-                results = self.collection.query(query_embeddings=[q_vec], n_results=3)
+            tasks_embeddings = [self.get_embedding(sq) for sq in sub_queries]
+            vectors = await asyncio.gather(*tasks_embeddings)
+
+            # Parallelize ChromaDB queries
+            db_tasks = []
+            for v in vectors:
+                if v:
+                    db_tasks.append(asyncio.to_thread(self.collection.query, query_embeddings=[v], n_results=3))
+            
+            if not db_tasks:
+                return []
+                
+            db_results_list = await asyncio.gather(*db_tasks)
+
+            for results in db_results_list:
                 for item in self._process_results(results, multiplier):
-                    # Deduplicate by food ID
                     all_results[item['id']] = item
 
-            print(f"  → Merged {len(all_results)} unique results from multi-query")
+            logger.info(f"  → Merged {len(all_results)} unique results from parallel multi-query")
             return list(all_results.values())
         except Exception as e:
-            print(f"❌ [Nutrition Tool] Multi-Query Search Error: {e}")
+            logger.error(f"❌ [Nutrition Tool] Multi-Query Search Error: {e}")
             return []
 
     def _process_results(self, results, multiplier: float = 1.0) -> List[Dict[str, Any]]:
@@ -101,12 +112,10 @@ class NutritionRAGTool:
             dist = results['distances'][0][i]
             food_name = meta.get('food_name', '').lower()
 
-            # Policy Check: Restrict flagged foods
             if any(r in food_name for r in settings.RESTRICTED_FOODS):
-                print(f"  ⚠️ Policy Alert: Skipping restricted item '{food_name}'")
+                logger.warning(f"  ⚠️ Policy Alert: Skipping restricted item '{food_name}'")
                 continue
 
-            # 2. FIX: Safe math calculation outside the LLM
             def safe_calc(val):
                 try:
                     return round(float(val) * multiplier, 2)

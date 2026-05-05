@@ -2,6 +2,7 @@
 fastapi
 uvicorn
 pydantic
+pydantic-settings
 python-jose
 passlib
 
@@ -16,6 +17,7 @@ chromadb
 openai
 python-dotenv
 scikit-learn
+tavily-python
 
 # --- Vision & CLIP ---
 torch
@@ -23,6 +25,7 @@ transformers
 pillow
 opencv-python
 mediapipe
+numpy
 
 # --- Caching & Tools ---
 

@@ -1,4 +1,4 @@
-from app.modules.auth.auth.service import AuthService
+from app.modules.auth.service import AuthService
 from app.common.response import success, error
 
 def register_user(payload):

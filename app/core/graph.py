@@ -1,3 +1,4 @@
+import asyncio
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from app.core.state import AgentState
@@ -6,6 +7,7 @@ from app.agents.router import AgentRouter, SafetyGuardrail
 from app.agents.nutrition_agent import NutritionAgent
 from app.agents.training_agent import TrainingAgent
 from langchain_core.messages import AIMessage
+from app.utils.logger import logger
 
 from app.agents.memory_agent import MemoryManager
 
@@ -17,6 +19,44 @@ training_agent = TrainingAgent()
 safety_guardrail = SafetyGuardrail()
 memory_manager = MemoryManager()
 
+async def specialists_node(state: AgentState):
+    """
+    NEW: Specialists Coordinator
+    Runs active agents in parallel using asyncio.gather.
+    This ensures a single join point for the synthesis layer.
+    """
+    intents = state.get("intent", [])
+    tasks = []
+    
+    # Map intents to agent run methods
+    intent_map = {
+        "nutrition": nutrition_agent.run,
+        "workout": training_agent.run,
+        "image": dummy_vision_agent,
+        "progress": dummy_progress_agent,
+        "general": dummy_domain_agent
+    }
+    
+    # Collect tasks for all detected intents
+    for intent in intents:
+        if intent in intent_map:
+            tasks.append(intent_map[intent](state))
+            
+    # Default to domain agent if no specific intent found
+    if not tasks:
+        tasks.append(dummy_domain_agent(state))
+        
+    logger.info(f"🧬 [Specialists] Running {len(tasks)} agents in parallel...")
+    results = await asyncio.gather(*tasks)
+    
+    # Merge all specialist results into a single update
+    merged_results = {}
+    for r in results:
+        if "specialist_results" in r:
+            merged_results.update(r["specialist_results"])
+            
+    return {"specialist_results": merged_results}
+
 async def synthesis_node(state: AgentState):
     """
     Step 8: SYNTHESIS LAYER
@@ -25,17 +65,20 @@ async def synthesis_node(state: AgentState):
     results = state.get("specialist_results", {})
     nutrition_out = results.get("nutrition", {}).get("answer", "")
     training_out = results.get("training", {}).get("answer", "")
+    vision_out = results.get("vision", {}).get("answer", "")
+    progress_out = results.get("progress", {}).get("answer", "")
+    domain_out = results.get("domain", {}).get("answer", "")
     
-    # Merge outputs from multiple agents if both were triggered
     responses = []
-    if nutrition_out:
-        responses.append(nutrition_out)
-    if training_out:
-        responses.append(training_out)
+    if nutrition_out: responses.append(nutrition_out)
+    if training_out: responses.append(training_out)
+    if vision_out: responses.append(vision_out)
+    if progress_out: responses.append(progress_out)
+    if domain_out: responses.append(domain_out)
         
     final_response = "\n\n---\n\n".join(responses) if responses else "I've analyzed your request but couldn't find a specific answer in my database."
     
-    print("✨ [Synthesis] Finalizing response.")
+    logger.info("✨ [Synthesis] Finalizing response.")
     return {
         "messages": [AIMessage(content=final_response)],
         "next_node": END
@@ -59,15 +102,15 @@ async def safe_response_node(state: AgentState):
 
 # --- Placeholder Nodes ---
 async def dummy_vision_agent(state: AgentState):
-    print("🚧 [Vision Agent] Placeholder reached.")
+    logger.info("🚧 [Vision Agent] Placeholder reached.")
     return {"specialist_results": {"vision": {"answer": "Vision Agent is under construction."}}}
 
 async def dummy_progress_agent(state: AgentState):
-    print("🚧 [Progress Agent] Placeholder reached.")
+    logger.info("🚧 [Progress Agent] Placeholder reached.")
     return {"specialist_results": {"progress": {"answer": "Progress Agent is under construction."}}}
 
 async def dummy_domain_agent(state: AgentState):
-    print("🚧 [Domain Agent] Placeholder reached.")
+    logger.info("🚧 [Domain Agent] Placeholder reached.")
     return {"specialist_results": {"domain": {"answer": "Domain Agent is under construction."}}}
 
 def build_graph():
@@ -78,17 +121,11 @@ def build_graph():
     workflow.add_node("safe_response_node", safe_response_node)
     workflow.add_node("orchestrator", orchestrator.run)
     workflow.add_node("agent_router", router.route)
-    workflow.add_node("nutrition_agent", nutrition_agent.run)
+    workflow.add_node("specialists_node", specialists_node)
     workflow.add_node("synthesis_layer", synthesis_node)
     workflow.add_node("memory_manager", memory_manager.run)
     workflow.add_node("out_of_scope_handler", out_of_scope_handler)
     
-    # Placeholders
-    workflow.add_node("training_agent", training_agent.run)
-    workflow.add_node("vision_agent", dummy_vision_agent)
-    workflow.add_node("progress_agent", dummy_progress_agent)
-    workflow.add_node("domain_agent", dummy_domain_agent)
-
     # 2. Set Entry Point
     workflow.set_entry_point("safety_guardrail")
 
@@ -118,29 +155,19 @@ def build_graph():
     )
     
     def route_after_router(state: AgentState):
-        # Router returns a list of nodes for parallel tasks
         return state["next_node"]
 
     workflow.add_conditional_edges(
         "agent_router",
         route_after_router,
         {
-            "nutrition_agent": "nutrition_agent",
-            "training_agent": "training_agent",
-            "vision_agent": "vision_agent",
-            "progress_agent": "progress_agent",
-            "domain_agent": "domain_agent",
+            "specialists_node": "specialists_node",
             "end": END
         }
     )
 
     # Specialists move to Synthesis
-    workflow.add_edge("nutrition_agent", "synthesis_layer")
-    workflow.add_edge("training_agent", "synthesis_layer")
-    workflow.add_edge("vision_agent", "synthesis_layer")
-    workflow.add_edge("progress_agent", "synthesis_layer")
-    workflow.add_edge("domain_agent", "synthesis_layer")
-    
+    workflow.add_edge("specialists_node", "synthesis_layer")
     workflow.add_edge("synthesis_layer", "memory_manager")
     workflow.add_edge("out_of_scope_handler", "memory_manager")
     workflow.add_edge("safe_response_node", "memory_manager")

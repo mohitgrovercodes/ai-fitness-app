@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from app.modules.auth.auth.routes import router as auth_router
-from app.modules.ai.ai.routes import router as ai_router
+from app.modules.auth.routes import router as auth_router
+from app.modules.ai.routes import router as ai_router
 
 app = FastAPI(title="AI Fitness App")
 

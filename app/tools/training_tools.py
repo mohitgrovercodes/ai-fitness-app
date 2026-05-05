@@ -1,9 +1,11 @@
 import os
 import chromadb
+import asyncio
 from pathlib import Path
 from openai import AsyncOpenAI
 from typing import List, Dict, Any
 from app.core.config import settings
+from app.utils.logger import logger
 
 class TrainingRAGTool:
     """
@@ -21,8 +23,9 @@ class TrainingRAGTool:
             self.client = chromadb.PersistentClient(path=str(self.chroma_dir))
             self.collection = self.client.get_collection("exercise_text")
             self.is_connected = True
+            logger.info("✅ [Training Tool] Connected to ChromaDB.")
         except Exception as e:
-            print(f"❌ [Training Tool] Database Connection Error: {e}")
+            logger.error(f"❌ [Training Tool] Database Connection Error: {e}")
             self.is_connected = False
             
         # Async OpenAI for non-blocking API calls
@@ -37,55 +40,66 @@ class TrainingRAGTool:
             )
             return res.data[0].embedding
         except Exception as e:
-            print(f"❌ [Training Tool] Embedding Error: {e}")
+            logger.error(f"❌ [Training Tool] Embedding Error: {e}")
             return []
 
-    async def search(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+    async def search(self, query: str, n_results: int = 5, multiplier: float = 1.0) -> List[Dict[str, Any]]:
         """
         Single Semantic Search for exercises.
+        Unblocked using asyncio.to_thread.
         """
         if not self.is_connected:
             return []
             
-        print(f"🏋️ [Training Tool] Searching DB for: '{query}'")
+        logger.info(f"🏋️ [Training Tool] Searching DB for: '{query}'")
         try:
             query_vector = await self.get_embedding(query)
             if not query_vector:
                 return []
                 
-            results = self.collection.query(
+            results = await asyncio.to_thread(
+                self.collection.query,
                 query_embeddings=[query_vector],
                 n_results=n_results
             )
             return self._process_results(results)
         except Exception as e:
-            print(f"❌ [Training Tool] Search Error: {e}")
+            logger.error(f"❌ [Training Tool] Search Error: {e}")
             return []
 
-    async def multi_query_search(self, query: str, sub_queries: List[str]) -> List[Dict[str, Any]]:
+    async def multi_query_search(self, query: str, sub_queries: List[str], multiplier: float = 1.0) -> List[Dict[str, Any]]:
         """
-        Multi-Query Expansion for complex workout requests (e.g., full body routine).
+        Multi-Query Expansion for complex workout requests.
         """
         if not self.is_connected:
             return []
             
-        print(f"🏋️ [Training Tool] Multi-Query Search with {len(sub_queries)} variations...")
+        logger.info(f"🏋️ [Training Tool] Multi-Query Search with {len(sub_queries)} variations...")
         all_results = {}
 
         try:
-            for sub_query in sub_queries:
-                q_vec = await self.get_embedding(sub_query)
-                if not q_vec:
-                    continue
-                results = self.collection.query(query_embeddings=[q_vec], n_results=3)
+            tasks_embeddings = [self.get_embedding(sq) for sq in sub_queries]
+            vectors = await asyncio.gather(*tasks_embeddings)
+
+            # Parallelize ChromaDB queries
+            db_tasks = []
+            for v in vectors:
+                if v:
+                    db_tasks.append(asyncio.to_thread(self.collection.query, query_embeddings=[v], n_results=3))
+            
+            if not db_tasks:
+                return []
+                
+            db_results_list = await asyncio.gather(*db_tasks)
+
+            for results in db_results_list:
                 for item in self._process_results(results):
-                    # Deduplicate by exercise ID
                     all_results[item['id']] = item
 
-            print(f"  → Merged {len(all_results)} unique results from multi-query")
+            logger.info(f"  → Merged {len(all_results)} unique results from parallel multi-query")
             return list(all_results.values())
         except Exception as e:
-            print(f"❌ [Training Tool] Multi-Query Search Error: {e}")
+            logger.error(f"❌ [Training Tool] Multi-Query Search Error: {e}")
             return []
 
     def _process_results(self, results) -> List[Dict[str, Any]]:

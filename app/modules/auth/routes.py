@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
-from app.modules.auth.auth.controller import register_user, login_user
-from app.modules.auth.auth.schema import RegisterSchema, LoginSchema
+from app.modules.auth.controller import register_user, login_user
+from app.modules.auth.schema import RegisterSchema, LoginSchema
 
 router = APIRouter()
 

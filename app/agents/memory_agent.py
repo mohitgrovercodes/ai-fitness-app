@@ -2,6 +2,7 @@ from typing import Dict, Any
 from app.core.state import AgentState
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
+from app.utils.logger import logger
 
 class MemoryManager:
     """
@@ -9,9 +10,14 @@ class MemoryManager:
     Summarizes older messages and truncates the history to prevent token limit errors.
     """
     def __init__(self, max_messages: int = 15, keep_recent: int = 5):
+        from app.core.config import settings
         self.max_messages = max_messages
         self.keep_recent = keep_recent
-        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        self.llm = ChatOpenAI(
+            model="gpt-4o-mini", 
+            temperature=0, 
+            api_key=settings.OPENAI_API_KEY
+        )
         
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """You are managing the conversation memory for an AI Fitness Coach.
@@ -31,7 +37,7 @@ EXISTING SUMMARY: {existing_summary}"""),
         if len(messages) <= self.max_messages:
             return {}
             
-        print(f"🧠 [Memory] Trimming conversation history (Current length: {len(messages)} messages).")
+        logger.info(f"🧠 [Memory] Trimming conversation history (Current length: {len(messages)} messages).")
         
         # We summarize everything EXCEPT the most recent N messages
         messages_to_summarize = messages[:-self.keep_recent]
@@ -48,7 +54,7 @@ EXISTING SUMMARY: {existing_summary}"""),
         })
         
         new_summary = res.content
-        print("🧠 [Memory] Summarization complete.")
+        logger.info("🧠 [Memory] Summarization complete.")
         
         return {
             "conversation_summary": new_summary,
