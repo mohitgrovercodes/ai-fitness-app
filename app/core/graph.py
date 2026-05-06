@@ -6,6 +6,7 @@ from app.agents.orchestrator import Orchestrator
 from app.agents.router import AgentRouter, SafetyGuardrail
 from app.agents.nutrition_agent import NutritionAgent
 from app.agents.training_agent import TrainingAgent
+from app.agents.vision_agent import VisionAgent
 from langchain_core.messages import AIMessage
 from app.utils.logger import logger
 
@@ -16,6 +17,7 @@ orchestrator = Orchestrator()
 router = AgentRouter()
 nutrition_agent = NutritionAgent()
 training_agent = TrainingAgent()
+vision_agent = VisionAgent()
 safety_guardrail = SafetyGuardrail()
 memory_manager = MemoryManager()
 
@@ -32,7 +34,7 @@ async def specialists_node(state: AgentState):
     intent_map = {
         "nutrition": nutrition_agent.run,
         "workout": training_agent.run,
-        "image": dummy_vision_agent,
+        "image": vision_agent.run,
         "progress": dummy_progress_agent,
         "general": dummy_domain_agent
     }

@@ -48,12 +48,21 @@ async def interactive_test():
             print(training_results.get('answer'))
             
             gifs = training_results.get('exercise_gifs', {})
-            if gifs:
-                print("\n📽️ ATTACHED GIFS:")
-                for name, path in gifs.items():
-                    print(f"  • {name}: {path}")
+            images = training_results.get('exercise_images', {})
+            
+            if gifs or images:
+                print("\n📽️ ATTACHED MEDIA:")
+                # Combine keys from both dicts
+                all_exercises = set(gifs.keys()) | set(images.keys())
+                for name in all_exercises:
+                    gif_path = gifs.get(name)
+                    img_path = images.get(name)
+                    media_str = f"GIF: {gif_path}" if gif_path else ""
+                    if img_path:
+                        media_str += f" | Image: {img_path}" if media_str else f"Image: {img_path}"
+                    print(f"  • {name}: {media_str}")
             else:
-                print("\nℹ️ No GIFs found for these exercises.")
+                print("\nℹ️ No media found for these exercises.")
             print("-"*30 + "\n")
             
         except Exception as e:

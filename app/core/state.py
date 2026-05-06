@@ -22,7 +22,7 @@ class AgentState(TypedDict):
     """
     messages: Annotated[Sequence[BaseMessage], merge_messages]
     conversation_summary: str  # Stores the rolling summary of past messages
-
+    image_bytes: Optional[bytes]
     
     # Validated User Context
     user_context: UserContext
