@@ -1,0 +1,2 @@
+2026-05-06 13:42:54 | INFO     | fit_bot | ✅ [ChromaDB Singleton] Shared PersistentClient initialized.
+2026-05-06 13:42:54 | INFO     | fit_bot | ✅ [Media Matcher] Loaded 1316 GIFs and 1316 Images.

@@ -4,22 +4,13 @@ from langgraph.checkpoint.memory import MemorySaver
 from app.core.state import AgentState
 from app.agents.orchestrator import Orchestrator
 from app.agents.router import AgentRouter, SafetyGuardrail
-from app.agents.nutrition_agent import NutritionAgent
-from app.agents.training_agent import TrainingAgent
-from app.agents.vision_agent import VisionAgent
+# Specialist imports moved inside nodes to prevent binary extension conflicts
 from langchain_core.messages import AIMessage
 from app.utils.logger import logger
 
 from app.agents.memory_agent import MemoryManager
 
-# Initialize Nodes
-orchestrator = Orchestrator()
-router = AgentRouter()
-nutrition_agent = NutritionAgent()
-training_agent = TrainingAgent()
-vision_agent = VisionAgent()
-safety_guardrail = SafetyGuardrail()
-memory_manager = MemoryManager()
+# Node functions will initialize agents lazily
 
 async def specialists_node(state: AgentState):
     """
@@ -30,13 +21,18 @@ async def specialists_node(state: AgentState):
     intents = state.get("intent", [])
     tasks = []
     
-    # Map intents to agent run methods
+    from app.agents.nutrition_agent import NutritionAgent
+    from app.agents.training_agent import TrainingAgent
+    from app.agents.vision_agent import VisionAgent
+    from app.agents.domain_agent import DomainAgent
+
+    # Map intents to agent run methods (Lazy Init)
     intent_map = {
-        "nutrition": nutrition_agent.run,
-        "workout": training_agent.run,
-        "image": vision_agent.run,
-        "progress": dummy_progress_agent,
-        "general": dummy_domain_agent
+        "nutrition": NutritionAgent().run,
+        "workout": TrainingAgent().run,
+        "image": VisionAgent().run,
+        "general": DomainAgent().run,
+        "progress": dummy_progress_agent
     }
     
     # Collect tasks for all detected intents
@@ -48,8 +44,11 @@ async def specialists_node(state: AgentState):
     if not tasks:
         tasks.append(dummy_domain_agent(state))
         
-    logger.info(f"🧬 [Specialists] Running {len(tasks)} agents in parallel...")
-    results = await asyncio.gather(*tasks)
+    # Re-enforce Sequential execution to prevent Segfaults with ChromaDB
+    logger.info(f"🧬 [Specialists] Running {len(tasks)} agents sequentially for stability...")
+    results = []
+    for task in tasks:
+        results.append(await task)
     
     # Merge all specialist results into a single update
     merged_results = {}
@@ -61,29 +60,51 @@ async def specialists_node(state: AgentState):
 
 async def synthesis_node(state: AgentState):
     """
-    Step 8: SYNTHESIS LAYER
-    Merges outputs from all active agents into a unified response.
+    Step 8: INTELLIGENT SYNTHESIS LAYER
+    Weaves multiple specialist responses into a single, cohesive coaching message.
     """
+    from langchain_openai import ChatOpenAI
+    from app.core.config import settings
+    
     results = state.get("specialist_results", {})
-    nutrition_out = results.get("nutrition", {}).get("answer", "")
-    training_out = results.get("training", {}).get("answer", "")
-    vision_out = results.get("vision", {}).get("answer", "")
-    progress_out = results.get("progress", {}).get("answer", "")
-    domain_out = results.get("domain", {}).get("answer", "")
+    if not results:
+        return {"messages": [AIMessage(content="I've analyzed your request but couldn't find a specific answer.")]}
+
+    # Format agent outputs for the Master Coach
+    agent_outputs = []
+    for agent_name, data in results.items():
+        ans = data.get("answer") or data # Handle different return types
+        if ans:
+            agent_outputs.append(f"[{agent_name.upper()}]: {ans}")
+
+    if not agent_outputs:
+         return {"messages": [AIMessage(content="I've analyzed your request but couldn't find a specific answer.")]}
+
+    context_str = "\n\n".join(agent_outputs)
     
-    responses = []
-    if nutrition_out: responses.append(nutrition_out)
-    if training_out: responses.append(training_out)
-    if vision_out: responses.append(vision_out)
-    if progress_out: responses.append(progress_out)
-    if domain_out: responses.append(domain_out)
-        
-    final_response = "\n\n---\n\n".join(responses) if responses else "I've analyzed your request but couldn't find a specific answer in my database."
+    # Master Coach LLM
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=settings.OPENAI_API_KEY)
     
-    logger.info("✨ [Synthesis] Finalizing response.")
+    prompt = f"""You are the Lead Fitness Coach at 'Agentic AI Gym'.
+Your task is to take the specialized advice from your team (provided below) and weave it into a single, fluent, and encouraging response for the user.
+
+RULES:
+- Do NOT just list the points. Integrate them.
+- If both workout and nutrition advice are provided, explain how they complement each other.
+- Maintain a warm, expert, and highly professional tone.
+- Ensure the most important information is clear and actionable.
+- Format the final response using clean Markdown.
+
+SPECIALIST ADVICE:
+{context_str}
+
+FINAL COHESIVE RESPONSE:"""
+
+    logger.info("✨ [Synthesis] Weaving specialist responses into a master plan.")
+    res = await llm.ainvoke(prompt)
+    
     return {
-        "messages": [AIMessage(content=final_response)],
-        "next_node": END
+        "messages": [AIMessage(content=res.content)]
     }
 
 async def out_of_scope_handler(state: AgentState):
@@ -118,14 +139,19 @@ async def dummy_domain_agent(state: AgentState):
 def build_graph():
     workflow = StateGraph(AgentState)
 
-    # 1. Add Nodes
-    workflow.add_node("safety_guardrail", safety_guardrail.check)
+    # 1. Add Nodes (Lazy Initialization)
+    async def _safety(state): return await SafetyGuardrail().check(state)
+    async def _orch(state): return await Orchestrator().run(state)
+    async def _router(state): return AgentRouter().route(state)
+    async def _memory(state): return await MemoryManager().run(state)
+
+    workflow.add_node("safety_guardrail", _safety)
     workflow.add_node("safe_response_node", safe_response_node)
-    workflow.add_node("orchestrator", orchestrator.run)
-    workflow.add_node("agent_router", router.route)
+    workflow.add_node("orchestrator", _orch)
+    workflow.add_node("agent_router", _router)
     workflow.add_node("specialists_node", specialists_node)
     workflow.add_node("synthesis_layer", synthesis_node)
-    workflow.add_node("memory_manager", memory_manager.run)
+    workflow.add_node("memory_manager", _memory)
     workflow.add_node("out_of_scope_handler", out_of_scope_handler)
     
     # 2. Set Entry Point
@@ -175,9 +201,8 @@ def build_graph():
     workflow.add_edge("safe_response_node", "memory_manager")
     workflow.add_edge("memory_manager", END)
 
-    # Compile with MemorySaver
-    memory = MemorySaver()
-    return workflow.compile(checkpointer=memory)
+    # Compile WITHOUT MemorySaver for stability testing
+    return workflow.compile()
 
 # Example Usage:
 # graph = build_graph()

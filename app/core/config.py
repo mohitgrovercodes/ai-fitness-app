@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # Tavily Web Search
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
 
+    # Redis Persistence
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
     # Cultural & Safety Restrictions
     RESTRICTED_FOODS: List[str] = ["beef"]
     

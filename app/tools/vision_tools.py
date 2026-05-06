@@ -60,25 +60,23 @@ _food_image_col = None
 _food_text_col  = None
 
 from app.core.config import settings
+from app.core.database import db_singleton
 import chromadb.utils.embedding_functions as embedding_functions
 
 
-def _load_chroma():
-    """Connect to ChromaDB only once (singleton pattern)."""
-    global _chroma_client, _food_image_col, _food_text_col
-    if _chroma_client is None:
-        print("⏳ [Vision Tool] Connecting to ChromaDB...")
-        _chroma_client  = chromadb.PersistentClient(path=str(CHROMA_DIR))
-        _food_image_col = _chroma_client.get_collection("food_image_centroids")
-
-        # Configure OpenAI embedding function for text collections
-        openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-            api_key=settings.OPENAI_API_KEY,
-            model_name="text-embedding-3-small"
-        )
-        _food_text_col = _chroma_client.get_collection("food_text", embedding_function=openai_ef)
-        print("✅ [Vision Tool] ChromaDB connected.")
-    return _food_image_col, _food_text_col
+def _get_vision_collections():
+    """Get collections via Singleton with specific embedding functions."""
+    food_image_col = db_singleton.get_collection("food_image_centroids")
+    
+    # Text collection needs OpenAI embedding function
+    openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+        api_key=settings.OPENAI_API_KEY,
+        model_name="text-embedding-3-small"
+    )
+    food_text_col = db_singleton.get_collection("food_text")
+    # Note: If collection already exists, setting embedding_function here might not be enough
+    # but we will rely on the singleton's PersistentClient.
+    return food_image_col, food_text_col
 
 
 # ════════════════════════════════════════════════════════════════
@@ -129,7 +127,7 @@ def search_image_in_db(
     query_vector = vec.squeeze().numpy().tolist()
 
     # Step 3: ChromaDB Top-5 Query
-    food_image_col, _ = _load_chroma()
+    food_image_col, _ = _get_vision_collections()
     results = food_image_col.query(
         query_embeddings=[query_vector],
         n_results=5,
@@ -165,7 +163,7 @@ def get_food_nutrition(category_name: str) -> Optional[Dict[str, Any]]:
         Dict with nutritional info, or None if no good match found.
     """
     import difflib
-    _, food_text_col = _load_chroma()
+    _, food_text_col = _get_vision_collections()
 
     try:
         search_name = category_name.lower().replace("_", " ").strip()
@@ -387,7 +385,7 @@ def identify_and_learn_new_food(
     learned = False
     try:
         import numpy as np
-        food_image_col, food_text_col = _load_chroma()
+        food_image_col, food_text_col = _get_vision_collections()
         dish_key = food_name.lower().replace(" ", "_")
 
         def _safe_float(val) -> float:

@@ -119,11 +119,18 @@ class BaseRAGAgent:
             if field not in standard_fields and val:
                 specialist_output[field] = val
 
+        # Run optional validation hook for subclasses
+        specialist_output = self._validate_output(specialist_output, context_str)
+
         return {
             "specialist_results": {
                 specialist_key: specialist_output
             }
         }
+
+    def _validate_output(self, output: Dict[str, Any], context: str) -> Dict[str, Any]:
+        """Optional hook for subclasses to validate LLM output (e.g. check media hallucinations)."""
+        return output
 
     def _format_context(self, results: List[Dict]) -> str:
         """To be implemented by subclasses if they need custom formatting."""

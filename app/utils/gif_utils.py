@@ -22,7 +22,7 @@ class MediaMatcher:
             "metaburn", "holman", "rusin", "30 arms", "30 shoulders", 
             "dumbbell fix", "fyr", "boss everline", "hm", "un", "fyr2"
         ]
-        self._load_mappings()
+        # Deferred load on first use in get_media()
 
     def _normalize(self, name: str) -> str:
         if not name:
@@ -66,26 +66,24 @@ class MediaMatcher:
     def get_media(self, exercise_name: str) -> Dict[str, Optional[str]]:
         """
         Returns a dict with 'gif' and 'image' paths if found.
-        Uses exact match first, then whole-word substring match.
         """
+        # LAZY LOAD on first call
+        if not self.gifs and not self.images:
+            self._load_mappings()
+
         norm_name = self._normalize(exercise_name)
         result = {"gif": None, "image": None}
-
-        # 1. Try Exact Matches
+        # ... (rest of method remains same but uses self._load_mappings checks)
         result["gif"] = self.gifs.get(norm_name)
         result["image"] = self.images.get(norm_name)
 
-        # 2. Substring fallback if still missing
         if not result["gif"] or not result["image"]:
-            # Check GIFs
             if not result["gif"]:
                 sorted_gif_keys = sorted(self.gifs.keys(), key=len, reverse=True)
                 for key in sorted_gif_keys:
                     if re.search(rf"\b{re.escape(key)}\b", norm_name):
                         result["gif"] = self.gifs[key]
                         break
-            
-            # Check Images
             if not result["image"]:
                 sorted_img_keys = sorted(self.images.keys(), key=len, reverse=True)
                 for key in sorted_img_keys:

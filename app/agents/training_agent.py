@@ -69,3 +69,21 @@ Injuries/Medical: {injuries}"""
             media_str = "\n  ".join(media_info) if media_info else "No media available"
             lines.append(f"• {name} (Muscle: {muscle}, Equipment: {equip})\n  {media_str}\n  Prep: {prep}\n  Execution: {exe}")
         return "\n\n".join(lines)
+    
+    def _validate_output(self, output: Dict[str, Any], context: str) -> Dict[str, Any]:
+        """
+        Ensures that media paths returned by the LLM were actually present in the context.
+        Prevents hallucination of GIF/Image paths.
+        """
+        for field in ["exercise_gifs", "exercise_images"]:
+            if field in output and isinstance(output[field], dict):
+                validated_media = {}
+                for name, path in output[field].items():
+                    # Only keep the path if it actually appears in the retrieved context string
+                    if path in context:
+                        validated_media[name] = path
+                    else:
+                        logger.warning(f"⚠️ [Training Agent] Hallucination Blocked: '{path}' was not in context.")
+                
+                output[field] = validated_media
+        return output

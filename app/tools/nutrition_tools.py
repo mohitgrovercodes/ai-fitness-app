@@ -1,9 +1,8 @@
-import os
-import chromadb
 import asyncio
 from pathlib import Path
 from openai import AsyncOpenAI
 from typing import List, Dict, Any
+from app.core.database import db_manager
 from app.core.config import settings
 from app.utils.logger import logger
 
@@ -13,19 +12,12 @@ class NutritionRAGTool:
     Queries the 39,358 food items in ChromaDB safely.
     """
     def __init__(self):
-        # Root directory logic to find the DB
-        self.root_dir = Path(__file__).resolve().parent.parent.parent
-        self.chroma_dir = self.root_dir / "chromadb_store"
-        
-        # Connect to ChromaDB with Error Handling
-        try:
-            self.client = chromadb.PersistentClient(path=str(self.chroma_dir))
-            self.collection = self.client.get_collection("food_text")
-            self.is_connected = True
-            logger.info("✅ [Nutrition Tool] Connected to ChromaDB.")
-        except Exception as e:
-            logger.error(f"❌ [Nutrition Tool] Database Connection Error: {e}")
-            self.is_connected = False
+        # Manager is a Singleton
+        self.is_connected = db_manager._client is not None
+        if self.is_connected:
+            logger.info("✅ [Nutrition Tool] Connected to shared ChromaDB via Manager.")
+        else:
+            logger.error("❌ [Nutrition Tool] Could not connect to ChromaDB.")
             
         self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
@@ -55,9 +47,9 @@ class NutritionRAGTool:
             if not query_vector:
                 return []
                 
-            # Unblock the event loop for the synchronous ChromaDB call
-            results = await asyncio.to_thread(
-                self.collection.query,
+            # Use the Manager's single-threaded query runner
+            results = await db_manager.run_query(
+                collection_name="food_text",
                 query_embeddings=[query_vector],
                 n_results=n_results
             )
@@ -110,10 +102,9 @@ class NutritionRAGTool:
         for i in range(len(results['ids'][0])):
             meta = results['metadatas'][0][i]
             dist = results['distances'][0][i]
-            food_name = meta.get('food_name', '').lower()
+            food_name = meta.get('food_name', '')
 
-            if any(r in food_name for r in settings.RESTRICTED_FOODS):
-                logger.warning(f"  ⚠️ Policy Alert: Skipping restricted item '{food_name}'")
+            if not self._is_safe(food_name):
                 continue
 
             def safe_calc(val):
@@ -132,3 +123,16 @@ class NutritionRAGTool:
                 "score": round(1 - dist, 3)
             })
         return cleaned
+
+    def _is_safe(self, text: str) -> bool:
+        """
+        Regex-based safety check to prevent false positives.
+        Ensures 'Beefsteak tomato' is allowed while 'Beef' is blocked.
+        """
+        import re
+        text_clean = text.lower()
+        for food in settings.RESTRICTED_FOODS:
+            if re.search(rf"\b{re.escape(food)}\b", text_clean):
+                logger.warning(f"🛡️ [Nutrition Tool] Restricted food detected: '{food}' in '{text}'")
+                return False
+        return True

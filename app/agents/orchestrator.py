@@ -25,11 +25,11 @@ Your task is to classify user intent based on the current message and the conver
 CONTEXT SUMMARY: {summary}
 
 CATEGORIES:
-- 'workout': Training, exercises, routines.
-- 'nutrition': Food, calories, meal plans.
-- 'progress': Logging metrics, history.
-- 'image': User provided an image.
-- 'general': Fitness knowledge.
+- 'workout': Exercise routines, form, or gym equipment.
+- 'nutrition': Diet, calories, macros, or specific foods.
+- 'image': Analyzing an uploaded photo of food or exercise.
+- 'general': Scientific questions about anatomy, physiology, BMR, or exercise theory.
+- 'progress': Tracking weight, strength gains, or history.
 - 'out_of_scope': Non-fitness topics.
 
 If the user says "tell me more" or "how many calories in that?", use the SUMMARY to determine the intent."""),
@@ -50,10 +50,15 @@ If the user says "tell me more" or "how many calories in that?", use the SUMMARY
         # Logic for domain checking
         route = "agent_router" if res.is_fitness_domain else "out_of_scope_handler"
         
-        logger.info(f"✅ [Orchestrator] Intents: {res.intents} | Domain: {res.is_fitness_domain}")
-        
+        # Cross-Agent Intelligence: If a workout is requested, automatically suggest nutrition
+        # unless it's already there.
+        final_intents = res.intents
+        # if "workout" in final_intents and "nutrition" not in final_intents:
+        #     logger.info("🧠 [Cross-Agent Intelligence] Adding 'nutrition' intent to support 'workout' request.")
+        #     final_intents.append("nutrition")
+
         return {
-            "intent": res.intents,
+            "intent": final_intents,
             "is_fitness_domain": res.is_fitness_domain,
             "next_node": route
         }

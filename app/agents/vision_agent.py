@@ -96,7 +96,12 @@ class VisionAgent:
         # STAGE 1 — CLIP Visual Search (Top-5)
         # ══════════════════════════════════════════════════════
         try:
-            top_matches, clip_vector = search_image_in_db(image_bytes, return_vector=True)
+            from app.core.database import db_singleton
+            import asyncio
+            async with db_singleton.lock:
+                top_matches, clip_vector = await asyncio.to_thread(
+                    search_image_in_db, image_bytes, return_vector=True
+                )
         except Exception as e:
             print(f"[Vision Agent] CLIP search failed: {e}")
             meta["decision_tier"] = "Error — CLIP Failed"
@@ -126,8 +131,10 @@ class VisionAgent:
         if top_score < NON_FOOD_THRESHOLD:
             print(f"[Vision Agent] Low CLIP score ({top_score:.4f}). VLM double-check...")
             meta["gpt_vision_used"] = True
-            meta["decision_tier"]   = f"Tier 3 — Low CLIP Score ({top_score:.4f}) → VLM Verify"
-            result = identify_and_learn_new_food(image_bytes, clip_vector=None, clip_hints=clip_hints)
+            async with db_singleton.lock:
+                result = await asyncio.to_thread(
+                    identify_and_learn_new_food, image_bytes, clip_vector=None, clip_hints=clip_hints
+                )
             if not result["is_food"]:
                 print(f"[Vision Agent] GUARDRAIL B (Tier 3): non-food: '{result['object']}'")
                 meta["decision_tier"] = f"Guardrail B — Not Food ({result['object']})"
@@ -164,9 +171,10 @@ class VisionAgent:
             meta["gpt_vision_used"] = True
             meta["decision_tier"]   = f"Tier 2 — {reason} (CLIP: {top_score:.4f}) → VLM Fallback"
 
-            result = identify_and_learn_new_food(
-                image_bytes, clip_vector=clip_vector, clip_hints=clip_hints
-            )
+            async with db_singleton.lock:
+                result = await asyncio.to_thread(
+                    identify_and_learn_new_food, image_bytes, clip_vector=clip_vector, clip_hints=clip_hints
+                )
 
             # GUARDRAIL B — VLM says NOT FOOD
             if not result["is_food"]:
@@ -193,7 +201,8 @@ class VisionAgent:
         print(f"[Vision Agent] HIGH confidence: '{top_match['category']}' ({top_score:.4f})")
         meta["decision_tier"]   = f"Tier 1a — High Confidence CLIP (score: {top_score:.4f})"
         meta["identified_food"] = top_match["category"]
-        nutrition_data = get_food_nutrition(top_match["category"])
+        async with db_singleton.lock:
+            nutrition_data = await asyncio.to_thread(get_food_nutrition, top_match["category"])
         meta["data_source"] = "db" if nutrition_data else "llm_knowledge"
         prompt = self._build_nutrition_prompt(
             top_match["category"], nutrition_data, user_text, "db"

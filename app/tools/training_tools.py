@@ -1,9 +1,8 @@
-import os
-import chromadb
 import asyncio
 from pathlib import Path
 from openai import AsyncOpenAI
 from typing import List, Dict, Any
+from app.core.database import db_manager
 from app.core.config import settings
 from app.utils.logger import logger
 from app.utils.gif_utils import media_matcher
@@ -16,19 +15,12 @@ class TrainingRAGTool:
     Maintains strict structural compatibility with NutritionRAGTool.
     """
     def __init__(self):
-        # Root directory logic to find the DB
-        self.root_dir = Path(__file__).resolve().parent.parent.parent
-        self.chroma_dir = self.root_dir / "chromadb_store"
-        
-        # Connect to ChromaDB with Error Handling
-        try:
-            self.client = chromadb.PersistentClient(path=str(self.chroma_dir))
-            self.collection = self.client.get_collection("exercise_text")
-            self.is_connected = True
-            logger.info("✅ [Training Tool] Connected to ChromaDB.")
-        except Exception as e:
-            logger.error(f"❌ [Training Tool] Database Connection Error: {e}")
-            self.is_connected = False
+        # Manager is a Singleton
+        self.is_connected = db_manager._client is not None
+        if self.is_connected:
+            logger.info("✅ [Training Tool] Connected to shared ChromaDB via Manager.")
+        else:
+            logger.error("❌ [Training Tool] Could not connect to ChromaDB.")
             
         # Async OpenAI for non-blocking API calls
         self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
@@ -59,8 +51,9 @@ class TrainingRAGTool:
             if not query_vector:
                 return []
                 
-            results = await asyncio.to_thread(
-                self.collection.query,
+            # Use the Manager's single-threaded query runner
+            results = await db_manager.run_query(
+                collection_name="exercise_text",
                 query_embeddings=[query_vector],
                 n_results=n_results
             )
