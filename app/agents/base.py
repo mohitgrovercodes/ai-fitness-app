@@ -29,7 +29,7 @@ class BaseRAGAgent:
             model=model_name, 
             temperature=temperature, 
             api_key=settings.OPENAI_API_KEY
-        ).with_structured_output(output_schema)
+        ).with_structured_output(output_schema, method="function_calling")
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
             ("human", "CONVERSATION SUMMARY (for context):\n{summary}\n\nQUESTION: {query}\n\nRETRIEVED DATA:\n{context}")

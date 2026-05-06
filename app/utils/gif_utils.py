@@ -62,28 +62,41 @@ class GIFMatcher:
 
     def get_gif_path(self, exercise_name: str) -> Optional[str]:
         """
-        Find a GIF path for a given exercise name.
-        1. Try exact normalized match.
-        2. Try whole-word substring match (e.g. 'Push up' matches 'MetaBurn Push up').
+        Find a GIF path for a given exercise name using word overlap.
         """
         if not self.mapping:
             return None
 
         norm_name = self._normalize(exercise_name)
+        if not norm_name:
+            return None
         
         # 1. Exact match
         if norm_name in self.mapping:
             return self.mapping[norm_name]
             
-        # 2. Whole-word substring match
-        # Sort by length descending to match the most specific name first
-        sorted_keys = sorted(self.mapping.keys(), key=len, reverse=True)
-        for key in sorted_keys:
-            # Loophole Fix: Use regex for whole-word matching instead of simple 'in'
-            # This avoids partial matches like 'run' matching 'crunch'
-            # We also allow shorter names now (e.g. 'run', 'dip')
-            pattern = rf"\b{re.escape(key)}\b"
-            if re.search(pattern, norm_name):
+        norm_words = set(norm_name.split())
+        best_match = None
+        max_overlap = 0
+        
+        # 2. Strong Substring / Subset Match (All words of one in the other)
+        for key in self.mapping.keys():
+            key_words = set(key.split())
+            overlap = len(norm_words.intersection(key_words))
+            
+            if overlap > 0 and (overlap == len(norm_words) or overlap == len(key_words)):
+                if overlap > max_overlap:
+                    max_overlap = overlap
+                    best_match = key
+                    
+        if best_match:
+            return self.mapping[best_match]
+            
+        # 3. Partial Overlap Match (At least 2 words match and >= 50% of the query)
+        for key in self.mapping.keys():
+            key_words = set(key.split())
+            overlap = len(norm_words.intersection(key_words))
+            if overlap >= 2 and (overlap / len(norm_words)) >= 0.5:
                 return self.mapping[key]
                 
         return None

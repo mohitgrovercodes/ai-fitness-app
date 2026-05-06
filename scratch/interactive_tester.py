@@ -1,6 +1,12 @@
 import asyncio
 import os
 from dotenv import load_dotenv
+import sys
+from pathlib import Path
+
+# Add the project root to sys.path so that 'app' can be imported
+sys.path.append(str(Path(__file__).parent.parent))
+
 from app.agents.training_agent import TrainingAgent
 from langchain_core.messages import HumanMessage
 from app.utils.logger import logger

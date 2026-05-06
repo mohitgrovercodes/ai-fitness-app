@@ -16,7 +16,7 @@ class Orchestrator:
             model=model_name, 
             temperature=0, 
             api_key=settings.OPENAI_API_KEY
-        ).with_structured_output(IntentResponse)
+        ).with_structured_output(IntentResponse, method="function_calling")
         
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """You are the Orchestrator for 'Agentic AI Gym'.

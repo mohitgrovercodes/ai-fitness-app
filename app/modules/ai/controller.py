@@ -10,7 +10,7 @@ async def posture_check(file):
 
 async def recommend_workout(data):
     try:
-        result = AIService.recommend_workout(data)
+        result = await AIService.recommend_workout(data)
         return success(result)
     except Exception as e:
         return error(str(e))

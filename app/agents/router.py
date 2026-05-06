@@ -21,7 +21,7 @@ class SafetyGuardrail:
             model="gpt-4o-mini", 
             temperature=0, 
             api_key=settings.OPENAI_API_KEY
-        ).with_structured_output(SafetyResult)
+        ).with_structured_output(SafetyResult, method="function_calling")
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """You are the Fit Bot Safety Officer. Assess if the user input or the proposed response is safe.
             
