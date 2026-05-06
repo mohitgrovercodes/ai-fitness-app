@@ -12,6 +12,7 @@ class TrainingAnalysis(BaseModel):
     sub_queries: List[str] = Field(default=[], description="Alternative search terms for routines.")
     final_answer: str = Field(description="The professional coaching response detailing the workout.")
     exercise_gifs: Dict[str, str] = Field(default={}, description="Mapping of exercise name to GIF relative path.")
+    exercise_images: Dict[str, str] = Field(default={}, description="Mapping of exercise name to Image relative path.")
 
 
 class TrainingAgent(BaseRAGAgent):
@@ -28,7 +29,9 @@ STRICT POLICIES:
 1. SAFETY FIRST: Always mention proper form or warm-ups if appropriate.
 2. ACCURACY (CRAG Evaluator): If the retrieved exercises DO NOT match the user's specific request, set 'is_accurate' to false.
 3. ADAPTABILITY: If the user has injuries, adapt the advice or suggest alternatives from the data.
-4. MEDIA: If the retrieved data includes a 'GIF Available' path for an exercise you recommend, you MUST include that path in the 'exercise_gifs' dictionary. Use the EXACT name of the exercise as it appears in the 'RETRIEVED DATA' (e.g., 'Push-up: Incline') as the dictionary key.
+4. MEDIA: If the retrieved data includes a 'GIF Available' path, put it in 'exercise_gifs'. If it includes an 'Image Available' path, put it in 'exercise_images'. Use the EXACT name from the 'RETRIEVED DATA' as the key. 
+Example: exercise_gifs = {{"Push-up": "videos/0662-I4hDWkc.gif"}}, exercise_images = {{"Push-up": "images/0662-I4hDWkc.jpg"}}.
+DO NOT include media links in the 'final_answer' text.
 
 USER DATA:
 Goal: {goal}
@@ -56,7 +59,13 @@ Injuries/Medical: {injuries}"""
             equip = r.get('equipment', 'N/A')
             prep = r.get('preparation', '')
             exe = r.get('execution', '')
-            gif = r.get('gif_path')
-            gif_info = f"\n  GIF Available: {gif}" if gif else "\n  GIF: Not available"
-            lines.append(f"• {name} (Muscle: {muscle}, Equipment: {equip}){gif_info}\n  Prep: {prep}\n  Execution: {exe}")
+            media = r.get('media', {})
+            gif = media.get('gif')
+            img = media.get('image')
+            media_info = []
+            if gif: media_info.append(f"GIF Available: {gif}")
+            if img: media_info.append(f"Image Available: {img}")
+            
+            media_str = "\n  ".join(media_info) if media_info else "No media available"
+            lines.append(f"• {name} (Muscle: {muscle}, Equipment: {equip})\n  {media_str}\n  Prep: {prep}\n  Execution: {exe}")
         return "\n\n".join(lines)

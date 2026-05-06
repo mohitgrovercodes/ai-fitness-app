@@ -1,0 +1,37 @@
+2026-05-06 11:42:15 | INFO     | fit_bot | ✅ [Media Matcher] Loaded 1316 GIFs and 1316 Images.
+
+==================================================
+      FIT BOT — EXERCISE GIF TESTER
+==================================================
+Type your workout query below (e.g., 'Chest workout', 'Leg day')
+Type 'exit' to quit.
+
+🤔 Your Query: 
+⏳ Processing...
+
+------------------------------
+🤖 AGENT RESPONSE:
+------------------------------
+For a chest workout, here are some effective exercises you can incorporate:
+
+1. **Machine Chest Press**: This exercise targets your chest muscles and is great for building strength. Make sure to adjust the seat height so that the handles are at chest level. Keep your back flat against the seat and press the handles forward until your arms are fully extended, then return to the starting position.
+
+2. **30 Chest Bench Push-Up**: A fantastic bodyweight exercise that works your chest, shoulders, and triceps. Start in a plank position with your hands slightly wider than shoulder-width apart. Lower your body until your chest nearly touches the floor, then push back up to the starting position. Maintain a straight line from your head to your heels throughout the movement.
+
+3. **Isometric Chest Squeezes**: This exercise helps to engage the chest muscles without the need for equipment. Stand or sit comfortably and press your palms together in front of your chest. Hold the squeeze for a few seconds, then release. Repeat for several reps.
+
+4. **Machine Chest Fly**: This machine exercise focuses on the chest muscles and helps to isolate them. Adjust the machine to your size, sit down, and grasp the handles. With a slight bend in your elbows, open your arms wide, then bring them back together in front of you.
+
+5. **30 Chest Push-Up**: Similar to the bench push-up, this exercise is excellent for building upper body strength. Follow the same form as the bench push-up, ensuring to keep your body straight and lowering yourself down with control.
+
+Remember to warm up before starting your workout and focus on maintaining proper form throughout each exercise to prevent injury. 
+
+Here are some media resources for the push-up exercises:
+- GIFs and images for **30 Chest Bench Push-Up** and **30 Chest Push-Up** are available for reference.
+
+📽️ ATTACHED MEDIA:
+  • 30 Chest Push-Up: GIF: videos/0662-I4hDWkc.gif | Image: images/0662-I4hDWkc.jpg
+  • 30 Chest Bench Push-Up: GIF: videos/0662-I4hDWkc.gif | Image: images/0662-I4hDWkc.jpg
+------------------------------
+
+🤔 Your Query: 
