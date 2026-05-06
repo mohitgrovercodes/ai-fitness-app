@@ -11,6 +11,7 @@ class TrainingAnalysis(BaseModel):
     needs_web_search: bool = Field(description="True if exercise is unknown or local DB lacks info.")
     sub_queries: List[str] = Field(default=[], description="Alternative search terms for routines.")
     final_answer: str = Field(description="The professional coaching response detailing the workout.")
+    exercise_gifs: Dict[str, str] = Field(default={}, description="Mapping of exercise name to GIF relative path.")
 
 
 class TrainingAgent(BaseRAGAgent):
@@ -27,6 +28,7 @@ STRICT POLICIES:
 1. SAFETY FIRST: Always mention proper form or warm-ups if appropriate.
 2. ACCURACY (CRAG Evaluator): If the retrieved exercises DO NOT match the user's specific request, set 'is_accurate' to false.
 3. ADAPTABILITY: If the user has injuries, adapt the advice or suggest alternatives from the data.
+4. MEDIA: If the retrieved data includes a 'GIF Available' path for an exercise you recommend, you MUST include that path in the 'exercise_gifs' dictionary. Use the EXACT name of the exercise as it appears in the 'RETRIEVED DATA' (e.g., 'Push-up: Incline') as the dictionary key.
 
 USER DATA:
 Goal: {goal}
@@ -54,5 +56,7 @@ Injuries/Medical: {injuries}"""
             equip = r.get('equipment', 'N/A')
             prep = r.get('preparation', '')
             exe = r.get('execution', '')
-            lines.append(f"• {name} (Muscle: {muscle}, Equipment: {equip})\n  Prep: {prep}\n  Execution: {exe}")
+            gif = r.get('gif_path')
+            gif_info = f"\n  GIF Available: {gif}" if gif else "\n  GIF: Not available"
+            lines.append(f"• {name} (Muscle: {muscle}, Equipment: {equip}){gif_info}\n  Prep: {prep}\n  Execution: {exe}")
         return "\n\n".join(lines)

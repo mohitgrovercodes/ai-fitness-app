@@ -6,6 +6,8 @@ from openai import AsyncOpenAI
 from typing import List, Dict, Any
 from app.core.config import settings
 from app.utils.logger import logger
+from app.utils.gif_utils import gif_matcher
+
 
 class TrainingRAGTool:
     """
@@ -120,6 +122,7 @@ class TrainingRAGTool:
                 "preparation": meta.get('preparation', ''),
                 "execution": meta.get('execution', ''),
                 "target_muscles": meta.get('target_muscles', 'N/A'),
+                "gif_path": gif_matcher.get_gif_path(meta.get('name', '')),
                 "score": round(1 - dist, 3)
             })
         return cleaned

@@ -103,12 +103,25 @@ class BaseRAGAgent:
                     "summary": summary
                 })
 
+        # Prepare final specialist output
+        specialist_output = {
+            "answer": analysis.final_answer,
+            "status": "success" if analysis.is_accurate else "expert_knowledge"
+        }
+        
+        # Add optional fields if present in the analysis object
+        # This dynamically captures metadata like 'exercise_gifs', 'nutritional_info', etc.
+        logger.info(f"[{self.agent_name}] Raw Analysis: {analysis}")
+        standard_fields = {"is_accurate", "needs_web_search", "sub_queries", "final_answer", "quantity_multiplier"}
+        analysis_dict = analysis.model_dump() if hasattr(analysis, "model_dump") else analysis.__dict__
+        
+        for field, val in analysis_dict.items():
+            if field not in standard_fields and val:
+                specialist_output[field] = val
+
         return {
             "specialist_results": {
-                specialist_key: {
-                    "answer": analysis.final_answer,
-                    "status": "success" if analysis.is_accurate else "expert_knowledge"
-                }
+                specialist_key: specialist_output
             }
         }
 
