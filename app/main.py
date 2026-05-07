@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from app.modules.auth.routes import router as auth_router
 from app.modules.ai.routes import router as ai_router

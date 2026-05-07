@@ -1,12 +1,12 @@
 from typing import Dict, Any
-from app.agents.base import BaseAgent
+from app.agents.base import BaseRAGAgent
 from app.core.state import AgentState
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from app.tools.web_tools import WebSearchTool
+from app.tools.web_search_tool import WebSearchTool
 from app.utils.logger import logger
 
-class DomainAgent(BaseAgent):
+class DomainAgent(BaseRAGAgent):
     """
     Specialist Agent for General Fitness Knowledge.
     Handles topics like anatomy, physiology, hypertrophy science, BMR, etc.

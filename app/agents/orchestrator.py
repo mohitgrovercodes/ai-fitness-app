@@ -40,10 +40,16 @@ If the user says "tell me more" or "how many calories in that?", use the SUMMARY
         last_message = state['messages'][-1].content
         summary = state.get('conversation_summary', "No previous context.")
         
+        # Check if an image was uploaded
+        has_image = state.get('image_bytes') is not None
+        input_text = last_message
+        if has_image:
+            input_text += "\n\n[SYSTEM NOTE: The user has attached an image file to this request. You MUST include the 'image' intent in your classification!]"
+            
         # Invoke with structured output
         chain = self.prompt | self.model
         res: IntentResponse = await chain.ainvoke({
-            "input": last_message,
+            "input": input_text,
             "summary": summary
         })
         

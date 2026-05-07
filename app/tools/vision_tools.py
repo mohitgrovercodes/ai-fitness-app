@@ -60,20 +60,20 @@ _food_image_col = None
 _food_text_col  = None
 
 from app.core.config import settings
-from app.core.database import db_singleton
+from app.core.database import db_manager
 import chromadb.utils.embedding_functions as embedding_functions
 
 
 def _get_vision_collections():
     """Get collections via Singleton with specific embedding functions."""
-    food_image_col = db_singleton.get_collection("food_image_centroids")
+    food_image_col = db_manager.get_collection("food_image_centroids")
     
     # Text collection needs OpenAI embedding function
     openai_ef = embedding_functions.OpenAIEmbeddingFunction(
         api_key=settings.OPENAI_API_KEY,
         model_name="text-embedding-3-small"
     )
-    food_text_col = db_singleton.get_collection("food_text")
+    food_text_col = db_manager.get_collection("food_text", embedding_function=openai_ef)
     # Note: If collection already exists, setting embedding_function here might not be enough
     # but we will rely on the singleton's PersistentClient.
     return food_image_col, food_text_col
@@ -275,10 +275,11 @@ def identify_and_learn_new_food(
     if clip_hints:
         clean_hints = [h.replace("_", " ").title() for h in clip_hints[:3]]
         hints_context = (
-            f"\n\nContext: Our image recognition system thinks this MIGHT be one of: "
+            f"\n\nContext: Our image recognition system guessed: "
             f"{', '.join(clean_hints)}. "
-            f"Please look at the image carefully and confirm if one of these is correct, "
-            f"or identify the actual dish if it is something different.\n"
+            f"WARNING: These guesses might be completely wrong due to shape/color confusion. "
+            f"DO NOT simply pick one of these hints unless it is a 100% PERFECT visual match (matching shape, texture, AND ingredients). "
+            f"If the shape is different (e.g., spherical vs flat patty), IGNORE the hints and provide the true name of the dish (e.g., 'Aloo Bonda', 'Cheese Balls', etc.).\n"
         )
 
     vlm_prompt = (
@@ -286,6 +287,8 @@ def identify_and_learn_new_food(
         "Your task: Identify the EXACT food dish in this image with high accuracy.\n"
         "- Look at the dish's texture, color, ingredients, and presentation carefully.\n"
         "- For Indian dishes: consider regional variations (North, South, East, West Indian).\n"
+        "- THALIS / MIXED MEALS: If the image is a 'Thali' or a platter with multiple items, DO NOT just say 'Thali'. You MUST list ONLY the VISIBLE components in the name (e.g., 'North Indian Veg Thali (Dal, Rice, Paneer, Roti)').\n"
+        "- CRITICAL ANTI-HALLUCINATION RULE: Do NOT invent or guess traditional combinations. For example, if you see a generic Thali, do NOT assume it contains 'Dal Baati' or 'Churma' unless you specifically see them. List ONLY what your eyes can see.\n"
         "- Do NOT guess. If unsure, pick the most visually accurate name.\n"
         f"{hints_context}\n"
         "Respond in STRICT JSON format only. No other text.\n\n"

@@ -21,7 +21,7 @@ class AIService:
         return await asyncio.to_thread(RecommendationModel.predict, data)
 
     @staticmethod
-    async def chat(user_input: str, user_id: str, context: dict = None):
+    async def chat(user_input: str, user_id: str, context: dict = None, image_bytes: bytes = None):
         """
         Main entry point for the Agentic AI Gym Chatbot.
         Processes user input through the LangGraph Multi-Agent system.
@@ -34,7 +34,9 @@ class AIService:
             "user_context": context or {},
             "conversation_summary": "" # This will be updated by the memory_manager
         }
-        
+        if image_bytes:
+            initial_state["image_bytes"] = image_bytes
+            
         # Run the graph
         final_state = await fitness_graph.ainvoke(initial_state, config=config)
         

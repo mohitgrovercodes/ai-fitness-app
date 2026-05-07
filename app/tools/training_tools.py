@@ -15,12 +15,9 @@ class TrainingRAGTool:
     Maintains strict structural compatibility with NutritionRAGTool.
     """
     def __init__(self):
-        # Manager is a Singleton
-        self.is_connected = db_manager._client is not None
-        if self.is_connected:
-            logger.info("✅ [Training Tool] Connected to shared ChromaDB via Manager.")
-        else:
-            logger.error("❌ [Training Tool] Could not connect to ChromaDB.")
+        # Manager is a Singleton and uses lazy loading.
+        self.is_connected = True
+        logger.info("✅ [Training Tool] Ready to connect to shared ChromaDB via Manager.")
             
         # Async OpenAI for non-blocking API calls
         self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
@@ -80,7 +77,7 @@ class TrainingRAGTool:
             db_tasks = []
             for v in vectors:
                 if v:
-                    db_tasks.append(asyncio.to_thread(self.collection.query, query_embeddings=[v], n_results=3))
+                    db_tasks.append(db_manager.run_query(collection_name="exercise_text", query_embeddings=[v], n_results=3))
             
             if not db_tasks:
                 return []

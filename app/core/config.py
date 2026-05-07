@@ -25,12 +25,14 @@ class Settings(BaseSettings):
     RESTRICTED_FOODS: List[str] = ["beef"]
     
     # Agent Performance Thresholds
-    VISION_CONFIDENCE_THRESHOLD: float = 0.70
-    AMBIGUITY_GAP_THRESHOLD: float = 0.15
+    VISION_CONFIDENCE_THRESHOLD: float = 0.86
+    AMBIGUITY_GAP_THRESHOLD: float = 0.01
     VISION_NON_FOOD_THRESHOLD: float = 0.82
     
     # RAG Settings
     TOP_K_RECORDS: int = 5
+    NUTRITION_CANDIDATES_COUNT: int = 3
+    NUTRITION_SIMILARITY_THRESHOLD: float = 0.60
     
     class Config:
         env_file = ".env"

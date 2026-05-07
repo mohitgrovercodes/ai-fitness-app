@@ -96,9 +96,9 @@ class VisionAgent:
         # STAGE 1 — CLIP Visual Search (Top-5)
         # ══════════════════════════════════════════════════════
         try:
-            from app.core.database import db_singleton
+            from app.core.database import db_manager
             import asyncio
-            async with db_singleton.lock:
+            async with db_manager.lock:
                 top_matches, clip_vector = await asyncio.to_thread(
                     search_image_in_db, image_bytes, return_vector=True
                 )
@@ -127,11 +127,22 @@ class VisionAgent:
         # STAGE 2 — DECISION ENGINE
         # ══════════════════════════════════════════════════════
 
-        # ── TIER 3: Low CLIP score — VLM double-check ─────────────────────────
+        # ── TIER 3: Low CLIP score — VLM Double Check / Auto Reject ───────────────
         if top_score < NON_FOOD_THRESHOLD:
+            # SUPER LOW SCORE (< 0.70): Absolute garbage / not food, save cost
+            if top_score < 0.70:
+                print(f"[Vision Agent] Score ({top_score:.4f} < 0.70). Auto-rejecting to save cost.")
+                meta["gpt_vision_used"] = False
+                meta["decision_tier"] = f"Guardrail B — Auto-Reject (Score: {top_score:.4f})"
+                meta["identified_food"] = "Non-Food Image"
+                prompt = self._build_guardrail_b_prompt("something that does not look like food", user_text)
+                llm_response = await self.llm.ainvoke(prompt)
+                return self._build_output(llm_response.content, meta)
+                
+            # BORDERLINE SCORE (0.70 - 0.82): Could be an exotic food OR a Car. Let VLM double-check.
             print(f"[Vision Agent] Low CLIP score ({top_score:.4f}). VLM double-check...")
             meta["gpt_vision_used"] = True
-            async with db_singleton.lock:
+            async with db_manager.lock:
                 result = await asyncio.to_thread(
                     identify_and_learn_new_food, image_bytes, clip_vector=None, clip_hints=clip_hints
                 )
@@ -171,7 +182,7 @@ class VisionAgent:
             meta["gpt_vision_used"] = True
             meta["decision_tier"]   = f"Tier 2 — {reason} (CLIP: {top_score:.4f}) → VLM Fallback"
 
-            async with db_singleton.lock:
+            async with db_manager.lock:
                 result = await asyncio.to_thread(
                     identify_and_learn_new_food, image_bytes, clip_vector=clip_vector, clip_hints=clip_hints
                 )
@@ -201,7 +212,7 @@ class VisionAgent:
         print(f"[Vision Agent] HIGH confidence: '{top_match['category']}' ({top_score:.4f})")
         meta["decision_tier"]   = f"Tier 1a — High Confidence CLIP (score: {top_score:.4f})"
         meta["identified_food"] = top_match["category"]
-        async with db_singleton.lock:
+        async with db_manager.lock:
             nutrition_data = await asyncio.to_thread(get_food_nutrition, top_match["category"])
         meta["data_source"] = "db" if nutrition_data else "llm_knowledge"
         prompt = self._build_nutrition_prompt(

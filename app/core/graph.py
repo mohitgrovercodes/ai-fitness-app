@@ -72,8 +72,24 @@ async def synthesis_node(state: AgentState):
 
     # Format agent outputs for the Master Coach
     agent_outputs = []
+    media_attachments = []
+    
     for agent_name, data in results.items():
-        ans = data.get("answer") or data # Handle different return types
+        if isinstance(data, dict):
+            ans = data.get("answer")
+            
+            # Extract media if present
+            gifs = data.get("exercise_gifs", {})
+            for name, url in gifs.items():
+                if url: media_attachments.append(f"![{name}]({url})")
+                
+            imgs = data.get("exercise_images", {})
+            for name, url in imgs.items():
+                if url and name not in gifs: # Avoid duplicate image if GIF exists
+                    media_attachments.append(f"![{name}]({url})")
+        else:
+            ans = data
+            
         if ans:
             agent_outputs.append(f"[{agent_name.upper()}]: {ans}")
 
@@ -103,8 +119,12 @@ FINAL COHESIVE RESPONSE:"""
     logger.info("✨ [Synthesis] Weaving specialist responses into a master plan.")
     res = await llm.ainvoke(prompt)
     
+    final_content = res.content
+    if media_attachments:
+        final_content += "\n\n### Exercise Demonstrations:\n" + "\n\n".join(media_attachments)
+    
     return {
-        "messages": [AIMessage(content=res.content)]
+        "messages": [AIMessage(content=final_content)]
     }
 
 async def out_of_scope_handler(state: AgentState):

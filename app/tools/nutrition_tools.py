@@ -12,13 +12,10 @@ class NutritionRAGTool:
     Queries the 39,358 food items in ChromaDB safely.
     """
     def __init__(self):
-        # Manager is a Singleton
-        self.is_connected = db_manager._client is not None
-        if self.is_connected:
-            logger.info("✅ [Nutrition Tool] Connected to shared ChromaDB via Manager.")
-        else:
-            logger.error("❌ [Nutrition Tool] Could not connect to ChromaDB.")
-            
+        # Manager is a Singleton and uses lazy loading.
+        self.is_connected = True
+        logger.info("✅ [Nutrition Tool] Ready to connect to shared ChromaDB via Manager.")
+        
         self.openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     async def get_embedding(self, text: str) -> List[float]:
@@ -76,7 +73,7 @@ class NutritionRAGTool:
             db_tasks = []
             for v in vectors:
                 if v:
-                    db_tasks.append(asyncio.to_thread(self.collection.query, query_embeddings=[v], n_results=3))
+                    db_tasks.append(db_manager.run_query(collection_name="food_text", query_embeddings=[v], n_results=3))
             
             if not db_tasks:
                 return []

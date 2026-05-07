@@ -22,6 +22,7 @@ class ChromaDBManager:
             root_dir = Path(__file__).resolve().parent.parent.parent
             cls._chroma_dir = root_dir / "chromadb_store"
             cls._executor = ThreadPoolExecutor(max_workers=1)
+            cls._lock = None
             logger.info("✅ [ChromaDB Manager] Single-threaded executor initialized (Lazy DB Loading).")
         return cls._instance
 
@@ -35,6 +36,20 @@ class ChromaDBManager:
             except Exception as e:
                 logger.error(f"❌ [ChromaDB Manager] Client Init Error: {e}")
         return self._client
+
+    @property
+    def lock(self):
+        """Backward compatibility for vision_agent that expects an asyncio.Lock."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+        
+    def get_collection(self, name: str, **kwargs):
+        """Backward compatibility for vision_tools that expect direct collection access."""
+        client = self._get_client()
+        if not client:
+            raise RuntimeError("ChromaDB Client not initialized")
+        return client.get_collection(name, **kwargs)
 
     async def run_query(self, collection_name: str, **kwargs):
         """Runs a query in the dedicated database thread with deferred imports."""

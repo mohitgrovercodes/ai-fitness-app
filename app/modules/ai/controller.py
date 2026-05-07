@@ -28,3 +28,14 @@ async def chat(data: dict):
         return success(result)
     except Exception as e:
         return error(f"Chat error: {str(e)}")
+
+async def chat_with_image(message: str, user_id: str, context: dict, file):
+    try:
+        image_bytes = None
+        if file:
+            image_bytes = await file.read()
+            
+        result = await AIService.chat(message, user_id, context=context, image_bytes=image_bytes)
+        return success(result)
+    except Exception as e:
+        return error(f"Chat vision error: {str(e)}")
