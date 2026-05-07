@@ -33,9 +33,19 @@ STRICT POLICIES:
         ])
 
     async def check(self, state: AgentState) -> Dict[str, Any]:
+        """Checks the USER input for safety."""
         last_message = state['messages'][-1].content
+        return await self._run_check(last_message, "orchestrator", "safe_response_node")
+
+    async def check_response(self, state: AgentState) -> Dict[str, Any]:
+        """Checks the AGENT response for safety before sending to user."""
+        last_message = state['messages'][-1].content
+        # If unsafe, we redirect to safe_response_node which will provide the suggested_response
+        return await self._run_check(last_message, "memory_manager", "safe_response_node")
+
+    async def _run_check(self, text: str, safe_node: str, unsafe_node: str) -> Dict[str, Any]:
         chain = self.prompt | self.model
-        res = await chain.ainvoke({"input": last_message})
+        res = await chain.ainvoke({"input": text})
         
         logger.info(f"🛡️ [Safety] Safe: {res.is_safe} | Reason: {res.reason}")
         
@@ -43,7 +53,7 @@ STRICT POLICIES:
             "is_safe": res.is_safe,
             "safety_reason": res.reason,
             "safety_response": res.suggested_response,
-            "next_node": "orchestrator" if res.is_safe else "safe_response_node"
+            "next_node": safe_node if res.is_safe else unsafe_node
         }
 
 class AgentRouter:

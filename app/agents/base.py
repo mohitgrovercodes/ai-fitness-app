@@ -28,7 +28,8 @@ class BaseRAGAgent:
         self.llm = ChatOpenAI(
             model=model_name, 
             temperature=temperature, 
-            api_key=settings.OPENAI_API_KEY
+            api_key=settings.OPENAI_API_KEY,
+            max_retries=3 # Production-grade retry logic
         ).with_structured_output(output_schema, method="function_calling")
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),

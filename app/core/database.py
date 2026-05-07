@@ -51,6 +51,10 @@ class ChromaDBManager:
             raise RuntimeError("ChromaDB Client not initialized")
         return client.get_collection(name, **kwargs)
 
+    def initialize(self):
+        """Explicitly initialize the client in the main thread."""
+        return self._get_client()
+
     async def run_query(self, collection_name: str, **kwargs):
         """Runs a query in the dedicated database thread with deferred imports."""
         loop = asyncio.get_running_loop()

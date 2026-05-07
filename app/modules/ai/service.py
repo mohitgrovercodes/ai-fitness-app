@@ -4,8 +4,15 @@ from app.core.graph import build_graph
 from langchain_core.messages import HumanMessage
 import uuid
 
-# Initialize the compiled LangGraph
-fitness_graph = build_graph()
+# Global variable for lazy init
+_fitness_graph = None
+
+def get_graph():
+    global _fitness_graph
+    if _fitness_graph is None:
+        from app.core.graph import build_graph
+        _fitness_graph = build_graph()
+    return _fitness_graph
 
 class AIService:
 
@@ -38,7 +45,8 @@ class AIService:
             initial_state["image_bytes"] = image_bytes
             
         # Run the graph
-        final_state = await fitness_graph.ainvoke(initial_state, config=config)
+        graph = get_graph()
+        final_state = await graph.ainvoke(initial_state, config=config)
         
         # Extract the last AI message
         last_msg = final_state["messages"][-1]

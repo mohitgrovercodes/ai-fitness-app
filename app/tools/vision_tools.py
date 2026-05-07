@@ -22,14 +22,11 @@ Vision Agent ke liye 3 main helper functions (Tools):
 """
 
 import io
-import torch
 import chromadb
 import warnings
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple, Union
-
 from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
 
 warnings.filterwarnings("ignore")
 
@@ -46,6 +43,8 @@ def _load_clip():
     """Load CLIP model only once into memory (singleton pattern)."""
     global _clip_model, _clip_processor
     if _clip_model is None:
+        import torch
+        from transformers import CLIPProcessor, CLIPModel
         print("⏳ [Vision Tool] Loading CLIP model...")
         _clip_model     = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
         _clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")

@@ -14,11 +14,19 @@ class RedisClient:
         if cls._instance is None:
             cls._instance = super(RedisClient, cls).__new__(cls)
             try:
-                # Default to localhost if no REDIS_URL is provided
+                # Production-grade Redis with ConnectionPool and Timeouts
                 redis_url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
-                cls._client = redis.from_url(redis_url, decode_responses=True)
+                pool = redis.ConnectionPool.from_url(
+                    redis_url, 
+                    decode_responses=True,
+                    max_connections=20,
+                    socket_timeout=5.0,
+                    socket_connect_timeout=5.0,
+                    retry_on_timeout=True
+                )
+                cls._client = redis.Redis(connection_pool=pool)
                 cls._client.ping() # Verify connection
-                logger.info("✅ [Redis] Connected successfully.")
+                logger.info("✅ [Redis] Connected successfully with ConnectionPool.")
             except Exception as e:
                 logger.error(f"❌ [Redis] Connection failed: {e}")
                 cls._client = None

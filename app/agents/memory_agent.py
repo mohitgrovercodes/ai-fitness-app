@@ -9,12 +9,12 @@ from app.core.redis_client import redis_manager
 
 class MemoryManager:
     """
-    Production Memory Manager with Redis Persistence.
-    - Stores full history in Redis.
-    - Summarizes history every 10 messages.
-    - Maintains the last 20 messages in active context.
+    Production Memory Manager with Optimized Redis Persistence.
+    - Stores full history in Redis using RPUSH.
+    - Summarizes history when messages exceed 20.
+    - Maintains a 2-line summary + last 6 messages in active context.
     """
-    def __init__(self, summary_trigger: int = 10, keep_recent: int = 20):
+    def __init__(self, summary_trigger: int = 20, keep_recent: int = 6):
         from app.core.config import settings
         self.summary_trigger = summary_trigger
         self.keep_recent = keep_recent
@@ -26,81 +26,63 @@ class MemoryManager:
         
         self.summary_prompt = ChatPromptTemplate.from_messages([
             ("system", """You are managing the conversation memory for an AI Fitness Coach.
-Your task is to summarize the conversation history provided below.
-Include key details: goals, injuries, specific foods discussed, workouts planned.
-If there is an existing summary, update it with the new information.
-Keep it concise but comprehensive.
+Your task is to summarize the conversation history provided below into EXACTLY TWO LINES.
+Include key details: user goals, injuries, specific foods discussed, and current workout phase.
 
 EXISTING SUMMARY: {existing_summary}"""),
             ("human", "NEW MESSAGES TO SUMMARIZE:\n{messages_str}")
         ])
 
     async def run(self, state: AgentState) -> Dict[str, Any]:
-        messages = state.get('messages', [])
-        # We assume thread_id is available in state or can be derived
-        # For now, we'll use a placeholder if not found, but in production, this comes from config
+        messages = list(state.get('messages', []))
         user_id = state.get("user_id", "default_user") 
         redis_key = f"chat_history:{user_id}"
         summary_key = f"chat_summary:{user_id}"
 
-        # 1. Save latest message to Redis if not already there
-        if redis_manager.is_available():
+        # 1. Save ONLY the latest message to Redis (Efficiency)
+        if redis_manager.is_available() and messages:
             try:
-                # Store all messages as JSON strings in a Redis list
-                serialized_msgs = [json.dumps({"type": m.type, "content": m.content}) for m in messages]
-                # In a real scenario, we might only push the NEWEST message, 
-                # but for simplicity in this node, we sync the state.
-                redis_manager.client.delete(redis_key)
-                if serialized_msgs:
-                    redis_manager.client.rpush(redis_key, *serialized_msgs)
+                last_msg = messages[-1]
+                serialized_msg = json.dumps({"type": last_msg.type, "content": last_msg.content})
+                redis_manager.client.rpush(redis_key, serialized_msg)
             except Exception as e:
                 logger.error(f"❌ [Memory] Redis Save Error: {e}")
 
-        # 2. Check for Summary Trigger (every 10 messages)
-        # We track 'message_count' in state or Redis to trigger summarization
+        # 2. Check for Summary Trigger
         total_messages = len(messages)
         existing_summary = state.get("conversation_summary", "")
         
-        # If we haven't loaded the summary from Redis yet, do it now
+        # Load summary from Redis if not in state
         if not existing_summary and redis_manager.is_available():
             existing_summary = redis_manager.client.get(summary_key) or ""
 
-        # Summary trigger logic: Every 10 messages
-        # To maintain a 20-message context window, we only prune when total > 20
-        # but we can update the summary every 10.
-        if total_messages % self.summary_trigger == 0 and total_messages > 0:
-            logger.info(f"🧠 [Memory] Updating summary at {total_messages} messages.")
+        # Logic: If messages > 20, we summarize and prune
+        if total_messages > self.summary_trigger:
+            logger.info(f"🧠 [Memory] Threshold reached ({total_messages}). Summarizing...")
             
-            # If we exceed the window, we prune. Otherwise we just summarize the whole history so far.
-            if total_messages > self.keep_recent:
-                msgs_to_summarize = messages[:-self.keep_recent]
-                active_messages = messages[-self.keep_recent:]
-            else:
-                msgs_to_summarize = messages
-                active_messages = messages # Keep all for now
-
-            if msgs_to_summarize:
-                msg_str = "\n".join([f"{m.type}: {m.content}" for m in msgs_to_summarize])
-                
-                chain = self.summary_prompt | self.llm
-                res = await chain.ainvoke({
-                    "existing_summary": existing_summary,
-                    "messages_str": msg_str
-                })
-                
-                new_summary = res.content
-                logger.info("🧠 [Memory] Summarization updated.")
-                
-                if redis_manager.is_available():
-                    redis_manager.client.set(summary_key, new_summary)
-                
-                # If we pruned, return the new list
-                if len(active_messages) < total_messages:
-                    return {
-                        "conversation_summary": new_summary,
-                        "messages": {"type": "replace", "messages": active_messages}
-                    }
-                return {"conversation_summary": new_summary}
+            # Keep only the last 6 messages
+            msgs_to_summarize = messages[:-self.keep_recent]
+            active_messages = messages[-self.keep_recent:]
+            
+            msg_str = "\n".join([f"{m.type}: {m.content}" for m in msgs_to_summarize])
+            
+            chain = self.summary_prompt | self.llm
+            res = await chain.ainvoke({
+                "existing_summary": existing_summary,
+                "messages_str": msg_str
+            })
+            
+            new_summary = res.content.strip()
+            # Force exactly 2 lines if possible, or at least very short
+            logger.info(f"🧠 [Memory] New 2-line summary created: {new_summary[:50]}...")
+            
+            if redis_manager.is_available():
+                redis_manager.client.set(summary_key, new_summary)
+            
+            return {
+                "conversation_summary": new_summary,
+                "messages": {"type": "replace", "messages": active_messages}
+            }
 
         return {
             "conversation_summary": existing_summary

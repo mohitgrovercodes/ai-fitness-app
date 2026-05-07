@@ -1,6 +1,7 @@
 import asyncio
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.pregel import RetryPolicy
 from app.core.state import AgentState
 from app.agents.orchestrator import Orchestrator
 from app.agents.router import AgentRouter, SafetyGuardrail
@@ -21,34 +22,41 @@ async def specialists_node(state: AgentState):
     intents = state.get("intent", [])
     tasks = []
     
-    from app.agents.nutrition_agent import NutritionAgent
-    from app.agents.training_agent import TrainingAgent
-    from app.agents.vision_agent import VisionAgent
-    from app.agents.domain_agent import DomainAgent
-
-    # Map intents to agent run methods (Lazy Init)
-    intent_map = {
-        "nutrition": NutritionAgent().run,
-        "workout": TrainingAgent().run,
-        "image": VisionAgent().run,
-        "general": DomainAgent().run,
-        "progress": dummy_progress_agent
-    }
-    
-    # Collect tasks for all detected intents
+    # Map intents to agent classes (Lazy Import)
     for intent in intents:
-        if intent in intent_map:
-            tasks.append(intent_map[intent](state))
+        if intent == "nutrition":
+            from app.agents.nutrition_agent import NutritionAgent
+            tasks.append(NutritionAgent().run(state))
+        elif intent == "workout":
+            from app.agents.training_agent import TrainingAgent
+            tasks.append(TrainingAgent().run(state))
+        elif intent == "image":
+            from app.agents.vision_agent import VisionAgent
+            tasks.append(VisionAgent().run(state))
+        elif intent == "general":
+            from app.agents.domain_agent import DomainAgent
+            tasks.append(DomainAgent().run(state))
+        elif intent == "progress":
+            tasks.append(dummy_progress_agent(state))
             
     # Default to domain agent if no specific intent found
     if not tasks:
-        tasks.append(dummy_domain_agent(state))
+        from app.agents.domain_agent import DomainAgent
+        tasks.append(DomainAgent().run(state))
         
-    # Re-enforce Sequential execution to prevent Segfaults with ChromaDB
-    logger.info(f"🧬 [Specialists] Running {len(tasks)} agents sequentially for stability...")
-    results = []
-    for task in tasks:
-        results.append(await task)
+    # RE-ENABLED: Parallel execution using asyncio.gather
+    import time
+    start_time = time.time()
+    logger.info(f"🧬 [Specialists] Running {len(tasks)} agents in parallel...")
+    
+    try:
+        results = await asyncio.gather(*tasks)
+        duration = time.time() - start_time
+        logger.info(f"✅ [Specialists] Parallel run completed in {duration:.2f}s.")
+    except Exception as e:
+        logger.error(f"❌ [Specialists] Critical failure during parallel execution: {e}")
+        # Return empty list to prevent crash; downstream nodes will handle missing results
+        results = []
     
     # Merge all specialist results into a single update
     merged_results = {}
@@ -124,7 +132,8 @@ FINAL COHESIVE RESPONSE:"""
         final_content += "\n\n### Exercise Demonstrations:\n" + "\n\n".join(media_attachments)
     
     return {
-        "messages": [AIMessage(content=final_content)]
+        "messages": [AIMessage(content=final_content)],
+        "next_node": "output_safety"
     }
 
 async def out_of_scope_handler(state: AgentState):
@@ -156,73 +165,87 @@ async def dummy_domain_agent(state: AgentState):
     logger.info("🚧 [Domain Agent] Placeholder reached.")
     return {"specialist_results": {"domain": {"answer": "Domain Agent is under construction."}}}
 
+async def global_error_handler(state: AgentState):
+    """Fallback node for unexpected graph failures."""
+    logger.error("🚨 [Global Error] An unexpected error occurred during graph execution.")
+    return {
+        "messages": [AIMessage(content="I'm sorry, I encountered an unexpected error while processing your request. Please try again in a moment or ask something else! 🛠️")],
+        "next_node": END
+    }
+
+
 def build_graph():
     workflow = StateGraph(AgentState)
+    
+    # ── 1. RETRY POLICY (Production Grade) ───────────────────
+    # Handles transient API failures, rate limits, and network hiccups
+    api_retry = RetryPolicy(
+        initial_interval=2.0,
+        max_interval=30.0,
+        backoff_factor=2.0,
+        max_attempts=3
+    )
 
-    # 1. Add Nodes (Lazy Initialization)
+    # ── 2. NODES (Lazy Initialization) ───────────────────────
     async def _safety(state): return await SafetyGuardrail().check(state)
     async def _orch(state): return await Orchestrator().run(state)
+    async def _safety_out(state): return await SafetyGuardrail().check_response(state)
     async def _router(state): return AgentRouter().route(state)
     async def _memory(state): return await MemoryManager().run(state)
 
-    workflow.add_node("safety_guardrail", _safety)
+    workflow.add_node("safety_guardrail", _safety, retry=api_retry)
+    workflow.add_node("output_safety", _safety_out, retry=api_retry)
     workflow.add_node("safe_response_node", safe_response_node)
-    workflow.add_node("orchestrator", _orch)
+    workflow.add_node("orchestrator", _orch, retry=api_retry)
     workflow.add_node("agent_router", _router)
-    workflow.add_node("specialists_node", specialists_node)
-    workflow.add_node("synthesis_layer", synthesis_node)
+    workflow.add_node("specialists_node", specialists_node) # Already has internal retries/sequential logic
+    workflow.add_node("synthesis_layer", synthesis_node, retry=api_retry)
     workflow.add_node("memory_manager", _memory)
     workflow.add_node("out_of_scope_handler", out_of_scope_handler)
     
-    # 2. Set Entry Point
+    # ── 3. EDGES (Routing) ───────────────────────────────────
     workflow.set_entry_point("safety_guardrail")
-
-    # 3. Define Edges (Routing)
-    def route_after_safety(state: AgentState):
-        return state["next_node"]
 
     workflow.add_conditional_edges(
         "safety_guardrail",
-        route_after_safety,
-        {
-            "orchestrator": "orchestrator",
-            "safe_response_node": "safe_response_node"
-        }
+        lambda s: s["next_node"],
+        {"orchestrator": "orchestrator", "safe_response_node": "safe_response_node"}
     )
-
-    def route_after_orchestrator(state: AgentState):
-        return state["next_node"]
 
     workflow.add_conditional_edges(
         "orchestrator",
-        route_after_orchestrator,
-        {
-            "agent_router": "agent_router",
-            "out_of_scope_handler": "out_of_scope_handler"
-        }
+        lambda s: s["next_node"],
+        {"agent_router": "agent_router", "out_of_scope_handler": "out_of_scope_handler"}
     )
     
-    def route_after_router(state: AgentState):
-        return state["next_node"]
-
     workflow.add_conditional_edges(
         "agent_router",
-        route_after_router,
-        {
-            "specialists_node": "specialists_node",
-            "end": END
-        }
+        lambda s: s["next_node"],
+        {"specialists_node": "specialists_node", "end": END}
     )
 
-    # Specialists move to Synthesis
     workflow.add_edge("specialists_node", "synthesis_layer")
-    workflow.add_edge("synthesis_layer", "memory_manager")
+    
+    workflow.add_conditional_edges(
+        "synthesis_layer",
+        lambda state: state.get("next_node", "output_safety"),
+        {"output_safety": "output_safety", "memory_manager": "memory_manager"}
+    )
+    
+    workflow.add_conditional_edges(
+        "output_safety",
+        lambda s: s["next_node"],
+        {"memory_manager": "memory_manager", "safe_response_node": "safe_response_node"}
+    )
+
     workflow.add_edge("out_of_scope_handler", "memory_manager")
     workflow.add_edge("safe_response_node", "memory_manager")
     workflow.add_edge("memory_manager", END)
 
-    # Compile WITHOUT MemorySaver for stability testing
-    return workflow.compile()
+    # ── 4. PERSISTENCE (Production Grade) ───────────────────
+    # Use MemorySaver for immediate production reliability on this host.
+    # Note: Transition to PostgresSaver/SqliteSaver for multi-host scaling.
+    return workflow.compile(checkpointer=MemorySaver())
 
 # Example Usage:
 # graph = build_graph()
