@@ -39,3 +39,17 @@ async def chat_with_image(message: str, user_id: str, context: dict, file):
         return success(result)
     except Exception as e:
         return error(f"Chat vision error: {str(e)}")
+
+async def generate_workout(data: dict):
+    try:
+        result = await AIService.generate_workout_plan(data)
+        return success(result)
+    except Exception as e:
+        return error(f"Workout Generation Error: {str(e)}")
+
+async def generate_diet(data: dict):
+    try:
+        result = await AIService.generate_diet_plan(data)
+        return success(result)
+    except Exception as e:
+        return error(f"Diet Generation Error: {str(e)}")

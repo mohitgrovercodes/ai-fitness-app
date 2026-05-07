@@ -88,7 +88,7 @@ class BaseRAGAgent:
 
                 analysis = await chain.ainvoke({
                     "query": query,
-                    "context": f"[Live Web Data]:\n{web_context}",
+                    "context": f"{context_str}\n\n[Live Web Data]:\n{web_context}",
                     "goal": goal,
                     "injuries": injuries,
                     "summary": summary
@@ -97,7 +97,7 @@ class BaseRAGAgent:
                 logger.warning(f"  ⚠️ [{self.agent_name}] Web search unavailable. Falling back to expert knowledge.")
                 analysis = await chain.ainvoke({
                     "query": query,
-                    "context": "No database or web data available. Use your expert knowledge safely.",
+                    "context": f"{context_str}\n\n[Expert Knowledge Fallback]: Use expert knowledge to supplement the data.",
                     "goal": goal,
                     "injuries": injuries,
                     "summary": summary
@@ -114,10 +114,14 @@ class BaseRAGAgent:
         logger.info(f"[{self.agent_name}] Raw Analysis: {analysis}")
         standard_fields = {"is_accurate", "needs_web_search", "sub_queries", "final_answer", "quantity_multiplier"}
         analysis_dict = analysis.model_dump() if hasattr(analysis, "model_dump") else analysis.__dict__
+        # Media fields that should always be included (even if empty dict)
+        always_include = {"exercise_gifs", "exercise_images"}
         
         for field, val in analysis_dict.items():
-            if field not in standard_fields and val:
-                specialist_output[field] = val
+            if field not in standard_fields:
+                # Always include media fields; only skip other falsy values
+                if val or field in always_include:
+                    specialist_output[field] = val
 
         # Run optional validation hook for subclasses
         specialist_output = self._validate_output(specialist_output, context_str)

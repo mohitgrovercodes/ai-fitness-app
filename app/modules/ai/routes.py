@@ -45,3 +45,27 @@ async def chat_vision_endpoint(
         context_dict = {}
         
     return await chat_with_image(message, user_id, context_dict, file)
+
+
+@router.post("/generate-workout")
+async def generate_workout_endpoint(data: dict):
+    """
+    Direct API to generate a workout plan (Bypasses Orchestrator).
+    Expects: { "user_id": "...", "goal": "muscle gain", "level": "beginner", "duration": "1 month", "injuries": [] }
+    Optional: Pass "message" to override the prompt completely.
+    Returns raw JSON with 'response', 'exercise_gifs', and 'exercise_images'.
+    """
+    from app.modules.ai.controller import generate_workout
+    return await generate_workout(data)
+
+
+@router.post("/generate-diet")
+async def generate_diet_endpoint(data: dict):
+    """
+    Direct API to generate a structured diet plan (Bypasses Orchestrator).
+    Expects: { "user_id": "...", "goal": "weight loss", "diet_type": "veg", "allergies": ["peanuts"] }
+    Optional: Pass "message" to override the prompt completely.
+    Returns raw JSON with 'response' containing the structured routine.
+    """
+    from app.modules.ai.controller import generate_diet
+    return await generate_diet(data)

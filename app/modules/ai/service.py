@@ -43,8 +43,80 @@ class AIService:
         # Extract the last AI message
         last_msg = final_state["messages"][-1]
         
+        # Extract media from specialist results if available
+        gifs = {}
+        imgs = {}
+        specialists = final_state.get("specialist_results", {})
+        for name, data in specialists.items():
+            if isinstance(data, dict):
+                if "exercise_gifs" in data:
+                    gifs.update(data["exercise_gifs"])
+                if "exercise_images" in data:
+                    imgs.update(data["exercise_images"])
+        
         return {
             "response": last_msg.content,
+            "exercise_gifs": gifs,
+            "exercise_images": imgs,
             "intents": final_state.get("intent", []),
             "summary": final_state.get("conversation_summary", "")
+        }
+
+    @staticmethod
+    async def generate_workout_plan(data: dict):
+        """Directly calls the TrainingAgent with structured data from a button/form."""
+        from app.agents.training_agent import TrainingAgent
+        
+        user_id = data.get("user_id", "default")
+        goal = data.get("goal", "general fitness")
+        level = data.get("level", "intermediate")
+        duration = data.get("duration", "4-day per week") # can be "1 month", "4-day per week", etc
+        injuries = data.get("injuries", [])
+        
+        # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
+        user_input = data.get("message")
+        if not user_input:
+            user_input = f"Create a structured {duration} workout plan for {goal} at a {level} fitness level."
+            
+        context = {"goal": goal, "injuries": injuries, "level": level}
+        
+        state = {
+            "messages": [HumanMessage(content=user_input)],
+            "user_context": context,
+            "conversation_summary": "Direct API Generation Request"
+        }
+        result = await TrainingAgent().run(state)
+        output = result.get("specialist_results", {}).get("training", {})
+        return {
+            "response": output.get("answer", "Could not generate plan."),
+            "exercise_gifs": output.get("exercise_gifs", {}),
+            "exercise_images": output.get("exercise_images", {})
+        }
+
+    @staticmethod
+    async def generate_diet_plan(data: dict):
+        """Directly calls the NutritionAgent with structured data from a button/form."""
+        from app.agents.nutrition_agent import NutritionAgent
+        
+        user_id = data.get("user_id", "default")
+        goal = data.get("goal", "general fitness")
+        diet_type = data.get("diet_type", "any")
+        allergies = data.get("allergies", [])
+        
+        # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
+        user_input = data.get("message")
+        if not user_input:
+            user_input = f"Create a structured time-based daily meal plan for {goal}. Dietary preference: {diet_type}. Allergies: {', '.join(allergies) if allergies else 'None'}."
+            
+        context = {"goal": goal, "injuries": allergies} # pass allergies as injuries so the agent avoids them
+        
+        state = {
+            "messages": [HumanMessage(content=user_input)],
+            "user_context": context,
+            "conversation_summary": "Direct API Generation Request"
+        }
+        result = await NutritionAgent().run(state)
+        output = result.get("specialist_results", {}).get("nutrition", {})
+        return {
+            "response": output.get("answer", "Could not generate plan.")
         }

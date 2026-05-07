@@ -90,6 +90,27 @@ class MediaMatcher:
                     if re.search(rf"\b{re.escape(key)}\b", norm_name):
                         result["image"] = self.images[key]
                         break
+                        
+        # ── LOOSER FALLBACK ──
+        # If still not found, check if a major part of the name (like 'bench press') matches
+        if not result["gif"] or not result["image"]:
+            tokens = norm_name.split()
+            # Try to match the last 2 or 3 words (e.g., 'bench press' from 'board bench press')
+            for i in range(len(tokens) - 1):
+                sub_phrase = " ".join(tokens[i:])
+                if len(sub_phrase) > 5:  # avoid matching small words
+                    if not result["gif"]:
+                        for key in self.gifs.keys():
+                            if sub_phrase in key:
+                                result["gif"] = self.gifs[key]
+                                break
+                    if not result["image"]:
+                        for key in self.images.keys():
+                            if sub_phrase in key:
+                                result["image"] = self.images[key]
+                                break
+                if result["gif"] and result["image"]:
+                    break
 
         return result
 
