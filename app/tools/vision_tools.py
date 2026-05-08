@@ -27,6 +27,7 @@ import warnings
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple, Union
 from PIL import Image
+import torch
 
 warnings.filterwarnings("ignore")
 
@@ -43,7 +44,6 @@ def _load_clip():
     """Load CLIP model only once into memory (singleton pattern)."""
     global _clip_model, _clip_processor
     if _clip_model is None:
-        import torch
         from transformers import CLIPProcessor, CLIPModel
         print("⏳ [Vision Tool] Loading CLIP model...")
         _clip_model     = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
@@ -288,6 +288,7 @@ def identify_and_learn_new_food(
         "- For Indian dishes: consider regional variations (North, South, East, West Indian).\n"
         "- THALIS / MIXED MEALS: If the image is a 'Thali' or a platter with multiple items, DO NOT just say 'Thali'. You MUST list ONLY the VISIBLE components in the name (e.g., 'North Indian Veg Thali (Dal, Rice, Paneer, Roti)').\n"
         "- CRITICAL ANTI-HALLUCINATION RULE: Do NOT invent or guess traditional combinations. For example, if you see a generic Thali, do NOT assume it contains 'Dal Baati' or 'Churma' unless you specifically see them. List ONLY what your eyes can see.\n"
+        "- PORTION ESTIMATION (CRITICAL): You MUST estimate the total quantity of food visible in the image. Do NOT provide 'per 100g' values. Calculate the total calories and macros for the ENTIRE plate/portion shown (e.g. if you see 4 pooris and curry, calculate the sum for all of them).\n"
         "- Do NOT guess. If unsure, pick the most visually accurate name.\n"
         f"{hints_context}\n"
         "Respond in STRICT JSON format only. No other text.\n\n"
@@ -295,10 +296,10 @@ def identify_and_learn_new_food(
         "{\n"
         '  "is_food": true,\n'
         '  "food_name": "Exact Dish Name (use common English/Hindi name)",\n'
-        '  "calories_kcal": <number per 100g>,\n'
-        '  "protein_g": <number per 100g>,\n'
-        '  "carbs_g": <number per 100g>,\n'
-        '  "fat_g": <number per 100g>\n'
+        '  "calories_kcal": <TOTAL number for the entire visible portion>,\n'
+        '  "protein_g": <TOTAL number for the entire visible portion>,\n'
+        '  "carbs_g": <TOTAL number for the entire visible portion>,\n'
+        '  "fat_g": <TOTAL number for the entire visible portion>\n'
         "}\n\n"
         "If the image is NOT food (e.g. person, car, animal, object):\n"
         "{\n"

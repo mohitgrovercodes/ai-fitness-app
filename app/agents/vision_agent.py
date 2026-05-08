@@ -175,55 +175,41 @@ class VisionAgent:
                 else:
                     print(f"[Vision Agent] Ambiguity canceled: same family.")
 
-        # ── TIER 2 & 1b: OOD or AMBIGUOUS → VLM FALLBACK + SELF-LEARN ─────────
-        if top_score < CONFIDENCE_THRESHOLD or not is_high_confidence:
-            reason = "OOD Food" if top_score < CONFIDENCE_THRESHOLD else "Ambiguous Food"
-            print(f"[Vision Agent] {reason} (score: {top_score:.4f}). Triggering VLM...")
-            meta["gpt_vision_used"] = True
-            meta["decision_tier"]   = f"Tier 2 — {reason} (CLIP: {top_score:.4f}) → VLM Fallback"
+        # ── TIER 1 & 2: DYNAMIC PORTION ESTIMATION VIA VLM ───────────────
+        reason = "High Confidence" if is_high_confidence and top_score >= CONFIDENCE_THRESHOLD else ("OOD Food" if top_score < CONFIDENCE_THRESHOLD else "Ambiguous Food")
+        print(f"[Vision Agent] {reason} (score: {top_score:.4f}). Triggering VLM for dynamic portion estimation...")
+        meta["gpt_vision_used"] = True
+        meta["decision_tier"]   = f"Tier 1/2 — {reason} (CLIP: {top_score:.4f}) → VLM Dynamic Sizing"
 
-            async with db_manager.lock:
-                result = await asyncio.to_thread(
-                    identify_and_learn_new_food, image_bytes, clip_vector=clip_vector, clip_hints=clip_hints
-                )
-
-            # GUARDRAIL B — VLM says NOT FOOD
-            if not result["is_food"]:
-                print(f"[Vision Agent] GUARDRAIL B: not food: '{result['object']}'")
-                meta["decision_tier"]   = f"Guardrail B — Not Food ({result['object']})"
-                meta["identified_food"] = result["object"]
-                prompt = self._build_guardrail_b_prompt(result["object"], user_text)
-                llm_response = await self.llm.ainvoke(prompt)
-                return self._build_output(llm_response.content, meta)
-
-            meta["identified_food"] = result["identified_food"]
-            meta["data_source"]     = result["source"]
-            meta["self_learned"]    = result["learned"]
-            learned_msg = " 💾 Saved to DB!" if result.get("learned") else ""
-            print(f"[Vision Agent] VLM identified: '{result['identified_food']}'{learned_msg}")
-
-            prompt = self._build_nutrition_prompt(
-                result["identified_food"], result["nutrition"], user_text, result["source"]
+        async with db_manager.lock:
+            result = await asyncio.to_thread(
+                identify_and_learn_new_food, image_bytes, clip_vector=clip_vector, clip_hints=clip_hints
             )
+
+        # GUARDRAIL B — VLM says NOT FOOD
+        if not result["is_food"]:
+            print(f"[Vision Agent] GUARDRAIL B: not food: '{result['object']}'")
+            meta["decision_tier"]   = f"Guardrail B — Not Food ({result['object']})"
+            meta["identified_food"] = result["object"]
+            prompt = self._build_guardrail_b_prompt(result["object"], user_text)
             llm_response = await self.llm.ainvoke(prompt)
             return self._build_output(llm_response.content, meta)
 
-        # ── TIER 1a: High Confidence — Direct Local DB Lookup ──────────────────
-        print(f"[Vision Agent] HIGH confidence: '{top_match['category']}' ({top_score:.4f})")
-        meta["decision_tier"]   = f"Tier 1a — High Confidence CLIP (score: {top_score:.4f})"
-        meta["identified_food"] = top_match["category"]
-        async with db_manager.lock:
-            nutrition_data = await asyncio.to_thread(get_food_nutrition, top_match["category"])
-        meta["data_source"] = "db" if nutrition_data else "llm_knowledge"
-        prompt = self._build_nutrition_prompt(
-            top_match["category"], nutrition_data, user_text, "db"
-        )
+        meta["identified_food"] = result["identified_food"]
+        meta["data_source"]     = result["source"]
+        meta["self_learned"]    = result["learned"]
+        learned_msg = " 💾 Saved to DB!" if result.get("learned") else ""
+        print(f"[Vision Agent] VLM identified: '{result['identified_food']}'{learned_msg}")
 
+        prompt = self._build_nutrition_prompt(
+            result["identified_food"], result["nutrition"], user_text, result["source"]
+        )
+        
         # ══════════════════════════════════════════════════════
         # STAGE 3 — LLM REASONING & FINAL RESPONSE
         # ══════════════════════════════════════════════════════
         print("[Vision Agent] Sending to LLM for final reasoning...")
-        llm_response  = await self.llm.ainvoke(prompt)
+        llm_response = await self.llm.ainvoke(prompt)
         print("[Vision Agent] Response ready.")
         return self._build_output(llm_response.content, meta)
 

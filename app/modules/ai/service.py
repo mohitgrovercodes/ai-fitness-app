@@ -51,9 +51,13 @@ class AIService:
         # Extract the last AI message
         last_msg = final_state["messages"][-1]
         
-        # Extract media from specialist results if available
+        # Extract media and structured data from specialist results if available
         gifs = {}
         imgs = {}
+        workouts = []
+        meals = []
+        daily_totals = {}
+        
         specialists = final_state.get("specialist_results", {})
         for name, data in specialists.items():
             if isinstance(data, dict):
@@ -61,11 +65,20 @@ class AIService:
                     gifs.update(data["exercise_gifs"])
                 if "exercise_images" in data:
                     imgs.update(data["exercise_images"])
+                if "workout" in data and isinstance(data["workout"], list):
+                    workouts.extend(data["workout"])
+                if "meals" in data and isinstance(data["meals"], list):
+                    meals.extend(data["meals"])
+                if "daily_totals" in data and isinstance(data["daily_totals"], dict):
+                    daily_totals.update(data["daily_totals"])
         
         return {
             "response": last_msg.content,
             "exercise_gifs": gifs,
             "exercise_images": imgs,
+            "workout": workouts,
+            "meals": meals,
+            "daily_totals": daily_totals,
             "intents": final_state.get("intent", []),
             "summary": final_state.get("conversation_summary", "")
         }
@@ -96,9 +109,10 @@ class AIService:
         result = await TrainingAgent().run(state)
         output = result.get("specialist_results", {}).get("training", {})
         return {
-            "response": output.get("answer", "Could not generate plan."),
-            "exercise_gifs": output.get("exercise_gifs", {}),
-            "exercise_images": output.get("exercise_images", {})
+            "summary": output.get("summary", ""),
+            "workout": output.get("workout", []),
+            "tip": output.get("tip", ""),
+            "response": output.get("answer", "Could not generate plan.")
         }
 
     @staticmethod
@@ -126,5 +140,9 @@ class AIService:
         result = await NutritionAgent().run(state)
         output = result.get("specialist_results", {}).get("nutrition", {})
         return {
+            "summary": output.get("summary", ""),
+            "meals": output.get("meals", []),
+            "daily_totals": output.get("daily_totals", {}),
+            "tip": output.get("tip", ""),
             "response": output.get("answer", "Could not generate plan.")
         }

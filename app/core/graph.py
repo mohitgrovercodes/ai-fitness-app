@@ -1,7 +1,7 @@
 import asyncio
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.pregel import RetryPolicy
+from langgraph.types import RetryPolicy
 from app.core.state import AgentState
 from app.agents.orchestrator import Orchestrator
 from app.agents.router import AgentRouter, SafetyGuardrail
@@ -113,7 +113,8 @@ async def synthesis_node(state: AgentState):
 Your task is to take the specialized advice from your team (provided below) and weave it into a single, fluent, and encouraging response for the user.
 
 RULES:
-- Do NOT just list the points. Integrate them.
+- Do NOT just list the points. Integrate them nicely into paragraphs.
+- CRITICAL: If any specialist provides precise numerical data (like Calories, Protein, Carbs, Fat, or Weights), you MUST explicitly include those exact numbers and macros in your final response. Do not summarize them away.
 - If both workout and nutrition advice are provided, explain how they complement each other.
 - Maintain a warm, expert, and highly professional tone.
 - Ensure the most important information is clear and actionable.

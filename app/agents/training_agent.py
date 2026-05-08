@@ -7,11 +7,24 @@ from pydantic import BaseModel, Field
 from app.utils.logger import logger
 
 
+class WorkoutExercise(BaseModel):
+    name: str = Field(description="Name of the exercise.")
+    target_muscle: List[str] = Field(description="List of target muscles.")
+    benefit: str = Field(description="Benefit of this exercise.")
+    description: str = Field(description="Step-by-step instructions on how to perform the exercise.")
+    sets: str = Field(description="DYNAMIC: Recommended number of sets based on goal (e.g., '4', '3', '5').")
+    reps: str = Field(description="DYNAMIC: Recommended reps or duration based on goal (e.g., '5-8' for strength, '15-20' for endurance, '60 seconds').")
+    gif_path: str = Field(default="", description="Exact relative path to the GIF (e.g., videos/0044-XlZ4lAC.gif)")
+    image_path: str = Field(default="", description="Exact relative path to the Image (e.g., images/0044-XlZ4lAC.jpg)")
+
 class TrainingAnalysis(BaseModel):
     is_accurate: bool = Field(description="Are the retrieved exercises relevant and safe?")
     needs_web_search: bool = Field(description="True if exercise is unknown or local DB lacks info.")
     sub_queries: List[str] = Field(default=[], description="Alternative search terms for routines.")
-    final_answer: str = Field(description="The professional coaching response detailing the workout.")
+    final_answer: str = Field(description="Full text markdown response for chat users.")
+    summary: str = Field(default="", description="Brief introduction/summary of the workout.")
+    workout: List[WorkoutExercise] = Field(default=[], description="List of structured exercises.")
+    tip: str = Field(default="", description="Closing tip for safety or cooldown.")
     exercise_gifs: Dict[str, str] = Field(default={}, description="Mapping of exercise name to GIF relative path.")
     exercise_images: Dict[str, str] = Field(default={}, description="Mapping of exercise name to Image relative path.")
 
@@ -28,11 +41,12 @@ Your goal is to provide accurate, safe workout advice based on retrieved data.
 
 STRICT POLICIES:
 1. SAFETY FIRST: Always mention proper form or warm-ups if appropriate.
-2. ACCURACY (CRAG Evaluator): If the retrieved exercises DO NOT match the user's specific request, set 'is_accurate' to false.
-3. ADAPTABILITY: If the user has injuries, adapt the advice or suggest alternatives from the data.
-4. MANDATORY MEDIA DICTIONARY: You MUST use the `exercise_gifs` and `exercise_images` JSON fields to store the media paths.
-5. NO MEDIA IN TEXT: CRITICAL! NEVER print the words "GIF:" or "Image:" or include any file paths (like .gif or .jpg) inside the `final_answer` string. Put them ONLY in the JSON dictionary.
-6. NO SYSTEM TALK: NEVER use phrases like "based on the retrieved data", "the database doesn't have", or "the retrieved exercises". Speak directly as an expert coach.
+2. FORCED DATABASE USAGE: You MUST build the workout using ONLY the exercises provided in the retrieved data. Even if they don't perfectly match a "balanced" routine, you must creatively incorporate them. Do NOT invent new exercises. Set `is_accurate` to true unless the data is completely broken.
+3. ADAPTABILITY & DYNAMIC PROGRAMMING: Adapt advice based on injuries. Critically, you MUST dynamically calculate sets and reps for EACH exercise based on the user's goal (e.g., Hypertrophy = 8-12 reps, Strength = 3-5 reps, Endurance = 15+ reps, Planks = 30-60s). DO NOT give a static 3 sets of 10-12 reps for everything.
+4. STRUCTURED JSON FIELDS: You MUST populate the `summary`, `workout` (list of exercises), and `tip` fields with structured data for interactive UI display.
+5. MEDIA PATHS: You MUST include the correct `gif_path` and `image_path` directly inside each exercise object in the `workout` list.
+6. CLEAN TEXT RESPONSE: The `final_answer` string MUST ONLY contain a polite greeting and a brief 1-2 sentence intro. DO NOT list the exercises, sets, reps, or media paths inside `final_answer`. Put the data ONLY in the structured JSON fields.
+7. NO SYSTEM TALK: NEVER use phrases like "based on the retrieved data", "the database doesn't have", or "the retrieved exercises". Speak directly as an expert coach.
 
 Example JSON mapping: exercise_gifs = {{"Push-up": "videos/0662-I4hDWkc.gif"}}, exercise_images = {{"Push-up": "images/0662-I4hDWkc.jpg"}}.
 
@@ -88,6 +102,19 @@ Injuries/Medical: {injuries}"""
         final_answer = output.get("answer", "")
         gifs_dict = output.get("exercise_gifs", {})
         imgs_dict = output.get("exercise_images", {})
+        
+        # New approach: Extract from the structured 'workout' list directly!
+        workout_list = output.get("workout", [])
+        if isinstance(workout_list, list):
+            for item in workout_list:
+                if isinstance(item, dict):
+                    name = item.get("name")
+                    g_path = item.get("gif_path")
+                    i_path = item.get("image_path")
+                    if name and g_path and g_path in all_valid_gifs:
+                        gifs_dict[name] = g_path
+                    if name and i_path and i_path in all_valid_images:
+                        imgs_dict[name] = i_path
 
         if not gifs_dict and final_answer:
             # Extract all gif/image paths from final_answer text
@@ -99,10 +126,17 @@ Injuries/Medical: {injuries}"""
 
             for label, path in gif_labeled:
                 if path in all_valid_gifs:
-                    gifs_dict[label.strip()] = path
+                    clean_label = label.strip()
+                    if clean_label in gifs_dict:
+                        clean_label = f"{clean_label} {len(gifs_dict)+1}"
+                    gifs_dict[clean_label] = path
+                    
             for label, path in img_labeled:
                 if path in all_valid_images:
-                    imgs_dict[label.strip()] = path
+                    clean_label = label.strip()
+                    if clean_label in imgs_dict:
+                        clean_label = f"{clean_label} {len(imgs_dict)+1}"
+                    imgs_dict[clean_label] = path
 
             # Fallback: unnamed paths
             if not gifs_dict:
