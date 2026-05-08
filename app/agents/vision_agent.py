@@ -214,9 +214,31 @@ class VisionAgent:
         meta["identified_food"] = top_match["category"]
         async with db_manager.lock:
             nutrition_data = await asyncio.to_thread(get_food_nutrition, top_match["category"])
-        meta["data_source"] = "db" if nutrition_data else "llm_knowledge"
+
+        # Check if DB macros are complete — if not, trigger VLM for portion-aware estimation
+        db_has_macros = nutrition_data and any(
+            nutrition_data.get(k, "N/A") != "N/A"
+            for k in ["protein", "carbs", "fat"]
+        )
+        if not db_has_macros:
+            print(f"[Vision Agent] Tier 1a: DB macros incomplete for '{top_match['category']}'. Upgrading to VLM for portion estimation.")
+            meta["gpt_vision_used"] = True
+            meta["decision_tier"]   = f"Tier 1a+VLM — CLIP Confident + VLM Nutrition ({top_score:.4f})"
+            async with db_manager.lock:
+                result = await asyncio.to_thread(
+                    identify_and_learn_new_food, image_bytes, clip_vector=clip_vector, clip_hints=clip_hints
+                )
+            if result.get("is_food") and result.get("nutrition"):
+                nutrition_data = result["nutrition"]
+                meta["data_source"] = result.get("source", "vlm")
+            else:
+                meta["data_source"] = "llm_knowledge"
+        else:
+            meta["data_source"] = "db"
+
         prompt = self._build_nutrition_prompt(
-            top_match["category"], nutrition_data, user_text, "db"
+            top_match["category"], nutrition_data, user_text,
+            meta["data_source"]
         )
 
         # ══════════════════════════════════════════════════════
@@ -352,37 +374,61 @@ class VisionAgent:
         )
 
         if nutrition:
+            serving_note = f"Estimated Serving Size: ~{nutrition['estimated_serving']}\n" if nutrition.get("estimated_serving") else ""
             nutrition_context = (
                 f"Food: {nutrition.get('food_name', food_display)}\n"
+                f"{serving_note}"
                 f"Calories: {nutrition.get('calories', 'N/A')} kcal\n"
                 f"Protein: {nutrition.get('protein', 'N/A')} g\n"
                 f"Carbs:   {nutrition.get('carbs', 'N/A')} g\n"
-                f"Fat:     {nutrition.get('fat', 'N/A')} g"
+                f"Fat:     {nutrition.get('fat', 'N/A')} g\n\n"
+                f"CRITICAL INSTRUCTION: If any macro value is 'N/A', or if calories seem wildly inaccurate for a standard moderate serving (e.g. >1000 kcal for a normal home-cooked plate), you MUST ignore that data and estimate realistic numeric values for the given portion. All values must be numbers — never 'N/A'."
             )
         else:
             nutrition_context = (
                 f"Food: {food_display}\n"
-                f"(Exact data not available — use your best nutritional knowledge.)"
+                f"(No database entry found. You MUST estimate all values based on a typical moderate serving size of this dish.)"
             )
 
         if user_text and user_text.strip():
             instruction = (
                 f'The user asked: "{user_text}"\n'
-                f"Answer their specific question using the nutrition data above."
+                f"Answer using the nutrition data above. FOLLOW THIS FORMAT STRICTLY:\n\n"
+                f"## 🍽️ [Food Name]\n"
+                f"**Description**: [2-3 sentences — interactive, engaging, describe what the dish is, its origin, key ingredients, and taste profile.]\n\n"
+                f"## 📊 Nutritional Breakdown\n"
+                f"*(Estimated for the visible portion)*\n"
+                f"- **Serving Size**: [Xg or approximate]\n"
+                f"- **Calories**: [X] kcal\n"
+                f"- **Protein**: [X] g\n"
+                f"- **Carbohydrates**: [X] g\n"
+                f"- **Fat**: [X] g\n\n"
+                f"STRICT RULES: All values MUST be numeric. Never write 'N/A' or 'Generally high'. "
+                f"Do NOT add a 'Complementary Aspects', 'Tips', or any other section. End after the nutritional breakdown."
             )
         else:
             instruction = (
-                "The user did not ask a specific question. "
-                "Automatically provide a friendly, complete nutritional summary of this food "
-                "including what it is, its calories, macros, and a brief health tip."
+                "Provide a response using EXACTLY this format:\n\n"
+                "## 🍽️ [Food Name]\n"
+                "**Description**: [2-3 sentences — interactive, engaging, describe what the dish is, its origin, key ingredients, and taste profile.]\n\n"
+                "## 📊 Nutritional Breakdown\n"
+                "*(Estimated for the visible portion)*\n"
+                "- **Serving Size**: [Xg or approximate]\n"
+                "- **Calories**: [X] kcal\n"
+                "- **Protein**: [X] g\n"
+                "- **Carbohydrates**: [X] g\n"
+                "- **Fat**: [X] g\n\n"
+                "STRICT RULES: All values MUST be numeric. Never write 'N/A' or 'Generally high'. "
+                "Do NOT add a 'Complementary Aspects', 'Tips', 'Putting it Together', or any other section. End immediately after the nutritional breakdown."
             )
 
         return (
-            f"You are FitBot, an expert AI nutrition assistant.\n\n"
+            f"You are FitBot, a world-class food identification and nutrition AI.\n"
+            f"You can identify and provide nutrition for ANY food from ANY global cuisine.\n\n"
             f"A user uploaded a food image. You have identified the food as:\n\n"
             f"{nutrition_context}\n\n"
             f"{instruction}\n\n"
-            f"Be concise, friendly, and formatted clearly with markdown headers.{source_note}"
+            f"Use clean markdown headers. Do not add any 'expert coach' fluff or unrelated suggestions.{source_note}"
         )
 
     def _build_output(self, response_text: str, meta: dict = None) -> Dict[str, Any]:

@@ -28,13 +28,16 @@ class ChromaDBManager:
 
     def _get_client(self):
         """Lazy initialization of the actual ChromaDB client."""
+        import threading
         if self._client is None:
-            import chromadb # DEFERRED IMPORT
-            try:
-                self._client = chromadb.PersistentClient(path=str(self._chroma_dir))
-                logger.info("✅ [ChromaDB Manager] PersistentClient initialized in background thread.")
-            except Exception as e:
-                logger.error(f"❌ [ChromaDB Manager] Client Init Error: {e}")
+            with threading.Lock():
+                if self._client is None:
+                    import chromadb # DEFERRED IMPORT
+                    try:
+                        self._client = chromadb.PersistentClient(path=str(self._chroma_dir))
+                        logger.info("✅ [ChromaDB Manager] PersistentClient initialized.")
+                    except Exception as e:
+                        logger.error(f"❌ [ChromaDB Manager] Client Init Error: {e}")
         return self._client
 
     @property

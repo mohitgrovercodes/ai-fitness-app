@@ -1,7 +1,7 @@
 import asyncio
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.pregel import RetryPolicy
+from langgraph.types import RetryPolicy
 from app.core.state import AgentState
 from app.agents.orchestrator import Orchestrator
 from app.agents.router import AgentRouter, SafetyGuardrail
@@ -110,19 +110,24 @@ async def synthesis_node(state: AgentState):
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=settings.OPENAI_API_KEY)
     
     prompt = f"""You are the Lead Fitness Coach at 'Agentic AI Gym'.
-Your task is to take the specialized advice from your team (provided below) and weave it into a single, fluent, and encouraging response for the user.
+Your task is to take the specialized advice from your team (provided below) and weave it into a single response.
 
-RULES:
+STRICT INSTRUCTIONS FOR IMAGE-BASED REQUESTS:
+- If a [VISION] result is provided, your response MUST focus primarily on the description of the food in the image and its nutritional breakdown.
+- Do NOT add suggestions for other foods, shakes, or unrelated snacks.
+- Keep the tone professional but interactive.
+- You MUST present the Nutritional Breakdown exactly point-wise with NUMERIC values (e.g., `- **Protein**: 15g`). Do NOT use vague terms like 'Generally high'.
+- NEVER add a "Complementary Aspects" or generic tip section. End the response immediately after the nutritional breakdown.
+
+GENERAL RULES:
 - Do NOT just list the points. Integrate them.
-- If both workout and nutrition advice are provided, explain how they complement each other.
-- Maintain a warm, expert, and highly professional tone.
-- Ensure the most important information is clear and actionable.
 - Format the final response using clean Markdown.
+- If both workout and nutrition advice are provided, explain how they complement each other briefly.
 
 SPECIALIST ADVICE:
 {context_str}
 
-FINAL COHESIVE RESPONSE:"""
+FINAL RESPONSE:"""
 
     logger.info("✨ [Synthesis] Weaving specialist responses into a master plan.")
     res = await llm.ainvoke(prompt)

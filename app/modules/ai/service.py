@@ -51,7 +51,7 @@ class AIService:
         # Extract the last AI message
         last_msg = final_state["messages"][-1]
         
-        # Extract media from specialist results if available
+        # Extract media from specialist results (only present for workout responses)
         gifs = {}
         imgs = {}
         specialists = final_state.get("specialist_results", {})
@@ -62,13 +62,13 @@ class AIService:
                 if "exercise_images" in data:
                     imgs.update(data["exercise_images"])
         
-        return {
+        response = {
             "response": last_msg.content,
-            "exercise_gifs": gifs,
-            "exercise_images": imgs,
             "intents": final_state.get("intent", []),
-            "summary": final_state.get("conversation_summary", "")
+            "summary": final_state.get("conversation_summary")
         }
+        
+        return response
 
     @staticmethod
     async def generate_workout_plan(data: dict):
@@ -97,8 +97,6 @@ class AIService:
         output = result.get("specialist_results", {}).get("training", {})
         return {
             "response": output.get("answer", "Could not generate plan."),
-            "exercise_gifs": output.get("exercise_gifs", {}),
-            "exercise_images": output.get("exercise_images", {})
         }
 
     @staticmethod
