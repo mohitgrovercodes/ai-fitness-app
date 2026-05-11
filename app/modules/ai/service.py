@@ -35,10 +35,37 @@ class AIService:
         """
         config = {"configurable": {"thread_id": user_id}}
         
+        # 1. Fetch Profile from Database if available
+        from app.core.sql_db import SessionLocal
+        from app.modules.profile.service import ProfileService
+        
+        db = SessionLocal()
+        try:
+            profile = ProfileService.get_profile(db, user_id)
+            db_context = {}
+            if profile:
+                db_context = {
+                    "full_name": profile.full_name,
+                    "age": profile.age,
+                    "gender": profile.gender.value if profile.gender else None,
+                    "weight_kg": profile.weight,
+                    "height_cm": profile.height,
+                    "goal": profile.goal.value if profile.goal else None,
+                    "activity_level": profile.activity_level.value if profile.activity_level else None,
+                    "diet_preference": profile.diet_preference,
+                    "injuries": profile.injuries.split(",") if profile.injuries else [],
+                    "medical_conditions": profile.medical_conditions.split(",") if profile.medical_conditions else []
+                }
+            
+            # Merge: Incoming context overrides DB context
+            merged_context = {**db_context, **(context or {})}
+        finally:
+            db.close()
+            
         # Initial state for the graph
         initial_state = {
             "messages": [HumanMessage(content=user_input)],
-            "user_context": context or {},
+            "user_context": merged_context,
             "conversation_summary": "" # This will be updated by the memory_manager
         }
         if image_bytes:

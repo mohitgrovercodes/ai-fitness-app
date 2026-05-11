@@ -3,12 +3,14 @@ from typing import List, Optional
 
 class UserContext(BaseModel):
     """Validated schema for user profile data."""
+    full_name: Optional[str] = None
     age: Optional[int] = None
     gender: Optional[str] = None
     weight_kg: Optional[float] = None
     height_cm: Optional[float] = None
     goal: Optional[str] = "General Fitness"
     activity_level: Optional[str] = "Moderate"
+    diet_preference: Optional[str] = None
     injuries: List[str] = []
     medical_conditions: List[str] = []
 
