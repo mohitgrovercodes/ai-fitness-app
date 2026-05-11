@@ -25,14 +25,19 @@ Your task is to classify user intent based on the current message and the conver
 CONTEXT SUMMARY: {summary}
 
 CATEGORIES:
-- 'workout': Exercise routines, form, or gym equipment.
-- 'nutrition': Diet, calories, macros, or specific foods.
+- 'workout': Exercise routines, form, gym equipment, training plans.
+- 'nutrition': Diet, calories, macros, meal plans, or specific foods.
 - 'image': Analyzing an uploaded photo of food or exercise.
 - 'general': Scientific questions about anatomy, physiology, BMR, or exercise theory.
 - 'progress': Tracking weight, strength gains, or history.
 - 'out_of_scope': Non-fitness topics.
 
-If the user says "tell me more" or "how many calories in that?", use the SUMMARY to determine the intent."""),
+MULTI-INTENT RULES (CRITICAL):
+- You MUST return MULTIPLE intents when the user asks for multiple things.
+- Weight loss / weight gain / body transformation goals ALWAYS require BOTH 'workout' AND 'nutrition' intents — the user needs both a workout plan AND a diet plan to achieve their goal.
+- If the user says 'diet plan' AND mentions a fitness goal (lose/gain weight, get fit), return ['workout', 'nutrition'].
+- If the user only asks a single specific question (e.g., 'how many calories in an apple?'), return just ['nutrition'].
+- If the user says 'tell me more' or 'how many calories in that?', use the SUMMARY to determine the intent."""),
             ("human", "{input}")
         ])
 
@@ -56,10 +61,17 @@ If the user says "tell me more" or "how many calories in that?", use the SUMMARY
         # Logic for domain checking
         route = "agent_router" if res.is_fitness_domain else "out_of_scope_handler"
         
-        # Cross-Agent Intelligence: If a workout is requested, automatically suggest nutrition
-        # unless it's already there.
+        # Cross-Agent Intelligence:
+        # LLM itself detected if this is a body transformation goal needing BOTH agents
         final_intents = res.intents
-        
+        if res.has_body_transformation_goal:
+            if "nutrition" in final_intents and "workout" not in final_intents:
+                final_intents.append("workout")
+                logger.info("🧠 [Orchestrator] Auto-added 'workout' — body transformation goal detected by LLM.")
+            elif "workout" in final_intents and "nutrition" not in final_intents:
+                final_intents.append("nutrition")
+                logger.info("🧠 [Orchestrator] Auto-added 'nutrition' — body transformation goal detected by LLM.")
+
         # Enforce strict 'image' handling to prevent generic fluff
         if "image" in final_intents and "nutrition" in final_intents:
             logger.info("🧠 [Orchestrator] Stripping 'nutrition' intent because an image is present. Vision Agent will handle the nutritional breakdown.")

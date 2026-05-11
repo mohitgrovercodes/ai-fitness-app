@@ -8,7 +8,7 @@ from app.utils.logger import logger
 class SafetyResult(BaseModel):
     is_safe: bool
     reason: str
-    suggested_response: str
+    suggested_response: str = ""
 
 class SafetyGuardrail:
     """

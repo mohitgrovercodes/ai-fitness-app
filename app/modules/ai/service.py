@@ -85,8 +85,6 @@ class AIService:
             out_data["exercise_images"] = imgs
         if daily_totals:
             out_data["daily_totals"] = daily_totals
-        if final_state.get("conversation_summary"):
-            out_data["summary"] = final_state.get("conversation_summary")
             
         return out_data
 
@@ -97,15 +95,19 @@ class AIService:
         from app.agents.training_agent import TrainingAgent
         
         user_id = data.get("user_id", "default")
-        goal = data.get("goal", "general fitness")
-        level = data.get("level", "intermediate")
-        duration = data.get("duration", "4-day per week") # can be "1 month", "4-day per week", etc
+        goal = data.get("goal", "")
+        level = data.get("level", "")
+        duration = data.get("duration", "")
         injuries = data.get("injuries", [])
         
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message")
         if not user_input:
-            user_input = f"Create a structured {duration} workout plan for {goal} at a {level} fitness level."
+            parts = ["Create a structured workout plan"]
+            if goal: parts.append(f"for {goal}")
+            if level: parts.append(f"at a {level} fitness level")
+            if duration: parts.append(f"for a duration of {duration}")
+            user_input = " ".join(parts) + "."
             
         context = {"goal": goal, "injuries": injuries, "level": level}
         
@@ -129,14 +131,18 @@ class AIService:
         from app.agents.nutrition_agent import NutritionAgent
         
         user_id = data.get("user_id", "default")
-        goal = data.get("goal", "general fitness")
-        diet_type = data.get("diet_type", "any")
+        goal = data.get("goal", "")
+        diet_type = data.get("diet_type", "")
         allergies = data.get("allergies", [])
         
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message")
         if not user_input:
-            user_input = f"Create a structured time-based daily meal plan for {goal}. Dietary preference: {diet_type}. Allergies: {', '.join(allergies) if allergies else 'None'}."
+            parts = ["Create a structured time-based daily meal plan"]
+            if goal: parts.append(f"for {goal}")
+            if diet_type: parts.append(f"with a {diet_type} dietary preference")
+            if allergies: parts.append(f". Avoid these allergies: {', '.join(allergies)}")
+            user_input = " ".join(parts) + "."
             
         context = {"goal": goal, "injuries": allergies} # pass allergies as injuries so the agent avoids them
         
