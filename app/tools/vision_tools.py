@@ -28,7 +28,6 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple, Union
 from PIL import Image
 import torch
-
 warnings.filterwarnings("ignore")
 
 # ─── Paths ────────────────────────────────────────────────────
@@ -44,9 +43,12 @@ def _load_clip():
     """Load CLIP model only once into memory (singleton pattern)."""
     global _clip_model, _clip_processor
     if _clip_model is None:
+        import torch
+        import os
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
         from transformers import CLIPProcessor, CLIPModel
-        print("⏳ [Vision Tool] Loading CLIP model...")
-        _clip_model     = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+        print("⏳ [Vision Tool] Loading CLIP model (CPU Mode)...")
+        _clip_model     = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to("cpu")
         _clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
         _clip_model.eval()
         print("✅ [Vision Tool] CLIP model loaded successfully.")
@@ -282,21 +284,28 @@ def identify_and_learn_new_food(
         )
 
     vlm_prompt = (
-        "You are an expert food identification AI. You specialize in Indian and Asian cuisine, but you MUST also identify all global foods (Italian, Mexican, American, Fast Food, etc.).\n"
-        "Your task: Identify the EXACT food dish in this image with high accuracy.\n"
-        "- If the image contains ANY edible food (including pasta, pizza, tacos, global dishes), you MUST set `is_food: true`.\n"
-        "- STRICT CULTURAL POLICY: DO NOT process or analyze BEEF. If the image contains beef, you MUST set `is_food: false` and set the object to 'A dish containing beef (violates policy)'.\n"
-        "- Look at the dish's texture, color, ingredients, and presentation carefully.\n"
-        "- THALIS / MIXED MEALS: If the image is a 'Thali' or a platter with multiple items, DO NOT just say 'Thali'. You MUST list ONLY the VISIBLE components in the name (e.g., 'North Indian Veg Thali (Dal, Rice, Paneer, Roti)').\n"
-        "- CRITICAL ANTI-HALLUCINATION RULE: Do NOT invent or guess traditional combinations. For example, if you see a generic Thali, do NOT assume it contains 'Dal Baati' or 'Churma' unless you specifically see them. List ONLY what your eyes can see.\n"
-        "- PORTION ESTIMATION (CRITICAL): You MUST estimate the total quantity of food visible in the image. Do NOT provide 'per 100g' values. Calculate the total calories and macros for the ENTIRE plate/portion shown (e.g. if you see 4 pooris and curry, calculate the sum for all of them).\n"
-        "- Do NOT guess. If unsure, pick the most visually accurate name.\n"
+        "You are a world-class food identification and nutrition AI with expert knowledge of ALL global cuisines "
+        "(Indian, Chinese, Italian, Mexican, American, Japanese, Mediterranean, Middle Eastern, Korean, Thai, and more).\n"
+        "Your task: Identify the EXACT food dish in this image AND estimate its nutritional content based on the VISIBLE PORTION SIZE.\n\n"
+        "IDENTIFICATION RULES:\n"
+        "- If the image contains ANY edible food, you MUST set `is_food: true`.\n"
+        "- STRICT CULTURAL POLICY: DO NOT process or analyze BEEF. If the image contains beef, set `is_food: false` and object to 'A dish containing beef (violates policy)'.\n"
+        "- Analyze texture, color, ingredients, plating style, and serving vessel carefully.\n"
+        "- Do NOT limit yourself to Indian food. Identify ANY world cuisine accurately.\n"
+        "- THALIS / MIXED MEALS: List ALL VISIBLE components in the name (e.g., 'North Indian Veg Thali (Dal, Rice, Paneer, Roti)'). Do NOT just say 'Thali'.\n"
+        "- ANTI-HALLUCINATION: List ONLY what you can visually confirm. Do not assume hidden ingredients.\n"
         f"{hints_context}\n"
+        "PORTION ESTIMATION RULES:\n"
+        "- Look at the plate/bowl size and estimate the TOTAL SERVING SIZE in grams.\n"
+        "- Provide nutritional values for the ENTIRE VISIBLE PORTION (not per 100g).\n"
+        "- Use realistic estimates: a normal plate of Rajma Chawal ≈ 450–550 kcal, a burger ≈ 450–600 kcal, a salad ≈ 150–300 kcal.\n"
+        "- NEVER output N/A for any macro. You MUST estimate a number.\n\n"
         "Respond in STRICT JSON format only. No other text.\n\n"
         "If the image IS a food dish:\n"
         "{\n"
         '  "is_food": true,\n'
         '  "food_name": "Exact Dish Name (use common English/Hindi name)",\n'
+        '  "estimated_serving_g": <estimated total weight of the visible portion in grams>,\n'
         '  "calories_kcal": <TOTAL number for the entire visible portion>,\n'
         '  "protein_g": <TOTAL number for the entire visible portion. NEVER output N/A. MUST estimate a number>,\n'
         '  "carbs_g": <TOTAL number for the entire visible portion. NEVER output N/A. MUST estimate a number>,\n'
@@ -325,7 +334,7 @@ def identify_and_learn_new_food(
                     ],
                 }
             ],
-            max_tokens=120,
+            max_tokens=250,
             temperature=0.0,
         )
 
@@ -362,15 +371,17 @@ def identify_and_learn_new_food(
         }
 
     # ── Step 3: Extract Food Info ──────────────────────────────────────────────
-    food_name     = vlm_data.get("food_name", "Unknown Food")
-    vlm_nutrition = {
-        "food_name": food_name,
-        "calories":  vlm_data.get("calories_kcal", "N/A"),
-        "protein":   vlm_data.get("protein_g",     "N/A"),
-        "carbs":     vlm_data.get("carbs_g",        "N/A"),
-        "fat":       vlm_data.get("fat_g",          "N/A"),
+    food_name      = vlm_data.get("food_name", "Unknown Food")
+    serving_g      = vlm_data.get("estimated_serving_g", None)
+    vlm_nutrition  = {
+        "food_name":         food_name,
+        "calories":          vlm_data.get("calories_kcal", "N/A"),
+        "protein":           vlm_data.get("protein_g",     "N/A"),
+        "carbs":             vlm_data.get("carbs_g",       "N/A"),
+        "fat":               vlm_data.get("fat_g",         "N/A"),
+        "estimated_serving": f"{serving_g}g" if serving_g else None,
     }
-    print(f"🍽️ [VLM Tool] Identified: '{food_name}'")
+    print(f"🍽️ [VLM Tool] Identified: '{food_name}' | Estimated serving: {serving_g}g | Cal: {vlm_nutrition['calories']} kcal")
 
     # ── Step 4: Local DB lookup — enrich macros only, keep VLM calories ──────
     # VLM already analyzed THIS specific plate/portion so its calorie estimate
@@ -396,6 +407,7 @@ def identify_and_learn_new_food(
         print(f"🌐 [VLM Tool] DB miss for '{food_name}'. Using VLM nutrition.")
         source = "vlm"
         final_nutrition = vlm_nutrition
+
 
     # ── Step 5: Smart Self-Learn — Centroid Update Strategy ───────────────────
     # Rule: Exactly 1 vector per dish (Zero Duplicacy).

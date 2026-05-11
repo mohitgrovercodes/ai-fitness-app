@@ -59,9 +59,11 @@ If the user says "tell me more" or "how many calories in that?", use the SUMMARY
         # Cross-Agent Intelligence: If a workout is requested, automatically suggest nutrition
         # unless it's already there.
         final_intents = res.intents
-        # if "workout" in final_intents and "nutrition" not in final_intents:
-        #     logger.info("🧠 [Cross-Agent Intelligence] Adding 'nutrition' intent to support 'workout' request.")
-        #     final_intents.append("nutrition")
+        
+        # Enforce strict 'image' handling to prevent generic fluff
+        if "image" in final_intents and "nutrition" in final_intents:
+            logger.info("🧠 [Orchestrator] Stripping 'nutrition' intent because an image is present. Vision Agent will handle the nutritional breakdown.")
+            final_intents.remove("nutrition")
 
         return {
             "intent": final_intents,

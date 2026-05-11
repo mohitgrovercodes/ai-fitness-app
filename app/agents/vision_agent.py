@@ -176,81 +176,79 @@ class VisionAgent:
                 else:
                     print(f"[Vision Agent] Ambiguity canceled: same family.")
 
-        # ── TIER 1 & 2: VLM for portion-accurate calorie estimation ──────────
-        # VLM (GPT-4o-mini Vision) analyzes the ACTUAL plate to estimate real
-        # calories — CLIP only identified the category, not the serving size.
-        # DB role: fills missing macros only (protein/carbs/fat), never calories.
-        reason = "High Confidence" if is_high_confidence and top_score >= CONFIDENCE_THRESHOLD else ("OOD Food" if top_score < CONFIDENCE_THRESHOLD else "Ambiguous Food")
-        print(f"[Vision Agent] {reason} (score: {top_score:.4f}). Triggering VLM for portion estimation...")
-        meta["gpt_vision_used"] = True
-        meta["decision_tier"]   = f"Tier 1/2 — {reason} (CLIP: {top_score:.4f}) → VLM Portion Estimation"
+        # ── TIER 1a: High Confidence — Direct Local DB Lookup ─────────────────
+        if is_high_confidence and top_score >= CONFIDENCE_THRESHOLD:
+            print(f"[Vision Agent] HIGH confidence: '{top_match['category']}' ({top_score:.4f})")
+            meta["decision_tier"]   = f"Tier 1a — High Confidence CLIP (score: {top_score:.4f})"
+            meta["identified_food"] = top_match["category"]
+            async with db_manager.lock:
+                nutrition_data = await asyncio.to_thread(get_food_nutrition, top_match["category"])
 
-        async with db_manager.lock:
-            result = await asyncio.to_thread(
-                identify_and_learn_new_food, image_bytes, clip_vector=clip_vector, clip_hints=clip_hints
+            # Check if DB macros are complete — if not, trigger VLM for portion-aware estimation
+            db_has_macros = nutrition_data and any(
+                nutrition_data.get(k, "N/A") != "N/A"
+                for k in ["protein", "carbs", "fat"]
+            )
+            if not db_has_macros:
+                print(f"[Vision Agent] Tier 1a: DB macros incomplete for '{top_match['category']}'. Upgrading to VLM.")
+                meta["gpt_vision_used"] = True
+                meta["decision_tier"]   = f"Tier 1a+VLM — CLIP Confident + VLM Nutrition ({top_score:.4f})"
+                async with db_manager.lock:
+                    result = await asyncio.to_thread(
+                        identify_and_learn_new_food, image_bytes, clip_vector=clip_vector, clip_hints=clip_hints
+                    )
+                if result.get("is_food") and result.get("nutrition"):
+                    nutrition_data = result["nutrition"]
+                    meta["data_source"] = result.get("source", "vlm")
+                else:
+                    meta["data_source"] = "llm_knowledge"
+            else:
+                meta["data_source"] = "db"
+
+            result_for_meals = {
+                "identified_food": top_match["category"],
+                "nutrition": nutrition_data,
+                "source": meta["data_source"],
+                "learned": False,
+                "is_food": True,
+            }
+            meta = self._build_meals_from_result(result_for_meals, meta)
+            prompt = self._build_nutrition_prompt(
+                top_match["category"], nutrition_data, user_text, meta["data_source"]
             )
 
-        # GUARDRAIL B — VLM says NOT FOOD
-        if not result["is_food"]:
-            print(f"[Vision Agent] GUARDRAIL B: not food: '{result['object']}'")
-            meta["decision_tier"]   = f"Guardrail B — Not Food ({result['object']})"
-            meta["identified_food"] = result["object"]
-            prompt = self._build_guardrail_b_prompt(result["object"], user_text)
-            llm_response = await self.llm.ainvoke(prompt)
-            return self._build_output(llm_response.content, meta)
+        else:
+            # ── TIER 2: Ambiguous or OOD → VLM Portion Estimation ───────────────
+            reason = "Ambiguous Food" if not is_high_confidence else "OOD Food"
+            print(f"[Vision Agent] {reason} (score: {top_score:.4f}). Triggering VLM for portion estimation...")
+            meta["gpt_vision_used"] = True
+            meta["decision_tier"]   = f"Tier 2 — {reason} (CLIP: {top_score:.4f}) → VLM Portion Estimation"
 
-        meta["identified_food"] = result["identified_food"]
-        meta["data_source"]     = result["source"]
-        meta["self_learned"]    = result["learned"]
-        learned_msg = " 💾 Saved to DB!" if result.get("learned") else ""
-        print(f"[Vision Agent] VLM identified: '{result['identified_food']}'{learned_msg}")
+            async with db_manager.lock:
+                result = await asyncio.to_thread(
+                    identify_and_learn_new_food, image_bytes, clip_vector=clip_vector, clip_hints=clip_hints
+                )
 
-        meta = self._build_meals_from_result(result, meta)
-        prompt = self._build_nutrition_prompt(
-            result["identified_food"], result["nutrition"], user_text, result["source"]
-        )
+            # GUARDRAIL B — VLM says NOT FOOD
+            if not result["is_food"]:
+                print(f"[Vision Agent] GUARDRAIL B: not food: '{result['object']}'")
+                meta["decision_tier"]   = f"Guardrail B — Not Food ({result['object']})"
+                meta["identified_food"] = result["object"]
+                prompt = self._build_guardrail_b_prompt(result["object"], user_text)
+                llm_response = await self.llm.ainvoke(prompt)
+                return self._build_output(llm_response.content, meta)
 
-        nut = result.get("nutrition")
-        if nut:
-            try:
-                def _to_num(val, fallback=0.0):
-                    """Convert any value to float, return fallback on failure/N/A."""
-                    if val in (None, "N/A", "n/a", "", 0, "0"):
-                        return None
-                    try:
-                        return float(str(val).replace('g','').strip())
-                    except Exception:
-                        return None
+            meta["identified_food"] = result["identified_food"]
+            meta["data_source"]     = result["source"]
+            meta["self_learned"]    = result["learned"]
+            learned_msg = " 💾 Saved to DB!" if result.get("learned") else ""
+            print(f"[Vision Agent] VLM identified: '{result['identified_food']}'{learned_msg}")
 
-                cal  = _to_num(nut.get("calories")) or 0.0
-                prot = _to_num(nut.get("protein"))
-                fat  = _to_num(nut.get("fat"))
-                carb = _to_num(nut.get("carbs"))
+            meta = self._build_meals_from_result(result, meta)
+            prompt = self._build_nutrition_prompt(
+                result["identified_food"], result["nutrition"], user_text, result["source"]
+            )
 
-                # 4-4-9 rule fallback for any missing macro
-                if prot is None and fat is not None and carb is not None:
-                    prot = max(0, round((cal - (fat * 9) - (carb * 4)) / 4, 1))
-                elif fat is None and prot is not None and carb is not None:
-                    fat  = max(0, round((cal - (prot * 4) - (carb * 4)) / 9, 1))
-                elif carb is None and prot is not None and fat is not None:
-                    carb = max(0, round((cal - (prot * 4) - (fat * 9)) / 4, 1))
-                # If all three are missing, estimate a reasonable split (40/30/30 for a balanced meal)
-                elif prot is None and fat is None and carb is None and cal > 0:
-                    prot = round(cal * 0.30 / 4, 1)
-                    fat  = round(cal * 0.30 / 9, 1)
-                    carb = round(cal * 0.40 / 4, 1)
-
-                meta["meals"] = [{
-                    "type": "Analyzed Image",
-                    "name": str(nut.get("food_name", result["identified_food"])).title(),
-                    "calories": round(cal, 1),
-                    "protein": f"{prot}g" if prot is not None else "Est. N/A",
-                    "carbs": f"{carb}g" if carb is not None else "Est. N/A",
-                    "fat": f"{fat}g" if fat is not None else "Est. N/A",
-                    "benefit": "Analyzed from your uploaded image."
-                }]
-            except Exception as e:
-                print(f"[Vision Agent] Failed to parse meal for UI: {e}")
         # ══════════════════════════════════════════════════════
         # STAGE 3 — LLM REASONING & FINAL RESPONSE
         # ══════════════════════════════════════════════════════
@@ -384,37 +382,62 @@ class VisionAgent:
         )
 
         if nutrition:
+            serving_note = f"Estimated Serving Size: ~{nutrition['estimated_serving']}\n" if nutrition.get("estimated_serving") else ""
             nutrition_context = (
                 f"Food: {nutrition.get('food_name', food_display)}\n"
+                f"{serving_note}"
                 f"Calories: {nutrition.get('calories', 'N/A')} kcal\n"
                 f"Protein: {nutrition.get('protein', 'N/A')} g\n"
                 f"Carbs:   {nutrition.get('carbs', 'N/A')} g\n"
-                f"Fat:     {nutrition.get('fat', 'N/A')} g"
+                f"Fat:     {nutrition.get('fat', 'N/A')} g\n\n"
+                f"CRITICAL INSTRUCTION: If any macro value is 'N/A', or if calories seem wildly inaccurate for a standard moderate serving (e.g. >1000 kcal for a normal home-cooked plate), you MUST ignore that data and estimate realistic numeric values for the given portion. All values must be numbers — never 'N/A'."
             )
         else:
             nutrition_context = (
                 f"Food: {food_display}\n"
-                f"(Exact data not available — use your best nutritional knowledge.)"
+                f"(No database entry found. You MUST estimate all values based on a typical moderate serving size of this dish.)"
             )
 
         if user_text and user_text.strip():
             instruction = (
                 f'The user asked: "{user_text}"\n'
-                f"Answer their specific question using the nutrition data above."
+                f"Answer using the nutrition data above. FOLLOW THIS FORMAT STRICTLY:\n\n"
+                f"## 🍽️ [Food Name]\n"
+                f"**Description**: [2-3 sentences — interactive, engaging, describe what the dish is, its origin, key ingredients, and taste profile.]\n\n"
+                f"## 📊 Nutritional Breakdown\n"
+                f"*(Estimated for the visible portion)*\n"
+                f"- **Serving Size**: [Xg or approximate]\n"
+                f"- **Calories**: [X] kcal\n"
+                f"- **Protein**: [X] g\n"
+                f"- **Carbohydrates**: [X] g\n"
+                f"- **Fat**: [X] g\n\n"
+                f"STRICT RULES: All values MUST be numeric. Never write 'N/A' or 'Generally high'. "
+                f"Do NOT add a 'Complementary Aspects', 'Tips', or any other section. End after the nutritional breakdown."
             )
         else:
             instruction = (
-                "The user did not ask a specific question. "
-                "Automatically provide a friendly, complete nutritional summary of this food "
-                "including what it is, its calories, macros, and a brief health tip."
+                "Provide a response using EXACTLY this format:\n\n"
+                "## 🍽️ [Food Name]\n"
+                "**Description**: [2-3 sentences — interactive, engaging, describe what the dish is, its origin, key ingredients, and taste profile.]\n\n"
+                "## 📊 Nutritional Breakdown\n"
+                "*(Estimated for the visible portion)*\n"
+                "- **Serving Size**: [Xg or approximate]\n"
+                "- **Calories**: [X] kcal\n"
+                "- **Protein**: [X] g\n"
+                "- **Carbohydrates**: [X] g\n"
+                "- **Fat**: [X] g\n\n"
+                "STRICT RULES: All values MUST be numeric. Never write 'N/A' or 'Generally high'. "
+                "Do NOT add a 'Complementary Aspects', 'Tips', 'Putting it Together', or any other section. End immediately after the nutritional breakdown."
             )
 
         return (
-            f"You are FitBot, an expert AI Food Vision assistant.\n\n"
+            f"You are FitBot, a world-class food identification and nutrition AI.\n"
+            f"You can identify and provide nutrition for ANY food from ANY global cuisine.\n\n"
             f"You have ALREADY analyzed the user's image using a vision module. The exact nutritional data for their specific meal is provided below.\n\n"
             f"{nutrition_context}\n\n"
             f"{instruction}\n\n"
-            f"CRITICAL RULE: DO NOT say 'I cannot analyze this specific meal' or 'I cannot see the image'. You ALREADY analyzed it. Present the provided data confidently as your own analysis."
+            f"CRITICAL RULE: DO NOT say 'I cannot analyze this specific meal' or 'I cannot see the image'. You ALREADY analyzed it. Present the provided data confidently as your own analysis.\n"
+            f"Use clean markdown headers. Do not add any 'expert coach' fluff or unrelated suggestions.{source_note}"
         )
 
     def _build_meals_from_result(self, result: dict, meta: dict) -> dict:

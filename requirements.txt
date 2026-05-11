@@ -21,7 +21,9 @@ tavily-python
 
 # --- Vision & CLIP ---
 torch
-transformers
+transformers==4.40.1
+tokenizers==0.19.1
+pysqlite3
 pillow
 opencv-python
 mediapipe

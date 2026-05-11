@@ -90,6 +90,7 @@ class AIService:
             
         return out_data
 
+
     @staticmethod
     async def generate_workout_plan(data: dict):
         """Directly calls the TrainingAgent with structured data from a button/form."""
@@ -119,7 +120,7 @@ class AIService:
             "summary": output.get("summary", ""),
             "workout": output.get("workout", []),
             "tip": output.get("tip", ""),
-            "response": output.get("answer", "Could not generate plan.")
+            "response": output.get("answer", "Could not generate plan."),
         }
 
     @staticmethod
