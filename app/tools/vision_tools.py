@@ -282,10 +282,11 @@ def identify_and_learn_new_food(
         )
 
     vlm_prompt = (
-        "You are an expert food identification AI specializing in Indian and Asian cuisine.\n"
+        "You are an expert food identification AI. You specialize in Indian and Asian cuisine, but you MUST also identify all global foods (Italian, Mexican, American, Fast Food, etc.).\n"
         "Your task: Identify the EXACT food dish in this image with high accuracy.\n"
+        "- If the image contains ANY edible food (including pasta, pizza, tacos, global dishes), you MUST set `is_food: true`.\n"
+        "- STRICT CULTURAL POLICY: DO NOT process or analyze BEEF. If the image contains beef, you MUST set `is_food: false` and set the object to 'A dish containing beef (violates policy)'.\n"
         "- Look at the dish's texture, color, ingredients, and presentation carefully.\n"
-        "- For Indian dishes: consider regional variations (North, South, East, West Indian).\n"
         "- THALIS / MIXED MEALS: If the image is a 'Thali' or a platter with multiple items, DO NOT just say 'Thali'. You MUST list ONLY the VISIBLE components in the name (e.g., 'North Indian Veg Thali (Dal, Rice, Paneer, Roti)').\n"
         "- CRITICAL ANTI-HALLUCINATION RULE: Do NOT invent or guess traditional combinations. For example, if you see a generic Thali, do NOT assume it contains 'Dal Baati' or 'Churma' unless you specifically see them. List ONLY what your eyes can see.\n"
         "- PORTION ESTIMATION (CRITICAL): You MUST estimate the total quantity of food visible in the image. Do NOT provide 'per 100g' values. Calculate the total calories and macros for the ENTIRE plate/portion shown (e.g. if you see 4 pooris and curry, calculate the sum for all of them).\n"
@@ -297,9 +298,9 @@ def identify_and_learn_new_food(
         '  "is_food": true,\n'
         '  "food_name": "Exact Dish Name (use common English/Hindi name)",\n'
         '  "calories_kcal": <TOTAL number for the entire visible portion>,\n'
-        '  "protein_g": <TOTAL number for the entire visible portion>,\n'
-        '  "carbs_g": <TOTAL number for the entire visible portion>,\n'
-        '  "fat_g": <TOTAL number for the entire visible portion>\n'
+        '  "protein_g": <TOTAL number for the entire visible portion. NEVER output N/A. MUST estimate a number>,\n'
+        '  "carbs_g": <TOTAL number for the entire visible portion. NEVER output N/A. MUST estimate a number>,\n'
+        '  "fat_g": <TOTAL number for the entire visible portion. NEVER output N/A. MUST estimate a number>\n'
         "}\n\n"
         "If the image is NOT food (e.g. person, car, animal, object):\n"
         "{\n"
@@ -371,15 +372,30 @@ def identify_and_learn_new_food(
     }
     print(f"🍽️ [VLM Tool] Identified: '{food_name}'")
 
-    # ── Step 4: Local DB lookup first ─────────────────────────────────────────
-    db_nutrition    = get_food_nutrition(food_name)
-    source          = "db" if db_nutrition else "vlm"
-    final_nutrition = db_nutrition if db_nutrition else vlm_nutrition
+    # ── Step 4: Local DB lookup — enrich macros only, keep VLM calories ──────
+    # VLM already analyzed THIS specific plate/portion so its calorie estimate
+    # is more accurate than the DB's generic per-100g value.
+    # Strategy: Use VLM calories (portion-accurate), fill missing macros from DB.
+    db_nutrition = get_food_nutrition(food_name)
 
     if db_nutrition:
-        print(f"✅ [VLM Tool] DB hit for '{food_name}'. Using DB nutrition.")
+        print(f"✅ [VLM Tool] DB hit for '{food_name}'. Using VLM calories + DB macros.")
+        source = "vlm+db"
+        def _pick(vlm_val, db_val):
+            if vlm_val in (None, "N/A", "n/a", "", 0, "0"):
+                return db_val
+            return vlm_val
+        final_nutrition = {
+            "food_name": db_nutrition.get("food_name", food_name),
+            "calories":  vlm_nutrition["calories"],
+            "protein":   _pick(vlm_nutrition["protein"], db_nutrition.get("protein")),
+            "carbs":     _pick(vlm_nutrition["carbs"],   db_nutrition.get("carbs")),
+            "fat":       _pick(vlm_nutrition["fat"],     db_nutrition.get("fat")),
+        }
     else:
         print(f"🌐 [VLM Tool] DB miss for '{food_name}'. Using VLM nutrition.")
+        source = "vlm"
+        final_nutrition = vlm_nutrition
 
     # ── Step 5: Smart Self-Learn — Centroid Update Strategy ───────────────────
     # Rule: Exactly 1 vector per dish (Zero Duplicacy).

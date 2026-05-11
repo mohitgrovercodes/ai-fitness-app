@@ -72,16 +72,23 @@ class AIService:
                 if "daily_totals" in data and isinstance(data["daily_totals"], dict):
                     daily_totals.update(data["daily_totals"])
         
-        return {
+        out_data = {
             "response": last_msg.content,
-            "exercise_gifs": gifs,
-            "exercise_images": imgs,
             "workout": workouts,
             "meals": meals,
-            "daily_totals": daily_totals,
-            "intents": final_state.get("intent", []),
-            "summary": final_state.get("conversation_summary", "")
+            "intents": final_state.get("intent", [])
         }
+        
+        if gifs:
+            out_data["exercise_gifs"] = gifs
+        if imgs:
+            out_data["exercise_images"] = imgs
+        if daily_totals:
+            out_data["daily_totals"] = daily_totals
+        if final_state.get("conversation_summary"):
+            out_data["summary"] = final_state.get("conversation_summary")
+            
+        return out_data
 
     @staticmethod
     async def generate_workout_plan(data: dict):

@@ -156,6 +156,7 @@ class VisionAgent:
             meta["identified_food"] = result["identified_food"]
             meta["data_source"]     = result["source"]
             meta["self_learned"]    = result["learned"]
+            meta = self._build_meals_from_result(result, meta)
             prompt = self._build_nutrition_prompt(
                 result["identified_food"], result["nutrition"], user_text, result["source"]
             )
@@ -175,11 +176,14 @@ class VisionAgent:
                 else:
                     print(f"[Vision Agent] Ambiguity canceled: same family.")
 
-        # ── TIER 1 & 2: DYNAMIC PORTION ESTIMATION VIA VLM ───────────────
+        # ── TIER 1 & 2: VLM for portion-accurate calorie estimation ──────────
+        # VLM (GPT-4o-mini Vision) analyzes the ACTUAL plate to estimate real
+        # calories — CLIP only identified the category, not the serving size.
+        # DB role: fills missing macros only (protein/carbs/fat), never calories.
         reason = "High Confidence" if is_high_confidence and top_score >= CONFIDENCE_THRESHOLD else ("OOD Food" if top_score < CONFIDENCE_THRESHOLD else "Ambiguous Food")
-        print(f"[Vision Agent] {reason} (score: {top_score:.4f}). Triggering VLM for dynamic portion estimation...")
+        print(f"[Vision Agent] {reason} (score: {top_score:.4f}). Triggering VLM for portion estimation...")
         meta["gpt_vision_used"] = True
-        meta["decision_tier"]   = f"Tier 1/2 — {reason} (CLIP: {top_score:.4f}) → VLM Dynamic Sizing"
+        meta["decision_tier"]   = f"Tier 1/2 — {reason} (CLIP: {top_score:.4f}) → VLM Portion Estimation"
 
         async with db_manager.lock:
             result = await asyncio.to_thread(
@@ -201,10 +205,52 @@ class VisionAgent:
         learned_msg = " 💾 Saved to DB!" if result.get("learned") else ""
         print(f"[Vision Agent] VLM identified: '{result['identified_food']}'{learned_msg}")
 
+        meta = self._build_meals_from_result(result, meta)
         prompt = self._build_nutrition_prompt(
             result["identified_food"], result["nutrition"], user_text, result["source"]
         )
-        
+
+        nut = result.get("nutrition")
+        if nut:
+            try:
+                def _to_num(val, fallback=0.0):
+                    """Convert any value to float, return fallback on failure/N/A."""
+                    if val in (None, "N/A", "n/a", "", 0, "0"):
+                        return None
+                    try:
+                        return float(str(val).replace('g','').strip())
+                    except Exception:
+                        return None
+
+                cal  = _to_num(nut.get("calories")) or 0.0
+                prot = _to_num(nut.get("protein"))
+                fat  = _to_num(nut.get("fat"))
+                carb = _to_num(nut.get("carbs"))
+
+                # 4-4-9 rule fallback for any missing macro
+                if prot is None and fat is not None and carb is not None:
+                    prot = max(0, round((cal - (fat * 9) - (carb * 4)) / 4, 1))
+                elif fat is None and prot is not None and carb is not None:
+                    fat  = max(0, round((cal - (prot * 4) - (carb * 4)) / 9, 1))
+                elif carb is None and prot is not None and fat is not None:
+                    carb = max(0, round((cal - (prot * 4) - (fat * 9)) / 4, 1))
+                # If all three are missing, estimate a reasonable split (40/30/30 for a balanced meal)
+                elif prot is None and fat is None and carb is None and cal > 0:
+                    prot = round(cal * 0.30 / 4, 1)
+                    fat  = round(cal * 0.30 / 9, 1)
+                    carb = round(cal * 0.40 / 4, 1)
+
+                meta["meals"] = [{
+                    "type": "Analyzed Image",
+                    "name": str(nut.get("food_name", result["identified_food"])).title(),
+                    "calories": round(cal, 1),
+                    "protein": f"{prot}g" if prot is not None else "Est. N/A",
+                    "carbs": f"{carb}g" if carb is not None else "Est. N/A",
+                    "fat": f"{fat}g" if fat is not None else "Est. N/A",
+                    "benefit": "Analyzed from your uploaded image."
+                }]
+            except Exception as e:
+                print(f"[Vision Agent] Failed to parse meal for UI: {e}")
         # ══════════════════════════════════════════════════════
         # STAGE 3 — LLM REASONING & FINAL RESPONSE
         # ══════════════════════════════════════════════════════
@@ -364,22 +410,81 @@ class VisionAgent:
             )
 
         return (
-            f"You are FitBot, an expert AI nutrition assistant.\n\n"
-            f"A user uploaded a food image. You have identified the food as:\n\n"
+            f"You are FitBot, an expert AI Food Vision assistant.\n\n"
+            f"You have ALREADY analyzed the user's image using a vision module. The exact nutritional data for their specific meal is provided below.\n\n"
             f"{nutrition_context}\n\n"
             f"{instruction}\n\n"
-            f"Be concise, friendly, and formatted clearly with markdown headers.{source_note}"
+            f"CRITICAL RULE: DO NOT say 'I cannot analyze this specific meal' or 'I cannot see the image'. You ALREADY analyzed it. Present the provided data confidently as your own analysis."
         )
+
+    def _build_meals_from_result(self, result: dict, meta: dict) -> dict:
+        """
+        Universally populate meta['meals'] from any VLM result dict.
+        Uses 4-4-9 macro math fallback if any macro is N/A or missing.
+        Called from ALL CLIP decision paths so meals are always populated.
+        """
+        nut = result.get("nutrition")
+        if not nut:
+            return meta
+        try:
+            def _to_num(val):
+                if val in (None, "N/A", "n/a", "", 0, "0"):
+                    return None
+                try:
+                    return float(str(val).replace("g", "").strip())
+                except Exception:
+                    return None
+
+            cal  = _to_num(nut.get("calories")) or 0.0
+            prot = _to_num(nut.get("protein"))
+            fat  = _to_num(nut.get("fat"))
+            carb = _to_num(nut.get("carbs"))
+
+            # 4-4-9 rule fallback for any missing macro
+            if prot is None and fat is not None and carb is not None:
+                prot = max(0, round((cal - (fat * 9) - (carb * 4)) / 4, 1))
+            elif fat is None and prot is not None and carb is not None:
+                fat  = max(0, round((cal - (prot * 4) - (carb * 4)) / 9, 1))
+            elif carb is None and prot is not None and fat is not None:
+                carb = max(0, round((cal - (prot * 4) - (fat * 9)) / 4, 1))
+            elif prot is None and fat is None and carb is None and cal > 0:
+                # All missing — balanced 40/30/30 split estimate
+                prot = round(cal * 0.30 / 4, 1)
+                fat  = round(cal * 0.30 / 9, 1)
+                carb = round(cal * 0.40 / 4, 1)
+
+            food_name = nut.get("food_name", result.get("identified_food", "Food"))
+            meta["meals"] = [{
+                "type": "Analyzed Image",
+                "name": str(food_name).title(),
+                "calories": round(cal, 1),
+                "protein": f"{prot}g" if prot is not None else "Est. N/A",
+                "carbs": f"{carb}g" if carb is not None else "Est. N/A",
+                "fat": f"{fat}g" if fat is not None else "Est. N/A",
+                "benefit": "Analyzed from your uploaded image."
+            }]
+        except Exception as e:
+            print(f"[Vision Agent] _build_meals_from_result failed: {e}")
+        return meta
 
     def _build_output(self, response_text: str, meta: dict = None) -> Dict[str, Any]:
         """Standard output format for the LangGraph state with optional metadata block."""
         full_response = response_text
         if meta:
             full_response = response_text + "\n\n" + self._format_metadata(meta)
+        
+        out = {
+            "answer": full_response,
+            "status": "success",
+            "metadata": meta
+        }
+        if meta and "meals" in meta:
+            out["meals"] = meta["meals"]
+            
         return {
             "messages": [AIMessage(content=full_response)],
             "specialist_results": {
-                "vision": full_response
+                "vision": out
             }
         }
 

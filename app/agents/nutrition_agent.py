@@ -9,14 +9,15 @@ from pydantic import BaseModel, Field
 class MealPlanItem(BaseModel):
     type: str = Field(description="Meal type (e.g., Breakfast, Lunch, Snack).")
     name: str = Field(description="Name of the dish/food.")
-    calories: int = Field(description="Estimated calories.")
-    protein: str = Field(description="Protein amount in grams (e.g., '12g'). NEVER 'N/A'.")
-    carbs: str = Field(description="Carbs amount in grams (e.g., '18g'). NEVER 'N/A'. MUST estimate if unknown.")
-    fat: str = Field(description="Fat amount in grams (e.g., '6g'). NEVER 'N/A'. MUST estimate if unknown.")
+    portion: str = Field(description="Amount of food to eat (e.g. '300g' or '2 cups'). MUST scale to hit the daily calorie goal!")
+    calories: float = Field(description="Total calories for this specific portion (can be decimal).")
+    protein: str = Field(description="Total protein for this portion in grams (e.g., '12g').")
+    carbs: str = Field(description="Total carbs for this portion in grams (e.g., '18g').")
+    fat: str = Field(description="Total fat for this portion in grams (e.g., '6g').")
     benefit: str = Field(description="Why this meal helps the user's goal.")
 
 class DailyTotals(BaseModel):
-    calories: int = Field(description="Total daily calories.")
+    calories: float = Field(description="Total daily calories.")
     protein: str = Field(description="Total daily protein.")
     carbs: str = Field(description="Total daily carbs.")
     fat: str = Field(description="Total daily fat.")
@@ -56,7 +57,8 @@ YOUR ROLE:
 
 STRICT POLICIES:
 - DIETARY RESTRICTIONS: If the user asks for "pure veg" or "vegetarian", you MUST ONLY provide 100% vegetarian foods. Avoid suggesting foods with names that sound like meat (e.g., "Kebab") unless you explicitly clarify it is made of vegetables or soy. NEVER recommend beef.
-- DYNAMIC KNOWLEDGE FALLBACK: If the DB is missing calories/macros, you MUST generate a realistic numerical estimate (e.g., "45g") using your expert knowledge. It is strictly FORBIDDEN to output "N/A" or "null".
+- DYNAMIC KNOWLEDGE FALLBACK: If the DB is missing calories/macros (shows as Unknown), you MUST generate a realistic numerical estimate (e.g., "45g") using your expert knowledge. It is strictly FORBIDDEN to output "N/A" or "null".
+- PORTION SIZING & MACRO MATH: The database provides values per 100g. If the user's goal requires high calories (e.g. 2500 kcal for weight gain), you MUST scale the portions (e.g. 300g of Dal = 3x the calories). Multiply the base 100g values appropriately so that the `daily_totals` actually sum up to the target calories required for their goal!
 - STRUCTURED JSON FIELDS: You MUST populate the `summary`, `meals`, `daily_totals`, and `tip` fields with structured data for interactive UI display.
 - CLEAN TEXT RESPONSE: The `final_answer` string MUST be a warm, motivating paragraph (3-4 sentences) explaining how this meal plan strategically helps the user's goal. However, DO NOT list the individual meals, bullet points, or raw macros inside `final_answer`.
 - CRITICAL: If the user is referring to an uploaded image (e.g. "what is this?", "these calories"), DO NOT guess the food. The Vision Agent will handle it. ONLY provide nutrition info for foods the user EXPLICITLY names in their text. If they didn't name a food, just give general advice and do not mention any specific food from the database.
@@ -83,9 +85,20 @@ Medical/Injuries: {injuries}"""
         lines = []
         for r in results:
             name = r.get('food_name', 'Unknown')
-            cal = r.get('calories', 'N/A')
-            prot = r.get('protein', 'N/A')
-            fat = r.get('fat', 'N/A')
-            carbs = r.get('carbs', 'N/A')
-            lines.append(f"• {name} (per 100g): {cal} kcal, {prot}g protein, {fat}g fat, {carbs}g carbs")
+            try:
+                cal = float(r.get('calories', 0) or 0)
+                prot = float(r.get('protein', 0) or 0)
+                fat = float(r.get('fat', 0) or 0)
+                
+                # Mathematically calculate missing carbs using 4-4-9 macro rule
+                raw_carbs = r.get('carbs', 'Unknown')
+                if raw_carbs in ['N/A', 'Unknown', None, '', 0, '0']:
+                    carb_cals = cal - (prot * 4) - (fat * 9)
+                    carbs = max(0, round(carb_cals / 4, 1))
+                else:
+                    carbs = float(raw_carbs)
+                
+                lines.append(f"• {name} (base 100g): {cal} kcal, {prot}g protein, {fat}g fat, {carbs}g carbs")
+            except Exception:
+                lines.append(f"• {name} (base 100g): {r.get('calories')} kcal")
         return "\n".join(lines)
