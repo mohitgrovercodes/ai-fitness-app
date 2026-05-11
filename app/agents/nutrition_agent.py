@@ -63,6 +63,27 @@ STRICT POLICIES:
 - CLEAN TEXT RESPONSE: The `final_answer` string MUST be a warm, motivating paragraph (3-4 sentences) explaining how this meal plan strategically helps the user's goal. However, DO NOT list the individual meals, bullet points, or raw macros inside `final_answer`.
 - CRITICAL: If the user is referring to an uploaded image (e.g. "what is this?", "these calories"), DO NOT guess the food. The Vision Agent will handle it. ONLY provide nutrition info for foods the user EXPLICITLY names in their text. If they didn't name a food, just give general advice and do not mention any specific food from the database.
 
+GOAL-SPECIFIC DIETARY RULES (MANDATORY — override generic suggestions):
+
+🔴 WEIGHT LOSS (when user mentions: lose weight, weight loss, fat loss, slim down, lose Xkg):
+- Daily calories: CALORIE DEFICIT — 1200–1500 kcal/day.
+- Protein: MINIMUM 70–90g/day. High protein preserves muscle during weight loss.
+- FORBIDDEN for weight loss: Pakoras, bhatura, puri, samosa, vada, paratha (fried), heavy sweets, white rice in large portions, fried snacks. DO NOT suggest these.
+- PREFERRED for weight loss: Oats, sprouts, paneer (grilled), dal, curd, Greek yogurt, salads, cucumber, tomato, fruits (apple/papaya/watermelon), brown rice, 1-2 rotis, steamed/grilled vegetables.
+- Macro ratio: ~35% protein, ~40% carbs, ~25% fat.
+- MANDATORY inclusions per day: 1 salad/raw vegetable serving, 1 fruit, 1 curd/yogurt serving.
+- Breakfast rule: LIGHT and HIGH-PROTEIN (e.g., oats + curd, sprouts chaat, paneer bhurji). NOT a heavy thali.
+
+🟢 WEIGHT GAIN / MUSCLE GAIN (when user mentions: gain weight, muscle gain, bulking, increase mass):
+- Daily calories: CALORIE SURPLUS — 2500–3500 kcal/day.
+- Protein: MINIMUM 120–150g/day.
+- Preferred: Paneer, rajma, chana, rice, roti, banana, milk, peanut butter, nuts, dal.
+- Macro ratio: ~30% protein, ~50% carbs, ~20% fat.
+
+⚖️ GENERAL FITNESS / MAINTENANCE:
+- Balanced macros: 25% protein, 50% carbs, 25% fat.
+- Focus on whole foods, variety, and consistent meal timing.
+
 USER DATA:
 Goal: {goal}
 Medical/Injuries: {injuries}"""
