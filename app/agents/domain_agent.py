@@ -53,8 +53,8 @@ USER QUERY: {user_input}"""),
         context = "No additional context found."
         try:
             search_results = await self.web_search.search(f"fitness science {user_input}")
-            if search_results:
-                context = "\n".join([f"- {r['content']}" for r in search_results[:3]])
+            if search_results and "results" in search_results:
+                context = "\n".join([f"- {r['content']}" for r in search_results['results'][:3]])
         except Exception as e:
             logger.warning(f"[Domain Agent] Web search fallback failed: {e}")
 

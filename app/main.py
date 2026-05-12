@@ -15,6 +15,7 @@ load_dotenv()
 from fastapi import FastAPI
 from app.modules.auth.routes import router as auth_router
 from app.modules.ai.routes import router as ai_router
+from app.modules.profile.routes import router as profile_router
 
 from contextlib import asynccontextmanager
 from app.utils.logger import logger
@@ -33,6 +34,12 @@ async def lifespan(app: FastAPI):
     from app.tools.vision_tools import _load_clip
     await asyncio.to_thread(_load_clip)
     
+    # 3. Initialize SQL Database (Profiles)
+    from app.core.sql_db import engine, Base
+    from app.modules.profile.model import Profile # Ensure model is registered
+    Base.metadata.create_all(bind=engine)
+    logger.info("✅ [Startup] SQL Database (Profiles) initialized.")
+    
     logger.info("✅ [Startup] All services ready.")
     yield
     logger.info("🛑 [Shutdown] Cleaning up services...")
@@ -42,6 +49,7 @@ app = FastAPI(title="AI Fitness App", lifespan=lifespan)
 # Register routes
 app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
 app.include_router(ai_router, prefix="/api/ai", tags=["AI"])
+app.include_router(profile_router, prefix="/api/profile", tags=["Profile"])
 
 @app.get("/")
 def root():
