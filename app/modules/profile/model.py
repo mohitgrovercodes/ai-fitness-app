@@ -5,19 +5,18 @@ from app.modules.profile.schema import Gender,  ActivityLevel
 class Profile(Base):
     __tablename__ = "user_profiles"
 
-    user_id = Column(String, primary_key=True, index=True)
-    full_name = Column(String)
+    user_id = Column(String(36), primary_key=True, index=True)
+    full_name = Column(String(100))
     age = Column(Integer)
     gender = Column(SQLEnum(Gender))
     height = Column(Float)
     weight = Column(Float)
-    goal = Column(String)
+    goal = Column(String(100))
     activity_level = Column(SQLEnum(ActivityLevel))
-    diet_preference = Column(String, nullable=True)
+    diet_preference = Column(String(100), nullable=True)
     injuries = Column(JSON, nullable=True)
     medical_conditions = Column(JSON, nullable=True)
     allergies = Column(JSON, nullable=True)
-
     def to_dict(self):
         return {
             "user_id": self.user_id,

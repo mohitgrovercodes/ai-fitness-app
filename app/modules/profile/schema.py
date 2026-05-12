@@ -192,6 +192,13 @@ class ProfileBase(BaseModel):
     # VALIDATORS
     # -----------------------------------
 
+    @field_validator("gender", "activity_level", mode="before")
+    @classmethod
+    def normalize_enums(cls, value):
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
     @field_validator("goal", mode="before")
     @classmethod
     def normalize_goal(cls, value):
@@ -233,14 +240,17 @@ class ProfileBase(BaseModel):
             return None
 
         # Allow:
-        # "asthma, diabetes"
-        # OR ["asthma", "diabetes"]
+        # "Asthma, Diabetes"
+        # OR ["Asthma", "Diabetes"]
 
         if isinstance(value, str):
             return [
-                item.strip()
+                item.strip().lower()
                 for item in value.split(",")
             ]
+
+        if isinstance(value, list):
+            return [str(item).strip().lower() for item in value]
 
         return value
 
@@ -274,6 +284,45 @@ class ProfileUpdate(BaseModel):
     injuries: Optional[List[str]] = None
     medical_conditions: Optional[List[str]] = None
     allergies: Optional[List[str]] = None
+
+    @field_validator("gender", "activity_level", mode="before")
+    @classmethod
+    def normalize_enums(cls, value):
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+    @field_validator("goal", mode="before")
+    @classmethod
+    def normalize_goal(cls, value):
+        if not value:
+            return value
+        value = value.strip().lower()
+        return GOAL_MAPPINGS.get(value, value.replace(" ", "_"))
+
+    @field_validator("diet_preference", mode="before")
+    @classmethod
+    def normalize_diet(cls, value):
+        if not value:
+            return value
+        value = value.strip().lower()
+        return DIET_MAPPINGS.get(value, value.replace(" ", "_"))
+
+    @field_validator(
+        "injuries",
+        "medical_conditions",
+        "allergies",
+        mode="before"
+    )
+    @classmethod
+    def convert_string_to_list(cls, value):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            return [item.strip().lower() for item in value.split(",")]
+        if isinstance(value, list):
+            return [str(item).strip().lower() for item in value]
+        return value
 
 
 # -----------------------------------

@@ -4,17 +4,15 @@ from app.core.sql_db import Base
 import uuid
 
 class User(Base):
-    """User authentication model"""
     __tablename__ = "users"
 
-    user_id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
-    email = Column(String, unique=True, index=True, nullable=False)
-    username = Column(String, unique=True, index=True, nullable=False)
-    password_hash = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String(255), unique=True, index=True, nullable=False)  
+    username = Column(String(100), unique=True, index=True, nullable=False)   
+    password_hash = Column(String(255), nullable=False)    
+    created_at = Column(DateTime, default=datetime.utcnow)    
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
-
     def to_dict(self) -> dict:
         """Convert user to dictionary"""
         return {
