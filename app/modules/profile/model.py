@@ -4,7 +4,7 @@ from app.modules.profile.schema import Gender,  ActivityLevel
 
 class Profile(Base):
     __tablename__ = "user_profiles"
-
+ 
     user_id = Column(String(36), primary_key=True, index=True)
     full_name = Column(String(100))
     age = Column(Integer)

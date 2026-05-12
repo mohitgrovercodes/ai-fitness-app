@@ -1,27 +1,32 @@
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, Depends
 from fastapi import Form
 from typing import Optional
 import json
+from app.core.security import get_current_user
 
 
 router = APIRouter()
 
 @router.post("/chat")
-async def chat_endpoint(data: dict):
+async def chat_endpoint(
+    data: dict, 
+    user_id: str = Depends(get_current_user)
+):
     """
     Agentic AI Chat Endpoint.
-    Expects: { "message": "...", "user_id": "...", "context": { "goal": "...", "injuries": [...] } }
+    Expects: { "message": "...", "context": { "goal": "...", "injuries": [...] } }
     """
     from app.modules.ai.controller import chat
+    data["user_id"] = user_id
     return await chat(data)
 
 
 @router.post("/chat-vision")
 async def chat_vision_endpoint(
     message: str = Form(...),
-    user_id: str = Form("default_user"),
     context: str = Form("{}"),
-    file: Optional[UploadFile] = File(None)
+    file: Optional[UploadFile] = File(None),
+    user_id: str = Depends(get_current_user)
 ):
     """
     Agentic AI Chat Endpoint with optional Image Upload (Vision Agent).
@@ -39,24 +44,28 @@ async def chat_vision_endpoint(
 
 
 @router.post("/generate-workout")
-async def generate_workout_endpoint(data: dict):
+async def generate_workout_endpoint(
+    data: dict,
+    user_id: str = Depends(get_current_user)
+):
     """
     Direct API to generate a workout plan (Bypasses Orchestrator).
-    Expects: { "user_id": "...", "goal": "muscle gain", "level": "beginner", "duration": "1 month", "injuries": [] }
-    Optional: Pass "message" to override the prompt completely.
-    Returns raw JSON with 'response', 'exercise_gifs', and 'exercise_images'.
+    Expects: { "goal": "muscle gain", "level": "beginner", "duration": "1 month", "injuries": [] }
     """
     from app.modules.ai.controller import generate_workout
+    data["user_id"] = user_id
     return await generate_workout(data)
 
 
 @router.post("/generate-diet")
-async def generate_diet_endpoint(data: dict):
+async def generate_diet_endpoint(
+    data: dict,
+    user_id: str = Depends(get_current_user)
+):
     """
     Direct API to generate a structured diet plan (Bypasses Orchestrator).
-    Expects: { "user_id": "...", "goal": "weight loss", "diet_type": "veg", "allergies": ["peanuts"] }
-    Optional: Pass "message" to override the prompt completely.
-    Returns raw JSON with 'response' containing the structured routine.
+    Expects: { "goal": "weight loss", "diet_type": "veg", "allergies": ["peanuts"] }
     """
     from app.modules.ai.controller import generate_diet
+    data["user_id"] = user_id
     return await generate_diet(data)

@@ -23,7 +23,6 @@ class Settings(BaseSettings):
 
     # MySQL Persistence
     MYSQL_URL: str = os.getenv("MYSQL_URL", "mysql+pymysql://root:password@localhost:3306/fitness_db")
-    
     # Cultural & Safety Restrictions
     RESTRICTED_FOODS: List[str] = ["beef"]
     

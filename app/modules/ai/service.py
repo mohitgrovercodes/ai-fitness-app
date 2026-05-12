@@ -40,11 +40,11 @@ class AIService:
                     "gender": profile.gender.value if profile.gender else None,
                     "weight_kg": profile.weight,
                     "height_cm": profile.height,
-                    "goal": profile.goal.value if profile.goal else None,
+                    "goal": profile.goal or None,
                     "activity_level": profile.activity_level.value if profile.activity_level else None,
                     "diet_preference": profile.diet_preference,
-                    "injuries": profile.injuries.split(",") if profile.injuries else [],
-                    "medical_conditions": profile.medical_conditions.split(",") if profile.medical_conditions else []
+                    "injuries": profile.injuries if isinstance(profile.injuries, list) else [],
+                    "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else []
                 }
             
             # Merge: Incoming context overrides DB context
@@ -110,12 +110,38 @@ class AIService:
     async def generate_workout_plan(data: dict):
         """Directly calls the TrainingAgent with structured data from a button/form."""
         from app.agents.training_agent import TrainingAgent
+        from app.core.sql_db import SessionLocal
+        from app.modules.profile.service import ProfileService
         
         user_id = data.get("user_id", "default")
         goal = data.get("goal", "")
         level = data.get("level", "")
         duration = data.get("duration", "")
         injuries = data.get("injuries", [])
+        
+        # Fetch real user profile from DB
+        db = SessionLocal()
+        try:
+            profile = ProfileService.get_profile(db, user_id)
+            db_context = {}
+            if profile:
+                db_context = {
+                    "full_name": profile.full_name,
+                    "age": profile.age,
+                    "gender": profile.gender.value if profile.gender else None,
+                    "weight_kg": profile.weight,
+                    "height_cm": profile.height,
+                    "goal": profile.goal or goal,
+                    "activity_level": profile.activity_level.value if profile.activity_level else None,
+                    "diet_preference": profile.diet_preference,
+                    "injuries": profile.injuries if isinstance(profile.injuries, list) else [],
+                    "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else []
+                }
+        finally:
+            db.close()
+        
+        # Merge: request data overrides DB context
+        merged_context = {**db_context, "goal": goal or db_context.get("goal", ""), "level": level, "injuries": injuries or db_context.get("injuries", [])}
         
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message")
@@ -125,12 +151,10 @@ class AIService:
             if level: parts.append(f"at a {level} fitness level")
             if duration: parts.append(f"for a duration of {duration}")
             user_input = " ".join(parts) + "."
-            
-        context = {"goal": goal, "injuries": injuries, "level": level}
         
         state = {
             "messages": [HumanMessage(content=user_input)],
-            "user_context": context,
+            "user_context": merged_context,
             "conversation_summary": "Direct API Generation Request"
         }
         result = await TrainingAgent().run(state)
@@ -146,11 +170,38 @@ class AIService:
     async def generate_diet_plan(data: dict):
         """Directly calls the NutritionAgent with structured data from a button/form."""
         from app.agents.nutrition_agent import NutritionAgent
+        from app.core.sql_db import SessionLocal
+        from app.modules.profile.service import ProfileService
         
         user_id = data.get("user_id", "default")
         goal = data.get("goal", "")
         diet_type = data.get("diet_type", "")
         allergies = data.get("allergies", [])
+
+        # Fetch real user profile from DB
+        db = SessionLocal()
+        try:
+            profile = ProfileService.get_profile(db, user_id)
+            db_context = {}
+            if profile:
+                db_context = {
+                    "full_name": profile.full_name,
+                    "age": profile.age,
+                    "gender": profile.gender.value if profile.gender else None,
+                    "weight_kg": profile.weight,
+                    "height_cm": profile.height,
+                    "goal": profile.goal or goal,
+                    "activity_level": profile.activity_level.value if profile.activity_level else None,
+                    "diet_preference": diet_type or profile.diet_preference,
+                    "injuries": profile.injuries if isinstance(profile.injuries, list) else [],
+                    "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else [],
+                    "allergies": allergies
+                }
+        finally:
+            db.close()
+
+        # Merge: request data overrides DB context
+        merged_context = {**db_context, "goal": goal or db_context.get("goal", "")}
         
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message")
@@ -160,12 +211,10 @@ class AIService:
             if diet_type: parts.append(f"with a {diet_type} dietary preference")
             if allergies: parts.append(f". Avoid these allergies: {', '.join(allergies)}")
             user_input = " ".join(parts) + "."
-            
-        context = {"goal": goal, "injuries": allergies} # pass allergies as injuries so the agent avoids them
         
         state = {
             "messages": [HumanMessage(content=user_input)],
-            "user_context": context,
+            "user_context": merged_context,
             "conversation_summary": "Direct API Generation Request"
         }
         result = await NutritionAgent().run(state)

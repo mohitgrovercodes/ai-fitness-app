@@ -5,12 +5,12 @@ import os
 from pathlib import Path
 
 from app.core.config import settings
-
+ 
 # Use the dynamic URL from config.py (defaults to MySQL)
 SQLALCHEMY_DATABASE_URL = settings.MYSQL_URL
-
+ 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, 
+    SQLALCHEMY_DATABASE_URL,
     pool_pre_ping=True, # Recommended for MySQL to handle dropped connections
     pool_recycle=3600
 )

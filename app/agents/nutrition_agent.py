@@ -32,7 +32,8 @@ class NutritionAnalysis(BaseModel):
     daily_totals: DailyTotals = Field(default=None, description="Total macros and calories for the day.")
     tip: str = Field(default="", description="Closing tip for hydration or nutrition.")
     final_answer: str = Field(
-        description="REQUIRED. A warm, motivating paragraph (3-4 sentences) explaining the diet strategy and how it helps the user's goal. DO NOT include any specific numbers (calories, protein grams, carbs, fat) here — those belong ONLY in the structured meals and daily_totals fields. Write narrative text only."
+        default="",
+        description="A warm, motivating paragraph (3-4 sentences) explaining the diet strategy and how it helps the user's goal. DO NOT include any specific numbers (calories, protein grams, carbs, fat) here — those belong ONLY in the structured meals and daily_totals fields. Write narrative text only."
     )
 
 
@@ -56,8 +57,13 @@ YOUR ROLE:
 - Consider the user's medical background/injuries: {injuries}
 
 STRICT POLICIES:
-- DIETARY RESTRICTIONS: If the user asks for "pure veg" or "vegetarian", you MUST ONLY provide 100% vegetarian foods. Avoid suggesting foods with names that sound like meat (e.g., "Kebab") unless you explicitly clarify it is made of vegetables or soy. NEVER recommend beef.
-- DYNAMIC KNOWLEDGE FALLBACK: If the DB is missing calories/macros (shows as Unknown), you MUST generate a realistic numerical estimate (e.g., "45g") using your expert knowledge. It is strictly FORBIDDEN to output "N/A" or "null".
+- DIETARY FLEXIBILITY (CRITICAL): You MUST strictly respect the user's dietary preferences (e.g., Veg, Non-Veg, Vegan, Keto).
+- If the user specifies "Veg", "Vegetarian", or "Pure Veg", you MUST ONLY provide vegetarian foods (no meat, fish, or eggs unless specified).
+- If the user specifies "Non-Veg", "Nonveg", "non_vegetarian", "non-vegetarian", or "Meat-eater", you SHOULD include healthy animal proteins (chicken, fish, eggs, lean meats, etc.) in the plan.
+
+- If no preference is specified, provide a balanced diet. 
+- There are NO global food restrictions. If the user wants beef, chicken, or pork, you are allowed to recommend it if it fits their nutritional goals.
+- DYNAMIC KNOWLEDGE FALLBACK: If the DB is missing calories/macros (shows as Unknown), you MUST generate a realistic numerical estimate (e.g., "45g") using your expert knowledge. It is strictly FORBIDDEN to output "N/A", "null", or "Unknown" for any macro or calorie field. Every meal MUST have numeric values for protein, carbs, fat, and calories.
 - PORTION SIZING & MACRO MATH: The database provides values per 100g. Scale portions appropriately so that the `daily_totals` actually sum up to the target calories required for their goal!
 - STRUCTURED JSON FIELDS: You MUST populate the `summary`, `meals`, `daily_totals`, and `tip` fields with structured data for interactive UI display.
 - CLEAN TEXT RESPONSE: The `final_answer` string MUST be a warm, motivating paragraph (3-4 sentences) explaining how this meal plan strategically helps the user's goal. However, DO NOT list the individual meals, bullet points, or raw macros inside `final_answer`.
@@ -69,35 +75,32 @@ DATA SANITY CHECK (MANDATORY — apply to EVERY retrieved food before using it):
 - SANITY RULE 3 (FAT QUALITY — DYNAMIC): For each food, calculate: fat_calories = fat_g × 9, and protein_carb_calories = (protein_g × 4) + (carbs_g × 4). Then judge based on the user's goal:
   • Weight loss: protein_carb_calories MUST be greater than fat_calories. If fat dominates, REJECT the food and use a healthier alternative from your knowledge.
   • Weight gain/maintenance: moderate fat is acceptable, but fat_calories should not exceed total_calories × 0.45.
-  This dynamically filters out deep-fried and excessively oily foods based on the actual goal.
-- SANITY RULE 4 (CEILING): No single meal may exceed its allocated % of the daily target. Example: if daily target = 1480 kcal and lunch budget = 35%, then max lunch = 1480 × 0.35 = 518 kcal. If a food at its normal portion exceeds this, REDUCE the portion size proportionally.
-- SANITY RULE 5 (SUM VERIFICATION): After generating all meals, SUM their calories. If sum < daily target, SCALE UP portions of healthy foods already chosen — do NOT switch to unhealthy alternatives just to add calories.
-- SANITY RULE 6 (NO DUPLICATES & EXPERT FALLBACK): NEVER repeat the same food item in more than one meal. You MUST create 4 distinct meals (Breakfast, Lunch, Snack, Dinner). If the database returns limited items, DO NOT repeat them. Instead, use your EXPERT KNOWLEDGE to generate healthy, goal-aligned vegetarian meals to complete the 4-meal structure.
+- SANITY RULE 4 (CEILING): No single meal may exceed its allocated % of the daily target.
+- SANITY RULE 5 (SUM VERIFICATION): After generating all meals, SUM their calories. If sum < daily target, SCALE UP portions of healthy foods already chosen.
+- SANITY RULE 6 (NO DUPLICATES & EXPERT FALLBACK): NEVER repeat the same food item in more than one meal. Create 4 distinct meals. If the database returns limited items, use your EXPERT KNOWLEDGE to generate healthy, goal-aligned meals consistent with the user's dietary preference.
 
 GOAL-SPECIFIC DIETARY RULES (MANDATORY):
 
 🔴 WEIGHT LOSS (when user mentions: lose weight, fat loss, slim down, lose Xkg):
-- Daily calories: Create a calorie deficit. If user gives a specific target (e.g. "lose 5kg in 4 months"), calculate: daily_deficit = (kg × 7700) / days, then target = estimated_TDEE - daily_deficit. Minimum floor: 1200 kcal/day.
-- Protein: Use 1.2–1.5g per kg of estimated body weight to preserve muscle.
-- Per-meal budget: Breakfast 25%, Lunch 35%, Snack 15%, Dinner 25% of daily target.
-- Avoid: deep-fried foods, heavy sweets, refined snacks.
-- Prefer: high-fiber, high-protein whole foods (oats, sprouts, paneer, dal, curd, salads, fruits, vegetables).
+- Daily calories: Dynamically calculate a sustainable, healthy calorie deficit based on the user's estimated TDEE (Total Daily Energy Expenditure). You MUST strictly avoid generating unsustainably low calorie counts that would be considered extreme crash diets. If your initial calculated sum falls into a dangerous crash-diet range, dynamically scale up the portion sizes or add healthy snacks to ensure a safe, sustainable deficit.
+- Protein: Dynamically calculate optimal protein intake based on the user's estimated body weight to effectively preserve muscle mass during the deficit.
+- Prefer: High-protein lean sources tailored dynamically to the user's specific diet type. Use your expert knowledge to select the most satiating, high-quality protein options that strictly align with whatever dietary restrictions or preferences the user provides (e.g., whether they specify vegetarian, vegan, keto, pescatarian, jain, or any other diet).
 
 🟢 WEIGHT GAIN / MUSCLE GAIN (when user mentions: gain weight, muscle gain, bulking):
-- Daily calories: Calorie surplus. Calculate: daily_surplus = (kg × 7700) / days, target = TDEE + surplus.
-- Protein: Use 1.6–2.2g per kg of estimated body weight.
-- Per-meal budget: Breakfast 25%, Lunch 35%, Snack 15%, Dinner 25% of daily target.
-- Prefer: calorie-dense nutritious foods (paneer, rajma, chana, rice, roti, banana, milk, nuts, dal).
+- Daily calories: Dynamically calculate a healthy calorie surplus based on the user's estimated TDEE to support steady weight gain.
+- Protein: Dynamically calculate optimal high-protein intake required to support muscle hypertrophy and recovery.
+- Prefer: Dynamically select high-quality, calorie-dense nutritious foods that strictly align with the user's specific dietary preferences.
 
 ⚖️ GENERAL FITNESS / MAINTENANCE:
-- Daily calories: Estimated TDEE (no surplus, no deficit).
+- Daily calories: Estimated TDEE.
 - Protein: 1.0–1.2g per kg of estimated body weight.
-- Per-meal budget: Breakfast 25%, Lunch 35%, Snack 15%, Dinner 25% of daily target.
-- Focus on balanced whole foods and variety across food groups.
 
 USER DATA:
 Goal: {goal}
-Medical/Injuries: {injuries}"""
+Medical/Injuries: {injuries}
+Dietary Preference: {diet_preference}
+Current Context: {summary}
+"""
         
         super().__init__(
             agent_name="Nutrition Agent",
@@ -115,7 +118,8 @@ Medical/Injuries: {injuries}"""
         """
         Code-level post-processor — LLM cannot override this.
         1. Remove duplicate meals (same food in multiple slots)
-        2. Recalculate daily_totals from actual meal data (always accurate)
+        2. Correct per-meal calories using macro math (protein×4 + carbs×4 + fat×9)
+        3. Recalculate daily_totals from actual meal data (always accurate)
         """
         meals = output.get("meals", [])
         if not meals:
@@ -131,15 +135,46 @@ Medical/Injuries: {injuries}"""
                 unique_meals.append(meal)
             else:
                 logger.warning(f"❌ [Nutrition Validator] Removed duplicate meal: '{meal.get('name')}'")
-        output["meals"] = unique_meals
 
-        # --- Step 2: Recalculate daily_totals from actual meals ---
+        # --- Step 2: Correct per-meal calories using 4-4-9 macro rule ---
         def parse_num(val) -> float:
             try:
                 return float(str(val).replace("g", "").replace(",", "").strip())
             except (ValueError, TypeError):
                 return 0.0
 
+        for meal in unique_meals:
+            prot = parse_num(meal.get("protein", 0))
+            carbs = parse_num(meal.get("carbs", 0))
+            fat = parse_num(meal.get("fat", 0))
+            macro_calories = round((prot * 4) + (carbs * 4) + (fat * 9), 1)
+            llm_calories = parse_num(meal.get("calories", 0))
+
+            if macro_calories > 0:
+                # Macro-based correction (primary check)
+                if llm_calories == 0 or abs(llm_calories - macro_calories) / max(macro_calories, 1) > 0.20:
+                    logger.warning(
+                        f"⚠️ [Macro Validator] '{meal.get('name')}': LLM said {llm_calories} kcal, "
+                        f"macros say {macro_calories} kcal → corrected."
+                    )
+                    meal["calories"] = macro_calories
+            else:
+                # Fallback: Physics-based density check (max 9 kcal/gram = pure fat)
+                # Parse portion grams for density check
+                portion_str = str(meal.get("portion", "100g"))
+                portion_g = parse_num(portion_str) or 100.0
+                max_possible_kcal = portion_g * 9  # Absolute physical maximum
+                if llm_calories > max_possible_kcal:
+                    logger.warning(
+                        f"⚠️ [Density Validator] '{meal.get('name')}': {llm_calories} kcal "
+                        f"for {portion_g}g is physically impossible (max={max_possible_kcal}). Capping."
+                    )
+                    # Cap at a reasonable density (~4 kcal/g = mixed food average)
+                    meal["calories"] = round(portion_g * 4.0, 1)
+
+        output["meals"] = unique_meals
+
+        # --- Step 3: Recalculate daily_totals from actual meals ---
         total_cal   = sum(parse_num(m.get("calories", 0)) for m in unique_meals)
         total_prot  = sum(parse_num(m.get("protein",  0)) for m in unique_meals)
         total_carbs = sum(parse_num(m.get("carbs",    0)) for m in unique_meals)
