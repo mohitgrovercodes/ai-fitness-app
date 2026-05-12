@@ -34,11 +34,13 @@ async def lifespan(app: FastAPI):
     from app.tools.vision_tools import _load_clip
     await asyncio.to_thread(_load_clip)
     
-    # 3. Initialize SQL Database (Profiles)
+    # 3. Initialize SQL Database (Profiles & Auth)
     from app.core.sql_db import engine, Base
     from app.modules.profile.model import Profile # Ensure model is registered
+    from app.modules.auth.model import User # Ensure model is registered
     Base.metadata.create_all(bind=engine)
-    logger.info("✅ [Startup] SQL Database (Profiles) initialized.")
+    logger.info("✅ [Startup] SQL Database (Profiles & Auth) initialized.")
+
     
     logger.info("✅ [Startup] All services ready.")
     yield

@@ -1,48 +1,26 @@
 from datetime import datetime
-from typing import Optional
+from sqlalchemy import Column, String, Boolean, DateTime
+from app.core.sql_db import Base
+import uuid
 
-class User:
+class User(Base):
     """User authentication model"""
-    
-    def __init__(
-        self,
-        user_id: str,
-        email: str,
-        username: str,
-        password_hash: str,
-        created_at: Optional[datetime] = None,
-        updated_at: Optional[datetime] = None,
-        is_active: bool = True
-    ):
-        self.user_id = user_id
-        self.email = email
-        self.username = username
-        self.password_hash = password_hash
-        self.created_at = created_at or datetime.utcnow()
-        self.updated_at = updated_at or datetime.utcnow()
-        self.is_active = is_active
-    
+    __tablename__ = "users"
+
+    user_id = Column(String, primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String, unique=True, index=True, nullable=False)
+    username = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
     def to_dict(self) -> dict:
         """Convert user to dictionary"""
         return {
             "user_id": self.user_id,
             "email": self.email,
             "username": self.username,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
             "is_active": self.is_active
         }
-
-
-class Token:
-    """Authentication token model"""
-    
-    def __init__(
-        self,
-        access_token: str,
-        token_type: str = "bearer",
-        expires_in: int = 3600
-    ):
-        self.access_token = access_token
-        self.token_type = token_type
-        self.expires_in = expires_in
