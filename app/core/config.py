@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # Redis Persistence
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
+    # MySQL Persistence
+    MYSQL_URL: str = os.getenv("MYSQL_URL", "mysql+pymysql://root:password@localhost:3306/fitness_db")
+
     # Cultural & Safety Restrictions
     RESTRICTED_FOODS: List[str] = ["beef"]
     

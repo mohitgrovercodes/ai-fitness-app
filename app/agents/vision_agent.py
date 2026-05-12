@@ -53,6 +53,9 @@ class VisionAgent:
         # ── Extract Inputs ─────────────────────────────────────────────────────
         image_bytes = state.get("image_bytes")
         user_text   = state["messages"][-1].content if state.get("messages") else ""
+        user_context = state.get("user_context", {})
+        goal = user_context.get("goal", "General Fitness")
+        diet_pref = user_context.get("diet_preference", "None")
 
         # ── Metadata Tracker ───────────────────────────────────────────────────
         meta = {
@@ -158,7 +161,7 @@ class VisionAgent:
             meta["self_learned"]    = result["learned"]
             meta = self._build_meals_from_result(result, meta)
             prompt = self._build_nutrition_prompt(
-                result["identified_food"], result["nutrition"], user_text, result["source"]
+                result["identified_food"], result["nutrition"], user_text, result["source"], goal, diet_pref
             )
             llm_response = await self.llm.ainvoke(prompt)
             return self._build_output(llm_response.content, meta)
@@ -214,7 +217,7 @@ class VisionAgent:
             }
             meta = self._build_meals_from_result(result_for_meals, meta)
             prompt = self._build_nutrition_prompt(
-                top_match["category"], nutrition_data, user_text, meta["data_source"]
+                top_match["category"], nutrition_data, user_text, meta["data_source"], goal, diet_pref
             )
 
         else:
@@ -246,7 +249,7 @@ class VisionAgent:
 
             meta = self._build_meals_from_result(result, meta)
             prompt = self._build_nutrition_prompt(
-                result["identified_food"], result["nutrition"], user_text, result["source"]
+                result["identified_food"], result["nutrition"], user_text, result["source"], goal, diet_pref
             )
 
         # ══════════════════════════════════════════════════════
@@ -373,7 +376,10 @@ class VisionAgent:
         nutrition: Dict | None,
         user_text: str,
         source: str,
+        goal: str = "General Fitness",
+        diet_pref: str = "None"
     ) -> str:
+
         """Universal nutrition prompt — works for Tier 1a (DB) and VLM fallback."""
         food_display = food_name.replace("_", " ").title()
         source_note  = (
@@ -433,6 +439,9 @@ class VisionAgent:
         return (
             f"You are FitBot, a world-class food identification and nutrition AI.\n"
             f"You can identify and provide nutrition for ANY food from ANY global cuisine.\n\n"
+            f"USER PROFILE:\n"
+            f"- Goal: {goal}\n"
+            f"- Dietary Preference: {diet_pref}\n\n"
             f"You have ALREADY analyzed the user's image using a vision module. The exact nutritional data for their specific meal is provided below.\n\n"
             f"{nutrition_context}\n\n"
             f"{instruction}\n\n"

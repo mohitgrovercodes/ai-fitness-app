@@ -40,12 +40,19 @@ STRICT GUIDELINES:
 SEARCH CONTEXT:
 {context}
 
+USER PROFILE:
+- Goal: {goal}
+- Dietary Preference: {diet_pref}
+
 USER QUERY: {user_input}"""),
             ("human", "{user_input}")
         ])
 
     async def run(self, state: AgentState) -> Dict[str, Any]:
         user_input = state['messages'][-1].content
+        user_context = state.get("user_context", {})
+        goal = user_context.get("goal", "General Fitness")
+        diet_pref = user_context.get("diet_preference", "None")
         logger.info(f"🧬 [Domain Agent] Analyzing general fitness query: '{user_input[:50]}...'")
 
         # Step 1: Attempt to find up-to-date info via Web Search if query is complex
@@ -62,8 +69,11 @@ USER QUERY: {user_input}"""),
         chain = self.prompt | self.llm
         res = await chain.ainvoke({
             "context": context,
-            "user_input": user_input
+            "user_input": user_input,
+            "goal": goal,
+            "diet_pref": diet_pref
         })
+
 
         return {
             "specialist_results": {

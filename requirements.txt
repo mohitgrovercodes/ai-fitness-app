@@ -33,7 +33,10 @@ numpy
 
 # --- Database ---
 sqlalchemy
+mysql-connector-python
+
 
 
 #-----Redis----
 redis
+

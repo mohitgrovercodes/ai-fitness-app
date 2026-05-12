@@ -45,6 +45,9 @@ class BaseRAGAgent:
         # Extract common variables for the prompt
         goal = user_context.get("goal", "General Fitness") if isinstance(user_context, dict) else "General Fitness"
         injuries = ", ".join(user_context.get("injuries", [])) if isinstance(user_context, dict) and user_context.get("injuries") else "None"
+        diet_pref = user_context.get("diet_preference", "None") if isinstance(user_context, dict) else "None"
+
+        logger.info(f"🧬 [{self.agent_name}] Extracted Context: Goal='{goal}', Diet='{diet_pref}'")
 
         chain = self.prompt | self.llm
 
@@ -57,6 +60,7 @@ class BaseRAGAgent:
             "context": context_str or "No specific data retrieved from local database.",
             "goal": goal,
             "injuries": injuries,
+            "diet_preference": diet_pref,
             "summary": summary
         })
 
@@ -76,6 +80,7 @@ class BaseRAGAgent:
                 "context": context_str or "Expanded search returned no additional data.",
                 "goal": goal,
                 "injuries": injuries,
+                "diet_preference": diet_pref,
                 "summary": summary
             })
 
@@ -92,6 +97,7 @@ class BaseRAGAgent:
                     "context": f"{context_str}\n\n[Live Web Data]:\n{web_context}",
                     "goal": goal,
                     "injuries": injuries,
+                    "diet_preference": diet_pref,
                     "summary": summary
                 })
             else:
@@ -101,6 +107,7 @@ class BaseRAGAgent:
                     "context": f"{context_str}\n\n[Expert Knowledge Fallback]: Use expert knowledge to supplement the data.",
                     "goal": goal,
                     "injuries": injuries,
+                    "diet_preference": diet_pref,
                     "summary": summary
                 })
 
