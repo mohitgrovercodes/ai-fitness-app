@@ -1,5 +1,4 @@
-from app.modules.ai.ml_models.posture_model import PostureModel
-from app.modules.ai.ml_models.recommendation_model import RecommendationModel
+
 from app.core.graph import build_graph
 from langchain_core.messages import HumanMessage
 import uuid
@@ -16,16 +15,7 @@ def get_graph():
 
 class AIService:
 
-    @staticmethod
-    async def check_posture(file):
-        import asyncio
-        return await asyncio.to_thread(PostureModel.process, file)
 
-    @staticmethod
-    async def recommend_workout(data):
-        import asyncio
-        # Legacy support for simple recommendation
-        return await asyncio.to_thread(RecommendationModel.predict, data)
 
     @staticmethod
     async def chat(user_input: str, user_id: str, context: dict = None, image_bytes: bytes = None):

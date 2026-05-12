@@ -1,20 +1,6 @@
 from app.modules.ai.service import AIService
 from app.common.response import success, error
 
-async def posture_check(file):
-    try:
-        result = await AIService.check_posture(file)
-        return success(result)
-    except Exception as e:
-        return error(str(e))
-
-async def recommend_workout(data):
-    try:
-        result = await AIService.recommend_workout(data)
-        return success(result)
-    except Exception as e:
-        return error(str(e))
-
 async def chat(data: dict):
     try:
         user_input = data.get("message")
