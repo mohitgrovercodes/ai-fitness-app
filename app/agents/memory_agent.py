@@ -34,17 +34,31 @@ EXISTING SUMMARY: {existing_summary}"""),
         ])
 
     async def run(self, state: AgentState) -> Dict[str, Any]:
+        print(f"🐛 [DEBUG MemoryAgent] Keys in state: {list(state.keys())}")
         messages = list(state.get('messages', []))
         user_id = state.get("user_id", "default_user") 
+        print(f"🐛 [DEBUG MemoryAgent] Extracted user_id: {user_id}") 
         redis_key = f"chat_history:{user_id}"
         summary_key = f"chat_summary:{user_id}"
 
-        # 1. Save ONLY the latest message to Redis (Efficiency)
+        # 1. Save the new messages to Redis
+        # A single chat turn adds exactly 2 messages: 1 Human, 1 AI. We save both.
         if redis_manager.is_available() and messages:
             try:
-                last_msg = messages[-1]
-                serialized_msg = json.dumps({"type": last_msg.type, "content": last_msg.content})
-                redis_manager.client.rpush(redis_key, serialized_msg)
+                msgs_to_save = messages[-2:] if len(messages) >= 2 else messages
+                for msg in msgs_to_save:
+                    data_to_save = {
+                        "type": msg.type, 
+                        "content": msg.content
+                    }
+                    
+                    # If this is the AI's final message of the current turn, attach the full JSON payload
+                    if msg.type == "ai" and msg == messages[-1]:
+                        data_to_save["structured_data"] = state.get("specialist_results", {})
+                        data_to_save["intents"] = state.get("intent", [])
+                        
+                    serialized_msg = json.dumps(data_to_save)
+                    redis_manager.client.rpush(redis_key, serialized_msg)
             except Exception as e:
                 logger.error(f"❌ [Memory] Redis Save Error: {e}")
 

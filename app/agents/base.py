@@ -132,7 +132,7 @@ class BaseRAGAgent:
                     specialist_output[field] = val
 
         # Run optional validation hook for subclasses
-        specialist_output = self._validate_output(specialist_output, context_str)
+        specialist_output = self._validate_output(specialist_output, context_str, state)
 
         return {
             "specialist_results": {
@@ -140,8 +140,8 @@ class BaseRAGAgent:
             }
         }
 
-    def _validate_output(self, output: Dict[str, Any], context: str) -> Dict[str, Any]:
-        """Optional hook for subclasses to validate LLM output (e.g. check media hallucinations)."""
+    def _validate_output(self, output: Dict[str, Any], context: str, state: AgentState = None) -> Dict[str, Any]:
+        """Optional hook for subclasses to validate or format output."""
         return output
 
     def _format_context(self, results: List[Dict]) -> str:

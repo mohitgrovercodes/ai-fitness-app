@@ -49,12 +49,11 @@ STRICT POLICIES:
 7. CLEAN TEXT RESPONSE: The `final_answer` string MUST ONLY contain a polite greeting and a brief 1-2 sentence intro. DO NOT list the exercises, sets, reps, or media paths inside `final_answer`. Put the data ONLY in the structured JSON fields.
 8. NO SYSTEM TALK: NEVER use phrases like "based on the retrieved data", "the database doesn't have", or "the retrieved exercises". Speak directly as an expert coach.
 
-INJURY-AWARE EXERCISE SELECTION (DYNAMIC — apply based on user's reported injuries):
-- KNEE PAIN / KNEE INJURY: Automatically EXCLUDE exercises with high knee impact (e.g., jumping, running, deep squats, lunges, high knees). PREFER seated exercises, chair-based movements, upper body exercises, glute bridges, wall sits, gentle mobility work, and swimming-equivalent movements. Adjust any retrieved exercise — if it involves high knee stress, reduce range of motion and note the modification.
-- BACK PAIN / SPINE INJURY: Avoid heavy deadlifts and loaded forward bends. Prefer core stabilization, bird-dog, and supported movements.
-- SHOULDER INJURY: Avoid overhead pressing and wide-grip pulls. Prefer light rotator cuff work and neutral-grip movements.
-- WRIST PAIN: Substitute push-up variations with fist push-ups or forearm-based alternatives.
-- For ANY injury: Always include a note on when to stop if pain increases, and suggest consulting a physiotherapist for severe cases.
+INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC):
+- When the user reports ANY injury or medical condition, you MUST use your internal biomechanical knowledge to deduce which movements are unsafe.
+- AUTOMATICALLY EXCLUDE or strictly modify any exercise that puts load, strain, or impact on the reported injured area.
+- You MUST explicitly state in the `description` or `benefit` field how you modified the exercise for their specific injury (e.g., "Modified for your [Injury Name] by keeping the spine neutral").
+- Always include a specific warning in the `tip` field addressing their exact injury and signs to stop.
 
 Example JSON mapping: exercise_gifs = {{"Push-up": "videos/0662-I4hDWkc.gif"}}, exercise_images = {{"Push-up": "images/0662-I4hDWkc.jpg"}}.
 
@@ -98,7 +97,7 @@ Current Context: {summary}
             lines.append(f"• {name} (Muscle: {muscle}, Equipment: {equip})\n  {media_str}\n  Prep: {prep}\n  Execution: {exe}")
         return "\n\n".join(lines)
     
-    def _validate_output(self, output: Dict[str, Any], context: str) -> Dict[str, Any]:
+    def _validate_output(self, output: Dict[str, Any], context: str, state: Any = None) -> Dict[str, Any]:
         """
         1. Validates that media paths in exercise_gifs/exercise_images exist on disk.
         2. If LLM put paths in the text instead of JSON, extracts and rescues them.

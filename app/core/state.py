@@ -11,7 +11,12 @@ def merge_messages(left: list, right: Any) -> list:
     return left + [right]
 
 def merge_dicts(left: Dict[str, Any], right: Dict[str, Any]) -> Dict[str, Any]:
-    """Reducer to safely merge dictionaries from parallel agents."""
+    """Reducer to safely merge dictionaries from parallel agents.
+    If right contains __clear__=True, old state is wiped before merging.
+    """
+    if right.get("__clear__"):
+        # Start fresh — discard all old specialist results from previous turns
+        return {k: v for k, v in right.items() if k != "__clear__"}
     merged = left.copy()
     merged.update(right)
     return merged
@@ -23,6 +28,7 @@ class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], merge_messages]
     conversation_summary: str  # Stores the rolling summary of past messages
     image_bytes: Optional[bytes]
+    user_id: str  # Unique identifier for Redis memory isolation
     
     # Validated User Context
     user_context: UserContext

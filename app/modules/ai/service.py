@@ -56,10 +56,11 @@ class AIService:
         initial_state = {
             "messages": [HumanMessage(content=user_input)],
             "user_context": merged_context,
-            "conversation_summary": "" # This will be updated by the memory_manager
+            "conversation_summary": "", # This will be updated by the memory_manager
+            "user_id": user_id,
+            "specialist_results": {"__clear__": True},  # Wipe old zombie data from previous turns
+            "image_bytes": image_bytes  # Always set explicitly — None clears old image from MemorySaver
         }
-        if image_bytes:
-            initial_state["image_bytes"] = image_bytes
             
         # Run the graph
         graph = get_graph()
@@ -155,7 +156,8 @@ class AIService:
         state = {
             "messages": [HumanMessage(content=user_input)],
             "user_context": merged_context,
-            "conversation_summary": "Direct API Generation Request"
+            "conversation_summary": "Direct API Generation Request",
+            "user_id": user_id
         }
         result = await TrainingAgent().run(state)
         output = result.get("specialist_results", {}).get("training", {})
@@ -164,6 +166,38 @@ class AIService:
             "workout": output.get("workout", []),
             "tip": output.get("tip", ""),
             "response": output.get("answer", "Could not generate plan."),
+        }
+
+    @staticmethod
+    def _calculate_tdee(weight_kg, height_cm, age, gender, activity_level) -> dict:
+        try:
+            w = float(weight_kg or 70)
+            h = float(height_cm or 170)
+            a = float(age or 25)
+        except (ValueError, TypeError):
+            w, h, a = 70, 170, 25
+
+        if str(gender).upper() in ("MALE", "M"):
+            bmr = (10 * w) + (6.25 * h) - (5 * a) + 5
+        else:
+            bmr = (10 * w) + (6.25 * h) - (5 * a) - 161
+
+        multipliers = {
+            "SEDENTARY": 1.2,
+            "LIGHTLY_ACTIVE": 1.375,
+            "MODERATELY_ACTIVE": 1.55,
+            "VERY_ACTIVE": 1.725,
+            "EXTRA_ACTIVE": 1.9,
+        }
+        factor = multipliers.get(str(activity_level).upper(), 1.2)
+        tdee = round(bmr * factor)
+
+        return {
+            "bmr": round(bmr),
+            "tdee": tdee,
+            "weight_loss_target": round(max(bmr, tdee * 0.80)),  # 20% deficit, never below BMR
+            "weight_gain_target": round(tdee * 1.15),            # 15% surplus
+            "maintenance_target": tdee,
         }
 
     @staticmethod
@@ -184,18 +218,34 @@ class AIService:
             profile = ProfileService.get_profile(db, user_id)
             db_context = {}
             if profile:
+                tdee_data = AIService._calculate_tdee(
+                    profile.weight, profile.height, profile.age,
+                    profile.gender.value if profile.gender else "male",
+                    profile.activity_level.value if profile.activity_level else "SEDENTARY"
+                )
+                
+                # Determine target calories based on goal
+                current_goal = profile.goal or goal
+                if "loss" in current_goal.lower() or "lose" in current_goal.lower():
+                    target_cal = tdee_data["weight_loss_target"]
+                elif "gain" in current_goal.lower() or "bulk" in current_goal.lower():
+                    target_cal = tdee_data["weight_gain_target"]
+                else:
+                    target_cal = tdee_data["maintenance_target"]
+                    
                 db_context = {
                     "full_name": profile.full_name,
                     "age": profile.age,
                     "gender": profile.gender.value if profile.gender else None,
                     "weight_kg": profile.weight,
                     "height_cm": profile.height,
-                    "goal": profile.goal or goal,
+                    "goal": current_goal,
                     "activity_level": profile.activity_level.value if profile.activity_level else None,
                     "diet_preference": diet_type or profile.diet_preference,
                     "injuries": profile.injuries if isinstance(profile.injuries, list) else [],
                     "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else [],
-                    "allergies": allergies
+                    "allergies": allergies,
+                    "target_calories": target_cal  # Crucial for Auto-Scaler
                 }
         finally:
             db.close()
@@ -215,7 +265,8 @@ class AIService:
         state = {
             "messages": [HumanMessage(content=user_input)],
             "user_context": merged_context,
-            "conversation_summary": "Direct API Generation Request"
+            "conversation_summary": "Direct API Diet Request",
+            "user_id": user_id
         }
         result = await NutritionAgent().run(state)
         output = result.get("specialist_results", {}).get("nutrition", {})
@@ -225,4 +276,41 @@ class AIService:
             "daily_totals": output.get("daily_totals", {}),
             "tip": output.get("tip", ""),
             "response": output.get("answer", "Could not generate plan.")
+        }
+
+    @staticmethod
+    async def ask_domain_agent(data: dict):
+        """Directly calls the DomainAgent with structured data from a button/form."""
+        from app.agents.domain_agent import DomainAgent
+        from app.core.sql_db import SessionLocal
+        from app.modules.profile.service import ProfileService
+        
+        user_id = data.get("user_id", "default")
+        user_input = data.get("message", "What is muscle hypertrophy?")
+
+        # Fetch real user profile from DB to give DomainAgent some context
+        db = SessionLocal()
+        db_context = {}
+        try:
+            profile = ProfileService.get_profile(db, user_id)
+            if profile:
+                db_context = {
+                    "goal": profile.goal,
+                    "diet_preference": profile.diet_preference
+                }
+        finally:
+            db.close()
+
+        state = {
+            "messages": [HumanMessage(content=user_input)],
+            "user_context": db_context,
+            "conversation_summary": "Direct API Domain Query"
+        }
+        
+        result = await DomainAgent().run(state)
+        output = result.get("specialist_results", {}).get("domain", {})
+        
+        return {
+            "response": output.get("answer", "Could not answer the query."),
+            "sources": output.get("sources", "internal_knowledge")
         }

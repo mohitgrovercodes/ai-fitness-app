@@ -69,3 +69,17 @@ async def generate_diet_endpoint(
     from app.modules.ai.controller import generate_diet
     data["user_id"] = user_id
     return await generate_diet(data)
+
+
+@router.post("/ask-domain")
+async def ask_domain_endpoint(
+    data: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Direct API for general fitness/science questions (Bypasses Orchestrator).
+    Expects: { "message": "What is muscle hypertrophy?" }
+    """
+    from app.modules.ai.controller import ask_domain
+    data["user_id"] = user_id
+    return await ask_domain(data)

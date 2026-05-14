@@ -110,24 +110,25 @@ async def synthesis_node(state: AgentState):
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=settings.OPENAI_API_KEY)
     
     prompt = f"""You are the Lead Fitness Coach at 'Agentic AI Gym'.
-Your task is to take the specialized advice from your team (provided below) and weave it into a single, cohesive coaching response.
+Your task is to take the specialized advice from your team (provided below) and weave it into a single response.
 
 RULES:
-- Do NOT just list the points. Integrate them into natural paragraphs.
-- If both workout and nutrition advice are provided, explain briefly how they complement each other.
-- Maintain a warm, expert, and professional tone.
+- Do NOT just list the points. Integrate them nicely into paragraphs.
+- CRITICAL: Do NOT list precise numerical data (like Calories, Protein, sets, or reps) inside your paragraph text, as the frontend UI will display them beautifully in separate cards.
+- If both workout and nutrition advice are provided, explain how they complement each other.
+- Maintain a warm, expert, and highly professional tone.
 - Ensure the most important information is clear and actionable.
-
-CRITICAL — NUMBERS & DATA ACCURACY:
-- The structured meal/workout data in the API response fields (meals, workout, daily_totals) is the GROUND TRUTH.
-- Your job is to write a motivating narrative — do NOT invent or repeat specific calorie/macro/protein numbers in the response text.
-- Do NOT say things like "your plan has 1500 kcal" or "120g protein" — those numbers are shown separately in the structured data fields.
-- If you reference nutrition, say things like "your meal plan is designed to create a healthy calorie deficit" instead of stating specific numbers.
-
 STRICT INSTRUCTIONS FOR IMAGE-BASED REQUESTS:
-- If a [VISION] result is provided, your response MUST focus primarily on the food description and its nutritional breakdown.
-- You MUST present the Nutritional Breakdown exactly point-wise with NUMERIC values (e.g., `- **Protein**: 15g`). Do NOT use vague terms.
-- NEVER add a "Complementary Aspects" or generic tip section after a vision response.
+- If a [VISION] result is provided, your response MUST focus primarily on the description of the food in the image and its nutritional breakdown.
+- Do NOT add suggestions for other foods, shakes, or unrelated snacks.
+- Keep the tone professional but interactive.
+- ONLY IF a [VISION] result is provided, you MUST present the Nutritional Breakdown exactly point-wise. If NO [VISION] result is provided, you MUST NOT generate any "Nutritional Breakdown" or "Macro" section.
+- NEVER add a "Complementary Aspects" or generic tip section. End the response immediately after the nutritional breakdown.
+
+GENERAL RULES:
+- Do NOT just list the points. Integrate them.
+- Format the final response using clean Markdown.
+- If both workout and nutrition advice are provided, explain how they complement each other briefly.
 
 SPECIALIST ADVICE:
 {context_str}
@@ -163,17 +164,9 @@ async def safe_response_node(state: AgentState):
     }
 
 # --- Placeholder Nodes ---
-async def dummy_vision_agent(state: AgentState):
-    logger.info("🚧 [Vision Agent] Placeholder reached.")
-    return {"specialist_results": {"vision": {"answer": "Vision Agent is under construction."}}}
-
 async def dummy_progress_agent(state: AgentState):
     logger.info("🚧 [Progress Agent] Placeholder reached.")
     return {"specialist_results": {"progress": {"answer": "Progress Agent is under construction."}}}
-
-async def dummy_domain_agent(state: AgentState):
-    logger.info("🚧 [Domain Agent] Placeholder reached.")
-    return {"specialist_results": {"domain": {"answer": "Domain Agent is under construction."}}}
 
 async def global_error_handler(state: AgentState):
     """Fallback node for unexpected graph failures."""

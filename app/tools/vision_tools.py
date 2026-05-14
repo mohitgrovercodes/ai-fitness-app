@@ -390,14 +390,32 @@ def identify_and_learn_new_food(
     db_nutrition = get_food_nutrition(food_name)
 
     if db_nutrition:
-        print(f"✅ [VLM Tool] DB hit for '{food_name}'. Using VLM calories + DB macros.")
+        # ── Name-Lock Fix: GPT-4 ka naam sachet hai, DB naam sirf high similarity pe use karo
+        # Check how similar the DB name is to GPT-4's identified name
+        from difflib import SequenceMatcher
+        db_name = db_nutrition.get("food_name", food_name)
+        name_similarity = SequenceMatcher(
+            None, 
+            food_name.lower().strip(), 
+            db_name.lower().strip()
+        ).ratio()
+        
+        # Only use DB name if it is very similar to what GPT-4 said (>=0.85)
+        # Otherwise, trust GPT-4's name (it saw the actual image)
+        final_name = db_name if name_similarity >= 0.85 else food_name
+        
+        if name_similarity < 0.85:
+            print(f"🔒 [VLM Tool] Name-Lock: GPT-4 name '{food_name}' kept (DB name '{db_name}' similarity={name_similarity:.2f} too low)")
+        else:
+            print(f"✅ [VLM Tool] DB hit for '{food_name}'. Using VLM calories + DB macros.")
+        
         source = "vlm+db"
         def _pick(vlm_val, db_val):
             if vlm_val in (None, "N/A", "n/a", "", 0, "0"):
                 return db_val
             return vlm_val
         final_nutrition = {
-            "food_name": db_nutrition.get("food_name", food_name),
+            "food_name": final_name,
             "calories":  vlm_nutrition["calories"],
             "protein":   _pick(vlm_nutrition["protein"], db_nutrition.get("protein")),
             "carbs":     _pick(vlm_nutrition["carbs"],   db_nutrition.get("carbs")),

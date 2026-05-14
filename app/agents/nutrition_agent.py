@@ -70,11 +70,12 @@ STRICT POLICIES:
 - CRITICAL: If the user is referring to an uploaded image (e.g. "what is this?", "these calories"), DO NOT guess the food. The Vision Agent will handle it. ONLY provide nutrition info for foods the user EXPLICITLY names in their text. If they didn't name a food, just give general advice and do not mention any specific food from the database.
 
 DATA SANITY CHECK (MANDATORY — apply to EVERY retrieved food before using it):
-- SANITY RULE 1 (CALORIE DENSITY): If any food item shows more than 500 kcal per 100g, that data is WRONG. Ignore DB value and use your expert knowledge instead.
+- SANITY RULE 1 (CALORIE DENSITY - DYNAMIC): Evaluate calorie density based on the food's macronutrient profile. Do not enforce a static calorie cap (e.g., nuts and oils can safely exceed 600 kcal/100g). Only reject a food if its calories physically exceed the theoretical maximum for its macros (Protein/Carbs = 4 kcal/g, Fat = 9 kcal/g).
 - SANITY RULE 2 (IMPOSSIBLE FAT): Calculate fat_calories = fat_g × 9. If fat_calories > total_calories_kcal, the fat value is physically impossible. Ignore DB fat and estimate from your knowledge.
-- SANITY RULE 3 (FAT QUALITY — DYNAMIC): For each food, calculate: fat_calories = fat_g × 9, and protein_carb_calories = (protein_g × 4) + (carbs_g × 4). Then judge based on the user's goal:
-  • Weight loss: protein_carb_calories MUST be greater than fat_calories. If fat dominates, REJECT the food and use a healthier alternative from your knowledge.
-  • Weight gain/maintenance: moderate fat is acceptable, but fat_calories should not exceed total_calories × 0.45.
+- SANITY RULE 3 (FAT QUALITY — DYNAMIC): Dynamically adjust the acceptable fat ratio based on the user's specific diet preference. 
+  • For Keto diets, fat MUST be high (70-80%).
+  • For Standard Weight Loss diets, ensure protein_carb_calories > fat_calories.
+  • For Standard Weight/Muscle Gain diets, moderate fat is acceptable, but scale it dynamically to fit their goal without forcing an arbitrary ceiling.
 - SANITY RULE 4 (CEILING): No single meal may exceed its allocated % of the daily target.
 - SANITY RULE 5 (SUM VERIFICATION): After generating all meals, SUM their calories. If sum < daily target, SCALE UP portions of healthy foods already chosen.
 - SANITY RULE 6 (NO DUPLICATES & EXPERT FALLBACK): NEVER repeat the same food item in more than one meal. Create 4 distinct meals. If the database returns limited items, use your EXPERT KNOWLEDGE to generate healthy, goal-aligned meals consistent with the user's dietary preference.
@@ -114,7 +115,7 @@ Current Context: {summary}
         result = await self.run_logic(state, specialist_key="nutrition", topic="nutrition")
         return result
 
-    def _validate_output(self, output: Dict[str, Any], context: str) -> Dict[str, Any]:
+    def _validate_output(self, output: Dict[str, Any], context: str, state: Any = None) -> Dict[str, Any]:
         """
         Code-level post-processor — LLM cannot override this.
         1. Remove duplicate meals (same food in multiple slots)
@@ -180,13 +181,47 @@ Current Context: {summary}
         total_carbs = sum(parse_num(m.get("carbs",    0)) for m in unique_meals)
         total_fat   = sum(parse_num(m.get("fat",      0)) for m in unique_meals)
 
+        # --- Step 4: GOAL-AWARE AUTO SCALER (Dynamic TDEE Matcher) ---
+        target_calories = None
+        if state and "user_context" in state:
+            target_calories = state["user_context"].get("target_calories")
+        
+        if target_calories and total_cal > 0:
+            # If the LLM missed the target by more than 5%, scale it
+            if abs(total_cal - target_calories) / target_calories > 0.05:
+                ratio = target_calories / total_cal
+                logger.info(f"⚖️ [Auto-Scaler] Target: {target_calories} | Actual: {total_cal}. Scaling by {ratio:.2f}")
+                
+                # Apply scaling to all meals
+                total_cal, total_prot, total_carbs, total_fat = 0, 0, 0, 0
+                for meal in unique_meals:
+                    # Scale macros
+                    m_prot = parse_num(meal.get("protein", 0)) * ratio
+                    m_carbs = parse_num(meal.get("carbs", 0)) * ratio
+                    m_fat = parse_num(meal.get("fat", 0)) * ratio
+                    
+                    meal["protein"] = f"{round(m_prot, 1)}g"
+                    meal["carbs"] = f"{round(m_carbs, 1)}g"
+                    meal["fat"] = f"{round(m_fat, 1)}g"
+                    meal["calories"] = round((m_prot * 4) + (m_carbs * 4) + (m_fat * 9), 1)
+                    
+                    # Scale portion size if possible
+                    portion_g = parse_num(meal.get("portion", 0))
+                    if portion_g > 0:
+                        meal["portion"] = f"{round(portion_g * ratio)}g"
+                        
+                    total_cal += meal["calories"]
+                    total_prot += m_prot
+                    total_carbs += m_carbs
+                    total_fat += m_fat
+
         output["daily_totals"] = {
             "calories": round(total_cal, 1),
             "protein":  f"{round(total_prot,  1)}g",
             "carbs":    f"{round(total_carbs, 1)}g",
             "fat":      f"{round(total_fat,   1)}g"
         }
-        logger.info(f"✅ [Nutrition Validator] Recalculated totals: {total_cal:.0f} kcal, {total_prot:.0f}g protein")
+        logger.info(f"✅ [Nutrition Validator] Final Totals: {total_cal:.0f} kcal, {total_prot:.0f}g protein")
         return output
 
     def _format_context(self, results: List[Dict]) -> str:

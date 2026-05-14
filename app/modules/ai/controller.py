@@ -39,3 +39,10 @@ async def generate_diet(data: dict):
         return success(result)
     except Exception as e:
         return error(f"Diet Generation Error: {str(e)}")
+
+async def ask_domain(data: dict):
+    try:
+        result = await AIService.ask_domain_agent(data)
+        return success(result)
+    except Exception as e:
+        return error(f"Domain Query Error: {str(e)}")
