@@ -435,7 +435,11 @@ def identify_and_learn_new_food(
     try:
         import numpy as np
         food_image_col, food_text_col = _get_vision_collections()
-        dish_key = food_name.lower().replace(" ", "_")
+        import re
+        # Normalize dish key: strip parenthetical ingredient lists to prevent duplicates.
+        # "North Indian Veg Thali (Puri, Chole, Aloo Gobi)" -> "north_indian_veg_thali"
+        clean_name = re.sub(r'\s*\([^)]*\)', '', food_name).strip()
+        dish_key = clean_name.lower().replace(" ", "_").replace("-", "_")
 
         def _safe_float(val) -> float:
             try:
@@ -515,7 +519,7 @@ def identify_and_learn_new_food(
                 ids=[text_id],
                 documents=[nutrition_doc],
                 metadatas=[{
-                    "food_name":     food_name,
+                    "food_name":     dish_key,
                     "calories_kcal": _safe_float(vlm_nutrition["calories"]),
                     "protein_g":     _safe_float(vlm_nutrition["protein"]),
                     "carbs_g":       _safe_float(vlm_nutrition["carbs"]),

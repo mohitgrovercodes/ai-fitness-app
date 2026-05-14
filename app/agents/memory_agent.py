@@ -63,7 +63,11 @@ EXISTING SUMMARY: {existing_summary}"""),
                 logger.error(f"❌ [Memory] Redis Save Error: {e}")
 
         # 2. Check for Summary Trigger
-        total_messages = len(messages)
+        # Use Redis LIST count (not LangGraph RAM count) so trigger survives server restarts.
+        if redis_manager.is_available():
+            total_messages = redis_manager.client.llen(redis_key)
+        else:
+            total_messages = len(messages)  # fallback if Redis is down
         existing_summary = state.get("conversation_summary", "")
         
         # Load summary from Redis if not in state
