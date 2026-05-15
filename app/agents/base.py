@@ -52,7 +52,7 @@ class BaseRAGAgent:
         chain = self.prompt | self.llm
 
         # ── PHASE 1: Local ChromaDB Search ───────────────────
-        db_results = await self.rag_tool.search(query)
+        db_results = await self.rag_tool.search(query, diet_preference=diet_pref)
         context_str = self._format_context(db_results)
 
         analysis = await chain.ainvoke({
@@ -72,7 +72,7 @@ class BaseRAGAgent:
             
             # Use quantity multiplier if the analysis found one (e.g. for nutrition)
             multiplier = getattr(analysis, 'quantity_multiplier', 1.0)
-            db_results = await self.rag_tool.multi_query_search(query, analysis.sub_queries, multiplier=multiplier)
+            db_results = await self.rag_tool.multi_query_search(query, analysis.sub_queries, multiplier=multiplier, diet_preference=diet_pref)
             context_str = self._format_context(db_results)
 
             analysis = await chain.ainvoke({

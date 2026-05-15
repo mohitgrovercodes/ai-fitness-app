@@ -30,7 +30,7 @@ class NutritionRAGTool:
             logger.error(f"❌ [Nutrition Tool] Embedding Error: {e}")
             return []
 
-    async def search(self, query: str, n_results: int = 5, multiplier: float = 1.0) -> List[Dict[str, Any]]:
+    async def search(self, query: str, n_results: int = 5, multiplier: float = 1.0, diet_preference: str = "") -> List[Dict[str, Any]]:
         """
         ADAPTIVE RAG: Phase 1 — Single Semantic Search.
         Unblocked using asyncio.to_thread for ChromaDB's sync query method.
@@ -48,14 +48,14 @@ class NutritionRAGTool:
             results = await db_manager.run_query(
                 collection_name="food_text",
                 query_embeddings=[query_vector],
-                n_results=n_results
+                n_results=25
             )
             return self._process_results(results, multiplier)
         except Exception as e:
             logger.error(f"❌ [Nutrition Tool] Search Error: {e}")
             return []
 
-    async def multi_query_search(self, query: str, sub_queries: List[str], multiplier: float = 1.0) -> List[Dict[str, Any]]:
+    async def multi_query_search(self, query: str, sub_queries: List[str], multiplier: float = 1.0, diet_preference: str = "") -> List[Dict[str, Any]]:
         """
         ADAPTIVE RAG: Phase 2 — Multi-Query Expansion.
         """
@@ -73,7 +73,7 @@ class NutritionRAGTool:
             db_tasks = []
             for v in vectors:
                 if v:
-                    db_tasks.append(db_manager.run_query(collection_name="food_text", query_embeddings=[v], n_results=3))
+                    db_tasks.append(db_manager.run_query(collection_name="food_text", query_embeddings=[v], n_results=15))
             
             if not db_tasks:
                 return []

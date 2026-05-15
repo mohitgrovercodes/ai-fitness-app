@@ -256,10 +256,18 @@ class AIService:
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message")
         if not user_input:
-            parts = ["Create a structured time-based daily meal plan"]
-            if goal: parts.append(f"for {goal}")
-            if diet_type: parts.append(f"with a {diet_type} dietary preference")
-            if allergies: parts.append(f". Avoid these allergies: {', '.join(allergies)}")
+            duration = data.get("duration", "")  # e.g. "daily", "weekly", "monthly", "10 days", "45 days"
+            parts = ["Create a structured meal plan"]
+            if duration:
+                parts.append(f"for {duration}")
+            else:
+                parts.append("for today (daily)")
+            if goal:
+                parts.append(f"for the goal: {goal}")
+            if diet_type:
+                parts.append(f"with a {diet_type} dietary preference")
+            if allergies:
+                parts.append(f". Avoid these allergens: {', '.join(allergies)}")
             user_input = " ".join(parts) + "."
         
         state = {
@@ -274,6 +282,7 @@ class AIService:
             "summary": output.get("summary", ""),
             "meals": output.get("meals", []),
             "daily_totals": output.get("daily_totals", {}),
+            "per_day_totals": output.get("per_day_totals", {}),
             "tip": output.get("tip", ""),
             "response": output.get("answer", "Could not generate plan.")
         }

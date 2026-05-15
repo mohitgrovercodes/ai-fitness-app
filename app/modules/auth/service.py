@@ -30,7 +30,7 @@ class AuthService:
     def login(db: Session, payload):
 
         user = db.query(User).filter(
-            User.email == payload.username
+            User.username == payload.username
         ).first()
 
         if not user or not verify_password(
