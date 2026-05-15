@@ -44,6 +44,7 @@ class WebSearchTool:
         if not self._available:
             return {
                 "results": [],
+                
                 "summary": "Web search is unavailable. TAVILY_API_KEY not configured.",
                 "source": "unavailable"
             }

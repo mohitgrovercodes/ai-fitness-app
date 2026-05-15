@@ -28,15 +28,28 @@ class AuthService:
 
     @staticmethod
     def login(db: Session, payload):
-        # Find user
-        user = db.query(User).filter(User.email == payload.email).first()
-        if not user or not verify_password(payload.password, user.password_hash):
+
+        user = db.query(User).filter(
+            User.email == payload.username
+        ).first()
+
+        if not user or not verify_password(
+            payload.password,
+            user.password_hash
+        ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
-        # Create token
-        token = create_access_token({"sub": user.user_id, "email": user.email})
-        return {"access_token": token, "token_type": "bearer", "user_id": user.user_id}
+
+        token = create_access_token({
+            "sub": str(user.user_id),
+            "email": user.email
+        })
+
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user_id": user.user_id
+        }
