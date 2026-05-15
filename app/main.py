@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from app.modules.auth.routes import router as auth_router
 from app.modules.ai.routes import router as ai_router
 from app.modules.profile.routes import router as profile_router
+from app.modules.feedback.routes import router as feedback_router
 
 from contextlib import asynccontextmanager
 from app.utils.logger import logger
@@ -36,8 +37,9 @@ async def lifespan(app: FastAPI):
     
     # 3. Initialize SQL Database (Profiles & Auth)
     from app.core.sql_db import engine, Base
-    from app.modules.profile.model import Profile # Ensure model is registered
-    from app.modules.auth.model import User # Ensure model is registered
+    from app.modules.profile.model import Profile   # Ensure model is registered
+    from app.modules.auth.model import User           # Ensure model is registered
+    from app.modules.feedback.model import Feedback   # Ensure model is registered
     Base.metadata.create_all(bind=engine)
     logger.info("✅ [Startup] SQL Database (Profiles & Auth) initialized.")
 
@@ -52,6 +54,7 @@ app = FastAPI(title="AI Fitness App", lifespan=lifespan)
 app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
 app.include_router(ai_router, prefix="/api/ai", tags=["AI"])
 app.include_router(profile_router, prefix="/api/profile", tags=["Profile"])
+app.include_router(feedback_router, prefix="/api/feedback", tags=["Feedback"])
 
 @app.get("/")
 def root():

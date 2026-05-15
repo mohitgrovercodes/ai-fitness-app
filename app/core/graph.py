@@ -37,7 +37,8 @@ async def specialists_node(state: AgentState):
             from app.agents.domain_agent import DomainAgent
             tasks.append(DomainAgent().run(state))
         elif intent == "progress":
-            tasks.append(dummy_progress_agent(state))
+            from app.agents.progress_agent import ProgressAgent
+            tasks.append(ProgressAgent().run(state))
             
     # Default to domain agent if no specific intent found
     if not tasks:
@@ -162,11 +163,6 @@ async def safe_response_node(state: AgentState):
         "messages": [AIMessage(content=msg)],
         "next_node": END
     }
-
-# --- Placeholder Nodes ---
-async def dummy_progress_agent(state: AgentState):
-    logger.info("🚧 [Progress Agent] Placeholder reached.")
-    return {"specialist_results": {"progress": {"answer": "Progress Agent is under construction."}}}
 
 async def global_error_handler(state: AgentState):
     """Fallback node for unexpected graph failures."""
