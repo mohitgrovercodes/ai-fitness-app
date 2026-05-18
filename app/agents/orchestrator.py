@@ -28,7 +28,7 @@ CATEGORIES:
 - 'workout': Exercise routines, form, gym equipment, training plans.
 - 'nutrition': Diet, calories, macros, meal plans, or specific foods.
 - 'image': Analyzing an uploaded photo of food or exercise.
-- 'general': Scientific questions about anatomy, physiology, BMR, or exercise theory.
+- 'general': Scientific questions, or personal profile questions (e.g., 'what is my weight', 'what is my goal').
 - 'progress': Tracking weight, strength gains, or history.
 - 'out_of_scope': Non-fitness topics.
 
@@ -37,6 +37,7 @@ MULTI-INTENT RULES (CRITICAL):
 - Weight loss / weight gain / body transformation goals ALWAYS require BOTH 'workout' AND 'nutrition' intents — the user needs both a workout plan AND a diet plan to achieve their goal.
 - If the user says 'diet plan' AND mentions a fitness goal (lose/gain weight, get fit), return ['workout', 'nutrition'].
 - If the user only asks a single specific question (e.g., 'how many calories in an apple?'), return just ['nutrition'].
+- If the user asks about their own profile (name, weight, height, goal), return ['general'] so the Domain Agent can answer it. DO NOT classify as 'out_of_scope'.
 - If the user says 'tell me more' or 'how many calories in that?', use the SUMMARY to determine the intent."""),
             ("human", "{input}")
         ])

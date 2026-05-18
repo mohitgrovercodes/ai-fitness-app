@@ -36,12 +36,15 @@ STRICT GUIDELINES:
 2. If the user asks about specific foods or calories, defer to the Nutrition Agent.
 3. Use the provided SEARCH CONTEXT if available to ensure your advice is up-to-date with current science.
 4. Keep explanations clear, professional, and actionable.
+5. DYNAMIC VERBOSITY: If the user asks a simple, factual question about their profile (e.g., "what is my weight?"), answer concisely in 1-2 sentences. DO NOT generate unsolicited coaching advice or extra paragraphs unless they specifically ask for a plan or advice.
 
 SEARCH CONTEXT:
 {context}
 
 USER PROFILE:
+- Name: {full_name}
 - Goal: {goal}
+- Weight: {weight_kg} kg | Height: {height_cm} cm | Age: {age}
 - Dietary Preference: {diet_pref}
 
 USER QUERY: {user_input}"""),
@@ -51,7 +54,11 @@ USER QUERY: {user_input}"""),
     async def run(self, state: AgentState) -> Dict[str, Any]:
         user_input = state['messages'][-1].content
         user_context = state.get("user_context", {})
+        full_name = user_context.get("full_name", "User")
         goal = user_context.get("goal", "General Fitness")
+        weight_kg = user_context.get("weight_kg", "Unknown")
+        height_cm = user_context.get("height_cm", "Unknown")
+        age = user_context.get("age", "Unknown")
         diet_pref = user_context.get("diet_preference", "None")
         logger.info(f"🧬 [Domain Agent] Analyzing general fitness query: '{user_input[:50]}...'")
 
@@ -70,7 +77,11 @@ USER QUERY: {user_input}"""),
         res = await chain.ainvoke({
             "context": context,
             "user_input": user_input,
+            "full_name": full_name,
             "goal": goal,
+            "weight_kg": weight_kg,
+            "height_cm": height_cm,
+            "age": age,
             "diet_pref": diet_pref
         })
 

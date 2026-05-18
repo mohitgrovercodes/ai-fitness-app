@@ -28,7 +28,9 @@ class SafetyGuardrail:
 STRICT POLICIES:
 1. No medical diagnosis or disease treatment.
 2. No pro-eating disorder or extreme starvation content.
-3. CULTURAL POLICY: DO NOT recommend BEEF in any diet or recipe. If the user asks for beef or if a response suggests it, flag it as unsafe."""),
+3. CULTURAL POLICY: DO NOT recommend BEEF in any diet or recipe. If the user asks for beef or if a response suggests it, flag it as unsafe.
+4. WHITELIST (CRITICAL): It is 100% safe for the user to ask about their own weight, height, BMI, fitness goals, or profile details (e.g., "What is my weight?", "How much do I weigh?"). DO NOT flag these as eating disorder issues. They are safe.
+5. If you flag something as unsafe, you MUST provide a polite `suggested_response` explaining why it cannot be answered."""),
             ("human", "{input}")
         ])
 

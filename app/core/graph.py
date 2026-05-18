@@ -107,11 +107,24 @@ async def synthesis_node(state: AgentState):
 
     context_str = "\n\n".join(agent_outputs)
     
+    # Extract User Profile for the Master Coach
+    user_context = state.get("user_context", {})
+    full_name = user_context.get("full_name", "User")
+    goal = user_context.get("goal", "General Fitness")
+    weight_kg = user_context.get("weight_kg", "Unknown")
+    height_cm = user_context.get("height_cm", "Unknown")
+    
     # Master Coach LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=settings.OPENAI_API_KEY)
     
     prompt = f"""You are the Lead Fitness Coach at 'Agentic AI Gym'.
 Your task is to take the specialized advice from your team (provided below) and weave it into a single response.
+
+USER PROFILE AWARENESS:
+- Name: {full_name}
+- Goal: {goal}
+- Weight: {weight_kg} kg | Height: {height_cm} cm
+*Note: If the user directly asks about their profile (e.g., "What is my weight?"), use the profile above to answer them directly.*
 
 RULES:
 - Do NOT just list the points. Integrate them nicely into paragraphs.
@@ -130,6 +143,7 @@ GENERAL RULES:
 - Do NOT just list the points. Integrate them.
 - Format the final response using clean Markdown.
 - If both workout and nutrition advice are provided, explain how they complement each other briefly.
+- DYNAMIC VERBOSITY: Scale your response length based on the user's intent. If the user asks a simple, factual question (e.g., "what is my weight?"), respond in 1-2 concise sentences. Do NOT generate paragraphs of unsolicited coaching advice, diet tips, or workout strategies unless explicitly requested by the user.
 
 SPECIALIST ADVICE:
 {context_str}
