@@ -34,7 +34,7 @@ class TrainingRAGTool:
             logger.error(f"❌ [Training Tool] Embedding Error: {e}")
             return []
 
-    async def search(self, query: str, n_results: int = 5, multiplier: float = 1.0) -> List[Dict[str, Any]]:
+    async def search(self, query: str, n_results: int = 5, multiplier: float = 1.0, **kwargs) -> List[Dict[str, Any]]:
         """
         Single Semantic Search for exercises.
         Unblocked using asyncio.to_thread.
@@ -59,7 +59,7 @@ class TrainingRAGTool:
             logger.error(f"❌ [Training Tool] Search Error: {e}")
             return []
 
-    async def multi_query_search(self, query: str, sub_queries: List[str], multiplier: float = 1.0) -> List[Dict[str, Any]]:
+    async def multi_query_search(self, query: str, sub_queries: List[str], multiplier: float = 1.0, **kwargs) -> List[Dict[str, Any]]:
         """
         Multi-Query Expansion for complex workout requests.
         """
