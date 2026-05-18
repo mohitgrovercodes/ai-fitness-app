@@ -79,6 +79,20 @@ async def synthesis_node(state: AgentState):
     if not results:
         return {"messages": [AIMessage(content="I've analyzed your request but couldn't find a specific answer.")]}
 
+    # ── Advisory Vision Pass-Through ─────────────────────────────────────────
+    # When the Vision Agent handled an advisory query (e.g. "should I eat this?"),
+    # its response already contains the full answer — food description, nutrition,
+    # AND the personalised recommendation. Passing it through the synthesis LLM
+    # would risk rewriting, stripping, or diluting that answer with incorrect
+    # context (e.g. wrong diet suggestions). So we return it directly.
+    vision_data = results.get("vision", {})
+    if isinstance(vision_data, dict) and vision_data.get("is_advisory") and len(results) == 1:
+        logger.info("✨ [Synthesis] Advisory vision query — passing through VisionAgent response directly.")
+        return {
+            "messages": [AIMessage(content=vision_data.get("answer", ""))],
+            "next_node": "output_safety"
+        }
+
     # Format agent outputs for the Master Coach
     agent_outputs = []
     media_attachments = []
@@ -113,6 +127,7 @@ async def synthesis_node(state: AgentState):
     goal = user_context.get("goal", "General Fitness")
     weight_kg = user_context.get("weight_kg", "Unknown")
     height_cm = user_context.get("height_cm", "Unknown")
+    diet_pref = user_context.get("diet_preference", "Not specified")
     
     # Master Coach LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=settings.OPENAI_API_KEY)
@@ -124,6 +139,7 @@ USER PROFILE AWARENESS:
 - Name: {full_name}
 - Goal: {goal}
 - Weight: {weight_kg} kg | Height: {height_cm} cm
+- Dietary Preference: {diet_pref}
 *Note: If the user directly asks about their profile (e.g., "What is my weight?"), use the profile above to answer them directly.*
 
 RULES:
@@ -137,7 +153,7 @@ STRICT INSTRUCTIONS FOR IMAGE-BASED REQUESTS:
 - Do NOT add suggestions for other foods, shakes, or unrelated snacks.
 - Keep the tone professional but interactive.
 - ONLY IF a [VISION] result is provided, you MUST present the Nutritional Breakdown exactly point-wise. If NO [VISION] result is provided, you MUST NOT generate any "Nutritional Breakdown" or "Macro" section.
-- If the [VISION] result already contains a personalised recommendation section (e.g. a '💡 Should You Eat This?' block), preserve it as-is. Otherwise, end the response after the nutritional breakdown. Do NOT add generic tips or unrelated suggestions.
+- End the response after the nutritional breakdown. Do NOT add generic tips, protein pairing suggestions, or unrelated food recommendations.
 
 GENERAL RULES:
 - Do NOT just list the points. Integrate them.

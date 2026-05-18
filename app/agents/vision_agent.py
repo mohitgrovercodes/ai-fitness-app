@@ -173,7 +173,7 @@ class VisionAgent:
                 is_advisory=is_advisory
             )
             llm_response = await self.llm.ainvoke(prompt)
-            return self._build_output(llm_response.content, meta)
+            return self._build_output(llm_response.content, meta, is_advisory=is_advisory)
 
         # ── TIER 1b: Ambiguity Check ─────────────────────────────────────────
         is_high_confidence = True
@@ -269,7 +269,7 @@ class VisionAgent:
         print("[Vision Agent] Sending to LLM for final reasoning...")
         llm_response = await self.llm.ainvoke(prompt)
         print("[Vision Agent] Response ready.")
-        return self._build_output(llm_response.content, meta)
+        return self._build_output(llm_response.content, meta, is_advisory=is_advisory)
 
     # ─── Image Quality Pre-Flight ─────────────────────────────────────────────
 
@@ -551,16 +551,17 @@ class VisionAgent:
             print(f"[Vision Agent] _build_meals_from_result failed: {e}")
         return meta
 
-    def _build_output(self, response_text: str, meta: dict = None) -> Dict[str, Any]:
+    def _build_output(self, response_text: str, meta: dict = None, is_advisory: bool = False) -> Dict[str, Any]:
         """Standard output format for the LangGraph state with optional metadata block."""
         full_response = response_text
         if meta:
             full_response = response_text + "\n\n" + self._format_metadata(meta)
-        
+
         out = {
             "answer": full_response,
             "status": "success",
-            "metadata": meta
+            "metadata": meta,
+            "is_advisory": is_advisory
         }
         if meta and "meals" in meta:
             out["meals"] = meta["meals"]
