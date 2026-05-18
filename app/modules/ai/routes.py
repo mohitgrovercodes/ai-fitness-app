@@ -24,23 +24,16 @@ async def chat_endpoint(
 @router.post("/chat-vision")
 async def chat_vision_endpoint(
     message: str = Form(...),
-    context: str = Form("{}"),
-    file: Optional[UploadFile] = File(None),
+    file: UploadFile = File(...),
     user_id: str = Depends(get_current_user)
 ):
     """
-    Agentic AI Chat Endpoint with optional Image Upload (Vision Agent).
+    Agentic AI Chat Endpoint with Image Upload (Vision Agent).
     Accepts multipart/form-data.
-    'context' should be a stringified JSON object (e.g. '{"goal": "weight loss"}').
     """
     from app.modules.ai.controller import chat_with_image
-    
-    try:
-        context_dict = json.loads(context)
-    except json.JSONDecodeError:
-        context_dict = {}
         
-    return await chat_with_image(message, user_id, context_dict, file)
+    return await chat_with_image(message, user_id, {}, file)
 
 
 @router.post("/generate-workout")
