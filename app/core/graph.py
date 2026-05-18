@@ -137,7 +137,7 @@ STRICT INSTRUCTIONS FOR IMAGE-BASED REQUESTS:
 - Do NOT add suggestions for other foods, shakes, or unrelated snacks.
 - Keep the tone professional but interactive.
 - ONLY IF a [VISION] result is provided, you MUST present the Nutritional Breakdown exactly point-wise. If NO [VISION] result is provided, you MUST NOT generate any "Nutritional Breakdown" or "Macro" section.
-- NEVER add a "Complementary Aspects" or generic tip section. End the response immediately after the nutritional breakdown.
+- If the [VISION] result already contains a personalised recommendation section (e.g. a '💡 Should You Eat This?' block), preserve it as-is. Otherwise, end the response after the nutritional breakdown. Do NOT add generic tips or unrelated suggestions.
 
 GENERAL RULES:
 - Do NOT just list the points. Integrate them.

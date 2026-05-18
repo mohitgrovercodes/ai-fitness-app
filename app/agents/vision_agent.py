@@ -96,15 +96,23 @@ class VisionAgent:
             )
 
         # ══════════════════════════════════════════════════════
-        # STAGE 1 — CLIP Visual Search (Top-5)
+        # STAGE 1 — CLIP Visual Search (Top-5)  +  Advisory Classification
+        # Both run concurrently so advisory detection adds zero extra latency.
         # ══════════════════════════════════════════════════════
         try:
             from app.core.database import db_manager
             import asyncio
-            async with db_manager.lock:
-                top_matches, clip_vector = await asyncio.to_thread(
-                    search_image_in_db, image_bytes, return_vector=True
-                )
+
+            async def _clip_search():
+                async with db_manager.lock:
+                    return await asyncio.to_thread(
+                        search_image_in_db, image_bytes, return_vector=True
+                    )
+
+            (top_matches, clip_vector), is_advisory = await asyncio.gather(
+                _clip_search(),
+                self._is_advisory_query(user_text)
+            )
         except Exception as e:
             print(f"[Vision Agent] CLIP search failed: {e}")
             meta["decision_tier"] = "Error — CLIP Failed"
@@ -161,7 +169,8 @@ class VisionAgent:
             meta["self_learned"]    = result["learned"]
             meta = self._build_meals_from_result(result, meta)
             prompt = self._build_nutrition_prompt(
-                result["identified_food"], result["nutrition"], user_text, result["source"], goal, diet_pref
+                result["identified_food"], result["nutrition"], user_text, result["source"], goal, diet_pref,
+                is_advisory=is_advisory
             )
             llm_response = await self.llm.ainvoke(prompt)
             return self._build_output(llm_response.content, meta)
@@ -217,7 +226,8 @@ class VisionAgent:
             }
             meta = self._build_meals_from_result(result_for_meals, meta)
             prompt = self._build_nutrition_prompt(
-                top_match["category"], nutrition_data, user_text, meta["data_source"], goal, diet_pref
+                top_match["category"], nutrition_data, user_text, meta["data_source"], goal, diet_pref,
+                is_advisory=is_advisory
             )
 
         else:
@@ -249,7 +259,8 @@ class VisionAgent:
 
             meta = self._build_meals_from_result(result, meta)
             prompt = self._build_nutrition_prompt(
-                result["identified_food"], result["nutrition"], user_text, result["source"], goal, diet_pref
+                result["identified_food"], result["nutrition"], user_text, result["source"], goal, diet_pref,
+                is_advisory=is_advisory
             )
 
         # ══════════════════════════════════════════════════════
@@ -357,6 +368,36 @@ class VisionAgent:
             "I can identify thousands of Indian and international dishes — just send the photo! 🍽️"
         )
 
+    async def _is_advisory_query(self, user_text: str) -> bool:
+        """
+        LLM-based intent classifier — determines whether the user is asking
+        for a personalised dietary recommendation vs. just food identification
+        or a macro lookup. Works for any language (English, Hindi, Hinglish, etc.).
+        """
+        if not user_text or not user_text.strip():
+            return False
+        prompt = (
+            "You are a query intent classifier for a Food Vision AI assistant.\n"
+            "Classify the user's message into exactly one of two categories:\n\n"
+            "- 'advisory': The user wants a personalised recommendation about whether "
+            "they should eat this food given their fitness goal or diet "
+            "(e.g. 'should I eat this?', 'is this good for weight loss?', "
+            "'can I have this on keto?', 'yeh khana chahiye mujhe?', 'is this healthy for me?').\n"
+            "- 'other': The user just wants the food identified, or wants calorie/macro "
+            "information, or is making a general statement with no advice needed.\n\n"
+            f"User message: \"{user_text}\"\n\n"
+            "Reply with ONLY one word: 'advisory' or 'other'."
+        )
+        try:
+            response = await self.llm.ainvoke(prompt)
+            result   = response.content.strip().lower()
+            is_adv   = result.startswith("advisory")
+            print(f"[Vision Agent] Advisory classifier → '{result}' (is_advisory={is_adv})")
+            return is_adv
+        except Exception as e:
+            print(f"[Vision Agent] Advisory classifier failed: {e}. Defaulting to False.")
+            return False
+
     def _build_guardrail_b_prompt(self, object_desc: str, user_text: str) -> str:
         """Guardrail B: Non-food image detected by VLM."""
         return (
@@ -377,7 +418,8 @@ class VisionAgent:
         user_text: str,
         source: str,
         goal: str = "General Fitness",
-        diet_pref: str = "None"
+        diet_pref: str = "None",
+        is_advisory: bool = False
     ) -> str:
 
         """Universal nutrition prompt — works for Tier 1a (DB) and VLM fallback."""
@@ -405,6 +447,15 @@ class VisionAgent:
             )
 
         if user_text and user_text.strip():
+            advisory_section = (
+                f"\n\n## 💡 Should You Eat This?\n"
+                f"[Answer the user's question directly: '{user_text}'. "
+                f"Based on their goal ({goal}) and dietary preference ({diet_pref}), "
+                f"give a clear 2-3 sentence personalised recommendation — "
+                f"state whether this food helps or hinders their goal, "
+                f"and if they should eat it, suggest a sensible portion size.]"
+            ) if is_advisory else ""
+
             instruction = (
                 f'The user asked: "{user_text}"\n'
                 f"Answer using the nutrition data above. FOLLOW THIS FORMAT STRICTLY:\n\n"
@@ -416,9 +467,10 @@ class VisionAgent:
                 f"- **Calories**: [X] kcal\n"
                 f"- **Protein**: [X] g\n"
                 f"- **Carbohydrates**: [X] g\n"
-                f"- **Fat**: [X] g\n\n"
+                f"- **Fat**: [X] g\n"
+                f"{advisory_section}\n\n"
                 f"STRICT RULES: All values MUST be numeric. Never write 'N/A' or 'Generally high'. "
-                f"Do NOT add a 'Complementary Aspects', 'Tips', or any other section. End after the nutritional breakdown."
+                f"Do NOT add a 'Complementary Aspects' or generic tip section beyond what is specified above."
             )
         else:
             instruction = (
