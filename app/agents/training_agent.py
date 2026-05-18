@@ -8,6 +8,7 @@ from app.utils.logger import logger
 
 
 class WorkoutExercise(BaseModel):
+    day: str = Field(default="", description="Day label for multi-day splits (e.g., 'Day 1 - Upper Body'). Leave empty for single-day plans.")
     name: str = Field(description="Name of the exercise.")
     target_muscle: List[str] = Field(description="List of target muscles.")
     benefit: str = Field(description="Benefit of this exercise.")
@@ -48,6 +49,15 @@ STRICT POLICIES:
 6. MEDIA PATHS: You MUST include the correct `gif_path` and `image_path` directly inside each exercise object in the `workout` list.
 7. CLEAN TEXT RESPONSE: The `final_answer` string MUST ONLY contain a polite greeting and a brief 1-2 sentence intro. DO NOT list the exercises, sets, reps, or media paths inside `final_answer`. Put the data ONLY in the structured JSON fields.
 8. NO SYSTEM TALK: NEVER use phrases like "based on the retrieved data", "the database doesn't have", or "the retrieved exercises". Speak directly as an expert coach.
+
+MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
+- Detect exactly what duration (N days) the user is asking for from their message (e.g., "today" = 1, "4 days" = 4, "a week" = 7, "a month" = 30).
+- DYNAMIC SPLIT SELECTION: You MUST dynamically assign an optimal, professional workout split based on the requested days:
+  • N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty.
+  • N = 2 to 7 (Weekly Splits): Generate exactly N unique days. Apply a logical split (e.g., N=3 is Push/Pull/Legs; N=4 is Upper/Lower; N=5 is Bro Split). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push", "Day 3 - Rest").
+  • N > 7 (Monthly/Long-term): DO NOT generate 30 different days of workouts. Real gym programming relies on microcycles. Generate exactly a 7-DAY or 14-DAY MICROCYCLE TEMPLATE (e.g., exactly 7 unique days) that the user will repeat. Explain in the `summary` and `tip` how to progressively overload (increase weight/reps) over the coming weeks. You MUST populate the `day` field for every exercise (e.g., "Day 1 - Monday", "Day 7 - Sunday").
+- DYNAMIC REST DAYS: You are authorized to create Rest Days where the exercise name is "Rest" or "Light Stretching".
+- DYNAMIC DAILY VOLUME: DO NOT just divide the retrieved exercises across the days. A single day MUST be a complete workout session on its own. Dynamically decide the number of exercises per day based on the split type (e.g., an intense Leg Day might need 5-7 exercises, while an Active Recovery day might only need 2-3 stretches). If the database didn't provide enough exercises for a complete daily session, use your expert knowledge to inject the missing exercises.
 
 INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC):
 - When the user reports ANY injury or medical condition, you MUST use your internal biomechanical knowledge to deduce which movements are unsafe.
