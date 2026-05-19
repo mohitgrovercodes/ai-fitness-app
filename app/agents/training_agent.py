@@ -68,8 +68,15 @@ INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC):
 Example JSON mapping: exercise_gifs = {{"Push-up": "videos/0662-I4hDWkc.gif"}}, exercise_images = {{"Push-up": "images/0662-I4hDWkc.jpg"}}.
 
 USER DATA:
+Name: {full_name}
+Age: {age} | Gender: {gender}
+Weight: {weight_kg} kg | Height: {height_cm} cm
+Activity Level: {activity_level}
+TDEE & Calorie Targets:
+  {tdee}
 Goal: {goal}
 Injuries/Medical: {injuries}
+Medical Conditions: {medical}
 Dietary Preference: {diet_preference}
 Current Context: {summary}
 """

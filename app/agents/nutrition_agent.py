@@ -137,9 +137,16 @@ GOAL-SPECIFIC DIETARY RULES (MANDATORY):
 - Protein: 1.0–1.2g per kg of estimated body weight.
 
 USER DATA:
+Name: {full_name}
+Age: {age} | Gender: {gender}
+Weight: {weight_kg} kg | Height: {height_cm} cm
+Activity Level: {activity_level}
+TDEE & Calorie Targets:
+  {tdee}
 Goal: {goal}
-Medical/Injuries: {injuries}
 Dietary Preference: {diet_preference}
+Injuries/Medical: {injuries}
+Medical Conditions: {medical}
 Current Context: {summary}
 """
         
