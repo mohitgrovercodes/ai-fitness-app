@@ -8,7 +8,7 @@ class AuthService:
     @staticmethod
     def register(db: Session, payload):
         # Check if user already exists
-        existing_user = db.query(User).filter(User.email == payload.email).first() or db.query(User).filter(User.username==payload.username.first)
+        existing_user = db.query(User).filter(User.email == payload.email).first() or db.query(User).filter(User.username==payload.username).first()
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

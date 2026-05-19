@@ -136,6 +136,15 @@ MULTI-DAY PLAN RULES (CRITICAL):
     - Populate `day` field: e.g. "Day 1 - Monday (Training Day)" up through "Day 7 - Sunday (Rest Day)".
 - Calorie and macro targets MUST vary dynamically per day (training day ≠ rest day).
 
+- USER QUERY STRICTNESS RULE:
+  Always strictly follow the user's requested duration and structure.
+  - If the user explicitly asks for a specific number of days (e.g. "3-day plan", "10 days", "2 weeks", "monthly"), generate the response according to that exact request.
+  - If the user asks for specific day types (e.g. "only training days", "weekdays only", "Monday to Friday", "rest day meal plan"), generate meals only for those requested days/types.
+  - If the user asks for a specific meal frequency (e.g. "3 meals per day", "6 meals", "intermittent fasting"), strictly follow that structure.
+  - If the user asks for a specific schedule pattern (e.g. alternating training/rest days, veg on weekdays and non-veg on weekends), adapt the generated plan dynamically according to the query.
+  - Never assume a default duration or structure when the user has explicitly provided one.
+  - The generated JSON output MUST always align exactly with the user's requested duration, schedule, meal frequency, and day pattern.
+
 GOAL-SPECIFIC DIETARY RULES (MANDATORY):
 
 🔴 WEIGHT LOSS (when user mentions: lose weight, fat loss, slim down, lose Xkg):
@@ -184,7 +193,13 @@ Current Context: {summary}
             "Convert any time expression (in any language) to a number of days.\n"
             "If no duration is mentioned, return 1.\n"
             "Reply with ONLY a single integer. No explanation, no units, just the number.\n\n"
-            f"User message: {query}"
+            f"User message: {query}\n\n"
+            "STRICT USER QUERY RULE:\n"
+            "- Follow the user's requested duration exactly.\n"
+            "- Follow requested day types (training/rest/weekdays/etc).\n"
+            "- Follow requested meal frequency.\n"
+            "- Do not assume default schedules if user specified one.\n"
+            "- Every day must have unique meals.\n\n"
         )
         try:
             response = await llm.ainvoke(prompt)
@@ -194,32 +209,64 @@ Current Context: {summary}
         except Exception as e:
             logger.warning(f"⚠️ [Nutrition Agent] Duration detection failed ({e}), defaulting to 1 day.")
             return 1
-
     async def run(self, state: AgentState) -> Dict[str, Any]:
         """
-        Smart runner: uses chunked generation for multi-week plans (N > 7)
-        to avoid gpt-4o-mini's 4096 output token ceiling.
-        For N <= 7 days, falls through to normal single-call logic.
+        Smart runner:
+        - Detects requested duration via LLM.
+        - Single call for short plans (within token budget).
+        - Chunked generation for longer plans.
         """
         query = state['messages'][-1].content
         n_days = await self._detect_n_days(query)
+        chunk_size = self._compute_chunk_size()
 
-        if n_days > 7:
-            logger.info(f"📅 [Nutrition Agent] Multi-week plan detected (N={n_days}). Using chunked generation.")
+        if n_days > chunk_size:
+            logger.info(f"📅 [Nutrition Agent] {n_days} days detected — chunk size={chunk_size}. Using chunked generation.")
             return await self._run_chunked(state, query, n_days)
         else:
             return await self.run_logic(state, specialist_key="nutrition", topic="nutrition")
 
+    def _compute_chunk_size(self) -> int:
+        """
+        Compute how many days can safely fit in ONE LLM call's output.
+        Based purely on model token limits — no hardcoded business values.
 
-    def _build_chunks(self, n_days: int, chunk_size: int = 3) -> list:
+        Formula:
+          chunk_size = floor(safe_output_tokens / (meals_per_day × tokens_per_meal))
+
+        These are physical model constraints, not business rules:
+          - safe_output_tokens: gpt-4o-mini max output (4096), with 10% safety margin
+          - tokens_per_meal: ~85 tokens per structured meal JSON object
+          - meals_per_day: 5 (standard full-day coverage)
         """
-        Dynamically builds day chunks for any duration.
-        For N > 7: caps to 7-day rotation template.
-        For N <= 7: generates exactly N days.
-        Chunk size is configurable (default 3 days per call).
-        Returns list of {"label": "Days 1-3", "days": "Day 1, Day 2, Day 3"}.
+        safe_output_tokens = int(self.llm.max_tokens * 0.90) if hasattr(self.llm, 'max_tokens') and self.llm.max_tokens else 3680
+        tokens_per_meal = 85    # approximate JSON token cost per MealPlanItem
+        meals_per_day = 5       # standard meals: breakfast, lunch, snack, dinner, dessert
+        return max(1, safe_output_tokens // (tokens_per_meal * meals_per_day))
+
+    def _compute_days_to_generate(self, n_days: int) -> int:
         """
-        days_to_generate = min(n_days, 7) if n_days > 7 else n_days
+        How many unique days to actually generate.
+        If n_days fits within max_api_calls × chunk_size, generate ALL n_days.
+        Otherwise generate as many as possible within a reasonable API call budget.
+
+        max_api_calls is derived from UX budget (each call ~15s, total <90s acceptable):
+          max_api_calls = floor(acceptable_wait_seconds / seconds_per_call)
+        """
+        seconds_per_call = 15       # approximate LLM call latency
+        acceptable_wait = 90        # max seconds user waits comfortably
+        max_api_calls = max(1, acceptable_wait // seconds_per_call)  # = 6
+        chunk_size = self._compute_chunk_size()
+        max_generatable = chunk_size * max_api_calls
+        return min(n_days, max_generatable)
+
+    def _build_chunks(self, days_to_generate: int) -> list:
+        """
+        Dynamically partition days_to_generate into chunks.
+        Each chunk size = _compute_chunk_size() (token-budget derived).
+        Returns: [{"label": "Days 1-8", "days": "Day 1, Day 2, ..., Day 8"}, ...]
+        """
+        chunk_size = self._compute_chunk_size()
         chunks = []
         day_num = 1
         while day_num <= days_to_generate:
@@ -232,92 +279,134 @@ Current Context: {summary}
             day_num = end + 1
         return chunks
 
+    async def _generate_plan_summary(self, all_meals: list, n_days: int, days_generated: int, goal: str, original_query: str) -> tuple:
+        """
+        Generate plan summary + tip via a dedicated LLM call AFTER all chunks are merged.
+        This ensures summary reflects the FULL plan, not just the first chunk.
+        Returns (summary_str, tip_str, answer_str).
+        """
+        from langchain_openai import ChatOpenAI
+        from app.core.config import settings
+
+        day_labels = list({m.get('day', '') for m in all_meals if m.get('day', '')})
+        day_labels_str = ', '.join(sorted(day_labels)[:5])  # show first 5 for brevity
+        is_rotation = n_days > days_generated
+
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=settings.OPENAI_API_KEY)
+        prompt = (
+            f"You are a nutrition coach. A {days_generated}-day meal plan has been generated for a user with goal: {goal}.\n"
+            f"The plan covers: {day_labels_str}{'...' if len(day_labels) > 5 else ''}.\n"
+            + (f"This is a rotation template — the user should repeat it to cover all {n_days} days.\n" if is_rotation else "")
+            + f"Original request: '{original_query}'\n\n"
+            "Write THREE short paragraphs in JSON format:\n"
+            '{"summary": "<2 sentences: what the plan covers and how it supports the goal>", '
+            '"tip": "<1 sentence: actionable nutrition tip or how to use the rotation>", '
+            '"answer": "<1 warm motivating sentence to open the response>"}\n'
+            "Reply with ONLY the JSON object, no markdown."
+        )
+        try:
+            resp = await llm.ainvoke(prompt)
+            import json
+            data = json.loads(resp.content.strip())
+            return data.get("summary", ""), data.get("tip", ""), data.get("answer", "")
+        except Exception as e:
+            logger.warning(f"⚠️ [Nutrition Chunked] Summary generation failed: {e}")
+            rotation_note = f" Repeat this {days_generated}-day rotation to cover all {n_days} days." if is_rotation else ""
+            return (
+                f"Here is your {days_generated}-day meal plan tailored for your {goal} goal.",
+                f"Stay consistent with your meals and hydration.{rotation_note}",
+                "Here is your personalized meal plan!"
+            )
+
     async def _run_chunked(self, state: AgentState, original_query: str, n_days: int) -> Dict[str, Any]:
         """
-        Fully dynamic chunked generation.
-        - Builds day ranges on the fly (no hardcoded day names or Training/Rest labels).
-        - LLM decides which days are training/rest based on user goal.
-        - Works for any duration: 10 days, 3 weeks, 2 months, etc.
+        Fully dynamic chunked generation — zero hardcoded values.
+        - days_to_generate: computed from token budget × UX latency budget
+        - chunk_size: computed from model output token limit
+        - summary/tip: generated post-merge via dedicated LLM call
+        - day labels: LLM decides (Training/Rest/etc) based on user goal
         """
         from langchain_core.prompts import ChatPromptTemplate
 
         user_context = state.get('user_context', {})
-        summary = state.get('conversation_summary', "No previous context.")
+        conv_summary = state.get('conversation_summary', "No previous context.")
         goal = user_context.get("goal", "General Fitness") if isinstance(user_context, dict) else "General Fitness"
         injuries = ", ".join(user_context.get("injuries", [])) if isinstance(user_context, dict) and user_context.get("injuries") else "None"
         diet_pref = user_context.get("diet_preference", "None") if isinstance(user_context, dict) else "None"
 
         # ── Step 1: ONE RAG search (shared across all chunks) ──────────
-        logger.info(f"🔍 [Nutrition Chunked] Doing single RAG search for context...")
+        logger.info(f"🔍 [Nutrition Chunked] Single RAG search for context...")
         db_results = await self.rag_tool.search(original_query, diet_preference=diet_pref)
         context_str = self._format_context(db_results) or "No specific data retrieved."
 
-        # ── Step 2: Dynamically build chunks ───────────────────────────
-        days_to_generate = min(n_days, 7) if n_days > 7 else n_days
-        DAY_CHUNKS = self._build_chunks(n_days)
-        logger.info(f"📦 [Nutrition Chunked] {len(DAY_CHUNKS)} chunks for {days_to_generate} days: {[c['label'] for c in DAY_CHUNKS]}")
+        # ── Step 2: Compute how many days & chunks (all dynamic) ───────
+        days_to_generate = self._compute_days_to_generate(n_days)
+        DAY_CHUNKS = self._build_chunks(days_to_generate)
+        is_rotation = n_days > days_to_generate
+        logger.info(
+            f"📦 [Nutrition Chunked] n_days={n_days} | days_to_generate={days_to_generate} | "
+            f"chunk_size={self._compute_chunk_size()} | chunks={[c['label'] for c in DAY_CHUNKS]} | "
+            f"rotation={'yes' if is_rotation else 'no'}"
+        )
 
-        # ── Step 3: Build chunk prompt ──────────────────────────────────
+        # ── Step 3: Chunk prompt ────────────────────────────────────────
         chunk_prompt = ChatPromptTemplate.from_messages([
             ("system", self.prompt.messages[0].prompt.template),
             ("human", (
-                "CONVERSATION SUMMARY (for context):\n{summary}\n\n"
-                "ORIGINAL USER REQUEST: {original_query}\n\n"
-                "YOUR TASK FOR THIS CALL: Generate meals ONLY for the following days: {days}\n"
-                "Each day MUST have exactly 5 meals (Breakfast, Lunch, Snack, Dinner, Dessert).\n"
-                "Use DIFFERENT foods for each day — do NOT repeat the same food on different days.\n"
-                "For each day's label in the `day` field, use the format: 'Day X - [Day Type]' "
-                "where [Day Type] is determined by you based on the user's goal and training split "
-                "(e.g., 'Training Day', 'Rest Day', 'Active Recovery', 'High Carb Day', etc.).\n"
-                "Set is_accurate=True. Set needs_web_search=False. Leave sub_queries empty.\n\n"
-                "RETRIEVED DATA:\n{context}"
+                "CONVERSATION SUMMARY:\n{conv_summary}\n\n"
+                "ORIGINAL REQUEST: {original_query}\n"
+                "USER GOAL: {goal} | INJURIES: {injuries} | DIET: {diet_pref}\n\n"
+                "TASK: Generate meals ONLY for: {days}\n"
+                "- 5 meals per day (Breakfast, Lunch, Snack, Dinner, Dessert)\n"
+                "- Each day must have DIFFERENT foods — no repeats across days\n"
+                "- In the `day` field use: 'Day X - [Day Type]' where you decide "
+                "  [Day Type] based on user goal (Training Day / Rest Day / Active Recovery / High Carb / etc.)\n"
+                "- Set is_accurate=True, needs_web_search=False, sub_queries=[]\n\n"
+                "FOOD DATA:\n{context}"
             ))
         ])
         chunk_chain = chunk_prompt | self.llm
 
-        # ── Step 4: Run sequential chunk calls ─────────────────────────
+        # ── Step 4: Sequential chunk calls ─────────────────────────────
         all_meals = []
-        first_analysis = None
-
         for chunk in DAY_CHUNKS:
             logger.info(f"🍽️  [Nutrition Chunked] Generating {chunk['label']}...")
             try:
                 analysis = await chunk_chain.ainvoke({
-                    "summary": summary,
+                    "conv_summary": conv_summary,
+                    "summary": conv_summary,          # system prompt uses {summary}
                     "original_query": original_query,
-                    "days": chunk["days"],
-                    "context": context_str,
                     "goal": goal,
                     "injuries": injuries,
-                    "diet_preference": diet_pref,
+                    "diet_pref": diet_pref,
+                    "diet_preference": diet_pref,     # system prompt uses {diet_preference}
+                    "days": chunk["days"],
+                    "context": context_str,
                 })
-                if first_analysis is None:
-                    first_analysis = analysis
                 chunk_meals = analysis.meals if hasattr(analysis, 'meals') else []
                 all_meals.extend([m.model_dump() if hasattr(m, 'model_dump') else m for m in chunk_meals])
-                logger.info(f"✅ [Nutrition Chunked] {chunk['label']} done — {len(chunk_meals)} meals collected.")
+                logger.info(f"✅ [Nutrition Chunked] {chunk['label']} — {len(chunk_meals)} meals")
             except Exception as e:
-                logger.error(f"❌ [Nutrition Chunked] Failed on {chunk['label']}: {e}")
+                logger.error(f"❌ [Nutrition Chunked] Failed {chunk['label']}: {e}")
 
-        logger.info(f"✅ [Nutrition Chunked] Total meals collected: {len(all_meals)} across {days_to_generate} days.")
+        logger.info(f"✅ [Nutrition Chunked] {len(all_meals)} total meals across {days_to_generate} days.")
 
-        # ── Step 5: Build merged specialist_output ─────────────────────
+        # ── Step 5: Generate summary/tip/answer POST-MERGE (full plan aware) ──
+        summary_str, tip_str, answer_str = await self._generate_plan_summary(
+            all_meals, n_days, days_to_generate, goal, original_query
+        )
+
+        # ── Step 6: Build & validate output ────────────────────────────
         specialist_output = {
-            "answer": first_analysis.final_answer if first_analysis else "Here is your meal plan.",
+            "answer": answer_str,
             "status": "success",
-            "summary": first_analysis.summary if first_analysis else "",
+            "summary": summary_str,
             "meals": all_meals,
-            "tip": first_analysis.tip if first_analysis else f"Repeat this {days_to_generate}-day template throughout your {n_days}-day goal.",
+            "tip": tip_str,
             "daily_totals": None,
         }
-
         specialist_output = self._validate_output(specialist_output, context_str, state)
-
-        return {
-            "specialist_results": {
-                "nutrition": specialist_output
-            }
-        }
+        return {"specialist_results": {"nutrition": specialist_output}}
 
 
     def _validate_output(self, output: Dict[str, Any], context: str, state: Any = None) -> Dict[str, Any]:

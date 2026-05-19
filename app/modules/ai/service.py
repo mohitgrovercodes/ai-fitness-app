@@ -162,22 +162,6 @@ class AIService:
         
         # Merge: request data overrides DB context
         merged_context = {**db_context, "goal": goal or db_context.get("goal", ""), "level": level, "injuries": injuries or db_context.get("injuries", [])}
-        import json
-        from app.core.redis_client import redis_manager
-        try:
-            if redis_manager.is_available():
-                redis_key = f"chat_history:{user_id}"
-                human_msg = {"type": "human", "content": user_input}
-                ai_msg = {
-                    "type": "ai",
-                    "content": output.get("answer", "Generated workout plan."),
-                    "structured_data": {"training": output},
-                    "intents": ["workout"]
-                }
-                redis_manager.client.rpush(redis_key, json.dumps(human_msg))
-                redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
-        except Exception as e:
-            print(f"Redis save error in generate_workout: {e}")
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message")
         if not user_input:
@@ -195,11 +179,25 @@ class AIService:
         }
         result = await TrainingAgent().run(state)
         output = result.get("specialist_results", {}).get("training", {})
+        import json
+        from app.core.redis_client import redis_manager
+        try:
+            if redis_manager.is_available():
+                redis_key = f"chat_history:{user_id}"
+                human_msg = {"type": "human", "content": user_input}
+                ai_msg = {
+                    "type": "ai",
+                    "structured_data": {"training": output},
+                    "intents": ["workout"]
+                }
+                redis_manager.client.rpush(redis_key, json.dumps(human_msg))
+                redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
+        except Exception as e:
+            print(f"Redis save error in generate_workout: {e}")
         return {
             "summary": output.get("summary", ""),
             "workout": output.get("workout", []),
             "tip": output.get("tip", ""),
-            "response": output.get("answer", "Could not generate plan."),
         }
 
     @staticmethod
@@ -312,6 +310,21 @@ class AIService:
         }
         result = await NutritionAgent().run(state)
         output = result.get("specialist_results", {}).get("nutrition", {})
+        import json
+        from app.core.redis_client import redis_manager
+        try:
+            if redis_manager.is_available():
+                redis_key = f"chat_history:{user_id}"
+                human_msg = {"type": "human", "content": user_input}
+                ai_msg = {
+                    "type": "ai",
+                    "structured_data": {"training": output},
+                    "intents": ["workout"]
+                }
+                redis_manager.client.rpush(redis_key, json.dumps(human_msg))
+                redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
+        except Exception as e:
+            print(f"Redis save error in generate_workout: {e}")
         
         return {
             "summary": output.get("summary", ""),
