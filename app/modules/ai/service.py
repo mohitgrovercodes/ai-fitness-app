@@ -34,6 +34,19 @@ class AIService:
             profile = ProfileService.get_profile(db, user_id)
             db_context = {}
             if profile:
+                tdee_data = AIService._calculate_tdee(
+                    profile.weight, profile.height, profile.age,
+                    profile.gender.value if profile.gender else "male",
+                    profile.activity_level.value if profile.activity_level else "SEDENTARY"
+                )
+                current_goal = profile.goal or ""
+                if "loss" in current_goal.lower() or "lose" in current_goal.lower() or "decrease" in current_goal.lower():
+                    target_cal = tdee_data["weight_loss_target"]
+                elif "gain" in current_goal.lower() or "bulk" in current_goal.lower() or "increase" in current_goal.lower():
+                    target_cal = tdee_data["weight_gain_target"]
+                else:
+                    target_cal = tdee_data["maintenance_target"]
+
                 db_context = {
                     "full_name": profile.full_name,
                     "age": profile.age,
@@ -44,7 +57,8 @@ class AIService:
                     "activity_level": profile.activity_level.value if profile.activity_level else None,
                     "diet_preference": profile.diet_preference,
                     "injuries": profile.injuries if isinstance(profile.injuries, list) else [],
-                    "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else []
+                    "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else [],
+                    "target_calories": target_cal  # ✅ Activates Auto-Scaler in _validate_output
                 }
             
             # Merge: Incoming context overrides DB context
@@ -75,6 +89,7 @@ class AIService:
         workouts = []
         meals = []
         daily_totals = {}
+        per_day_totals = {}
         
         specialists = final_state.get("specialist_results", {})
         for name, data in specialists.items():
@@ -89,6 +104,8 @@ class AIService:
                     meals.extend(data["meals"])
                 if "daily_totals" in data and isinstance(data["daily_totals"], dict):
                     daily_totals.update(data["daily_totals"])
+                if "per_day_totals" in data and isinstance(data["per_day_totals"], dict):
+                    per_day_totals.update(data["per_day_totals"])
         
         out_data = {
             "response": last_msg.content,
@@ -103,6 +120,8 @@ class AIService:
             out_data["exercise_images"] = imgs
         if daily_totals:
             out_data["daily_totals"] = daily_totals
+        if per_day_totals:
+            out_data["per_day_totals"] = per_day_totals
             
         return out_data
 
@@ -143,7 +162,22 @@ class AIService:
         
         # Merge: request data overrides DB context
         merged_context = {**db_context, "goal": goal or db_context.get("goal", ""), "level": level, "injuries": injuries or db_context.get("injuries", [])}
-        
+        import json
+        from app.core.redis_client import redis_manager
+        try:
+            if redis_manager.is_available():
+                redis_key = f"chat_history:{user_id}"
+                human_msg = {"type": "human", "content": user_input}
+                ai_msg = {
+                    "type": "ai",
+                    "content": output.get("answer", "Generated workout plan."),
+                    "structured_data": {"training": output},
+                    "intents": ["workout"]
+                }
+                redis_manager.client.rpush(redis_key, json.dumps(human_msg))
+                redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
+        except Exception as e:
+            print(f"Redis save error in generate_workout: {e}")
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message")
         if not user_input:
@@ -278,6 +312,7 @@ class AIService:
         }
         result = await NutritionAgent().run(state)
         output = result.get("specialist_results", {}).get("nutrition", {})
+        
         return {
             "summary": output.get("summary", ""),
             "meals": output.get("meals", []),

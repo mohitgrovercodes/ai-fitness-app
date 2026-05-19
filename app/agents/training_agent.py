@@ -71,6 +71,7 @@ USER DATA:
 Goal: {goal}
 Injuries/Medical: {injuries}
 Dietary Preference: {diet_preference}
+
 Current Context: {summary}
 """
 

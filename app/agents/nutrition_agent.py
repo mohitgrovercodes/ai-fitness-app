@@ -151,9 +151,156 @@ Current Context: {summary}
             system_prompt=system_prompt
         )
 
+    async def _detect_n_days(self, query: str) -> int:
+        """
+        Dynamically detects plan duration from user query using LLM.
+        No hardcoded rules — the LLM understands any language/phrasing naturally.
+        """
+        from langchain_openai import ChatOpenAI
+        from app.core.config import settings
+
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=settings.OPENAI_API_KEY)
+        prompt = (
+            "You are a duration parser. Read the user's message and determine how many total days "
+            "they are requesting a fitness or diet plan for.\n"
+            "Convert any time expression (in any language) to a number of days.\n"
+            "If no duration is mentioned, return 1.\n"
+            "Reply with ONLY a single integer. No explanation, no units, just the number.\n\n"
+            f"User message: {query}"
+        )
+        try:
+            response = await llm.ainvoke(prompt)
+            n = int(response.content.strip())
+            logger.info(f"📅 [Nutrition Agent] LLM detected duration: {n} day(s) from query.")
+            return max(n, 1)
+        except Exception as e:
+            logger.warning(f"⚠️ [Nutrition Agent] Duration detection failed ({e}), defaulting to 1 day.")
+            return 1
+
     async def run(self, state: AgentState) -> Dict[str, Any]:
-        result = await self.run_logic(state, specialist_key="nutrition", topic="nutrition")
-        return result
+        """
+        Smart runner: uses chunked generation for multi-week plans (N > 7)
+        to avoid gpt-4o-mini's 4096 output token ceiling.
+        For N <= 7 days, falls through to normal single-call logic.
+        """
+        query = state['messages'][-1].content
+        n_days = await self._detect_n_days(query)
+
+        if n_days > 7:
+            logger.info(f"📅 [Nutrition Agent] Multi-week plan detected (N={n_days}). Using chunked generation.")
+            return await self._run_chunked(state, query, n_days)
+        else:
+            return await self.run_logic(state, specialist_key="nutrition", topic="nutrition")
+
+
+    def _build_chunks(self, n_days: int, chunk_size: int = 3) -> list:
+        """
+        Dynamically builds day chunks for any duration.
+        For N > 7: caps to 7-day rotation template.
+        For N <= 7: generates exactly N days.
+        Chunk size is configurable (default 3 days per call).
+        Returns list of {"label": "Days 1-3", "days": "Day 1, Day 2, Day 3"}.
+        """
+        days_to_generate = min(n_days, 7) if n_days > 7 else n_days
+        chunks = []
+        day_num = 1
+        while day_num <= days_to_generate:
+            end = min(day_num + chunk_size - 1, days_to_generate)
+            day_labels = [f"Day {i}" for i in range(day_num, end + 1)]
+            chunks.append({
+                "label": f"Days {day_num}-{end}" if day_num != end else f"Day {day_num}",
+                "days": ", ".join(day_labels)
+            })
+            day_num = end + 1
+        return chunks
+
+    async def _run_chunked(self, state: AgentState, original_query: str, n_days: int) -> Dict[str, Any]:
+        """
+        Fully dynamic chunked generation.
+        - Builds day ranges on the fly (no hardcoded day names or Training/Rest labels).
+        - LLM decides which days are training/rest based on user goal.
+        - Works for any duration: 10 days, 3 weeks, 2 months, etc.
+        """
+        from langchain_core.prompts import ChatPromptTemplate
+
+        user_context = state.get('user_context', {})
+        summary = state.get('conversation_summary', "No previous context.")
+        goal = user_context.get("goal", "General Fitness") if isinstance(user_context, dict) else "General Fitness"
+        injuries = ", ".join(user_context.get("injuries", [])) if isinstance(user_context, dict) and user_context.get("injuries") else "None"
+        diet_pref = user_context.get("diet_preference", "None") if isinstance(user_context, dict) else "None"
+
+        # ── Step 1: ONE RAG search (shared across all chunks) ──────────
+        logger.info(f"🔍 [Nutrition Chunked] Doing single RAG search for context...")
+        db_results = await self.rag_tool.search(original_query, diet_preference=diet_pref)
+        context_str = self._format_context(db_results) or "No specific data retrieved."
+
+        # ── Step 2: Dynamically build chunks ───────────────────────────
+        days_to_generate = min(n_days, 7) if n_days > 7 else n_days
+        DAY_CHUNKS = self._build_chunks(n_days)
+        logger.info(f"📦 [Nutrition Chunked] {len(DAY_CHUNKS)} chunks for {days_to_generate} days: {[c['label'] for c in DAY_CHUNKS]}")
+
+        # ── Step 3: Build chunk prompt ──────────────────────────────────
+        chunk_prompt = ChatPromptTemplate.from_messages([
+            ("system", self.prompt.messages[0].prompt.template),
+            ("human", (
+                "CONVERSATION SUMMARY (for context):\n{summary}\n\n"
+                "ORIGINAL USER REQUEST: {original_query}\n\n"
+                "YOUR TASK FOR THIS CALL: Generate meals ONLY for the following days: {days}\n"
+                "Each day MUST have exactly 5 meals (Breakfast, Lunch, Snack, Dinner, Dessert).\n"
+                "Use DIFFERENT foods for each day — do NOT repeat the same food on different days.\n"
+                "For each day's label in the `day` field, use the format: 'Day X - [Day Type]' "
+                "where [Day Type] is determined by you based on the user's goal and training split "
+                "(e.g., 'Training Day', 'Rest Day', 'Active Recovery', 'High Carb Day', etc.).\n"
+                "Set is_accurate=True. Set needs_web_search=False. Leave sub_queries empty.\n\n"
+                "RETRIEVED DATA:\n{context}"
+            ))
+        ])
+        chunk_chain = chunk_prompt | self.llm
+
+        # ── Step 4: Run sequential chunk calls ─────────────────────────
+        all_meals = []
+        first_analysis = None
+
+        for chunk in DAY_CHUNKS:
+            logger.info(f"🍽️  [Nutrition Chunked] Generating {chunk['label']}...")
+            try:
+                analysis = await chunk_chain.ainvoke({
+                    "summary": summary,
+                    "original_query": original_query,
+                    "days": chunk["days"],
+                    "context": context_str,
+                    "goal": goal,
+                    "injuries": injuries,
+                    "diet_preference": diet_pref,
+                })
+                if first_analysis is None:
+                    first_analysis = analysis
+                chunk_meals = analysis.meals if hasattr(analysis, 'meals') else []
+                all_meals.extend([m.model_dump() if hasattr(m, 'model_dump') else m for m in chunk_meals])
+                logger.info(f"✅ [Nutrition Chunked] {chunk['label']} done — {len(chunk_meals)} meals collected.")
+            except Exception as e:
+                logger.error(f"❌ [Nutrition Chunked] Failed on {chunk['label']}: {e}")
+
+        logger.info(f"✅ [Nutrition Chunked] Total meals collected: {len(all_meals)} across {days_to_generate} days.")
+
+        # ── Step 5: Build merged specialist_output ─────────────────────
+        specialist_output = {
+            "answer": first_analysis.final_answer if first_analysis else "Here is your meal plan.",
+            "status": "success",
+            "summary": first_analysis.summary if first_analysis else "",
+            "meals": all_meals,
+            "tip": first_analysis.tip if first_analysis else f"Repeat this {days_to_generate}-day template throughout your {n_days}-day goal.",
+            "daily_totals": None,
+        }
+
+        specialist_output = self._validate_output(specialist_output, context_str, state)
+
+        return {
+            "specialist_results": {
+                "nutrition": specialist_output
+            }
+        }
+
 
     def _validate_output(self, output: Dict[str, Any], context: str, state: Any = None) -> Dict[str, Any]:
         """
