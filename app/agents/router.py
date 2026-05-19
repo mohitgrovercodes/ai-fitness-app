@@ -30,7 +30,9 @@ STRICT POLICIES:
 2. No pro-eating disorder or extreme starvation content.
 3. CULTURAL POLICY: DO NOT recommend BEEF in any diet or recipe. If the user asks for beef or if a response suggests it, flag it as unsafe.
 4. WHITELIST (CRITICAL): It is 100% safe for the user to ask about their own weight, height, BMI, fitness goals, or profile details (e.g., "What is my weight?", "How much do I weigh?"). DO NOT flag these as eating disorder issues. They are safe.
-5. If you flag something as unsafe, you MUST provide a polite `suggested_response` explaining why it cannot be answered."""),
+5. WHITELIST (CRITICAL): All food and diet advisory questions are 100% SAFE and within the core scope of this fitness chatbot. This includes ANY of the following — "should I eat this?", "can I eat X?", "is this good for my goal?", "is this healthy?", "should I avoid X?", or ANY vague short query like "should I eat it?" that implies the user is asking about a food item (possibly from an uploaded image). NEVER flag these as unsafe. They are the primary purpose of this app.
+6. WHITELIST (CRITICAL): General workout, exercise, and fitness questions are always safe.
+7. If you flag something as unsafe, you MUST provide a polite `suggested_response` explaining why it cannot be answered."""),
             ("human", "{input}")
         ])
 

@@ -70,12 +70,16 @@ class ProgressAgent:
 Your role is to review the user's fitness journey and provide a personalized progress report.
 
 USER PROFILE:
-- Name: {full_name}
-- Goal: {goal}
-- Weight: {weight_kg} kg | Height: {height_cm} cm | Age: {age}
-- Diet Preference: {diet_preference}
-- Activity Level: {activity_level}
-- Medical/Injuries: {injuries}
+Name: {full_name}
+Age: {age} | Gender: {gender}
+Weight: {weight_kg} kg | Height: {height_cm} cm
+Activity Level: {activity_level}
+TDEE & Calorie Targets:
+  {tdee_str}
+Goal: {goal}
+Dietary Preference: {diet_preference}
+Injuries/Medical: {injuries}
+Medical Conditions: {medical}
 
 RULES:
 - Only reference topics the user has actually discussed (do NOT invent data).
@@ -225,10 +229,28 @@ Generate a full progress report.""")
         weight_kg = user_context.get("weight_kg") or "Unknown"
         height_cm = user_context.get("height_cm") or "Unknown"
         age = user_context.get("age") or "Unknown"
+        gender = user_context.get("gender") or "Unknown"
         diet_pref = user_context.get("diet_preference") or "No preference"
         activity = user_context.get("activity_level") or "Unknown"
+        
         injuries_raw = user_context.get("injuries", [])
         injuries = ", ".join(injuries_raw) if isinstance(injuries_raw, list) and injuries_raw else "None"
+        medical_raw = user_context.get("medical_conditions", [])
+        medical = ", ".join(medical_raw) if isinstance(medical_raw, list) and medical_raw else "None"
+
+        cal_loss        = user_context.get("cal_loss", 0)
+        cal_maintenance = user_context.get("cal_maintenance", 0)
+        cal_gain        = user_context.get("cal_gain", 0)
+        
+        tdee_str = "Unknown — profile data incomplete."
+        if cal_maintenance:
+            tdee_str = (
+                f"TDEE {cal_maintenance} kcal/day\n"
+                f"  Weight-loss target  : {cal_loss} kcal\n"
+                f"  Maintenance target  : {cal_maintenance} kcal\n"
+                f"  Weight-gain target  : {cal_gain} kcal\n"
+                f"  → Choose the target that matches the user's goal above."
+            )
 
         logger.info(
             f"📈 [ProgressAgent] Running for '{user_id}' | Goal: '{goal}' | "
@@ -243,9 +265,12 @@ Generate a full progress report.""")
             "weight_kg": weight_kg,
             "height_cm": height_cm,
             "age": age,
+            "gender": gender,
             "diet_preference": diet_pref,
             "activity_level": activity,
+            "tdee_str": tdee_str,
             "injuries": injuries,
+            "medical": medical,
             "conversation_summary": summary,
             "sessions_analyzed": history["sessions_analyzed"],
             "journey_journal": history["journal"],

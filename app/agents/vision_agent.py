@@ -54,8 +54,33 @@ class VisionAgent:
         image_bytes = state.get("image_bytes")
         user_text   = state["messages"][-1].content if state.get("messages") else ""
         user_context = state.get("user_context", {})
-        goal = user_context.get("goal", "General Fitness")
-        diet_pref = user_context.get("diet_preference", "None")
+        
+        # Profile Data
+        full_name      = user_context.get("full_name", "User")
+        goal           = user_context.get("goal", "General Fitness")
+        diet_pref      = user_context.get("diet_preference", "None")
+        weight_kg      = user_context.get("weight_kg", "Unknown")
+        height_cm      = user_context.get("height_cm", "Unknown")
+        age            = user_context.get("age", "Unknown")
+        gender         = user_context.get("gender", "Unknown")
+        activity_level = user_context.get("activity_level", "Unknown")
+        injuries       = ", ".join(user_context.get("injuries", [])) if user_context.get("injuries") else "None"
+        medical        = ", ".join(user_context.get("medical_conditions", [])) if user_context.get("medical_conditions") else "None"
+        
+        # Calorie Targets
+        cal_loss        = user_context.get("cal_loss", 0)
+        cal_maintenance = user_context.get("cal_maintenance", 0)
+        cal_gain        = user_context.get("cal_gain", 0)
+        
+        tdee_str = "Unknown — profile data incomplete."
+        if cal_maintenance:
+            tdee_str = (
+                f"TDEE {cal_maintenance} kcal/day\n"
+                f"  Weight-loss target  : {cal_loss} kcal\n"
+                f"  Maintenance target  : {cal_maintenance} kcal\n"
+                f"  Weight-gain target  : {cal_gain} kcal\n"
+                f"  → Choose the target that matches the user's goal above."
+            )
 
         # ── Metadata Tracker ───────────────────────────────────────────────────
         meta = {
@@ -96,15 +121,23 @@ class VisionAgent:
             )
 
         # ══════════════════════════════════════════════════════
-        # STAGE 1 — CLIP Visual Search (Top-5)
+        # STAGE 1 — CLIP Visual Search (Top-5)  +  Advisory Classification
+        # Both run concurrently so advisory detection adds zero extra latency.
         # ══════════════════════════════════════════════════════
         try:
             from app.core.database import db_manager
             import asyncio
-            async with db_manager.lock:
-                top_matches, clip_vector = await asyncio.to_thread(
-                    search_image_in_db, image_bytes, return_vector=True
-                )
+
+            async def _clip_search():
+                async with db_manager.lock:
+                    return await asyncio.to_thread(
+                        search_image_in_db, image_bytes, return_vector=True
+                    )
+
+            (top_matches, clip_vector), is_advisory = await asyncio.gather(
+                _clip_search(),
+                self._is_advisory_query(user_text)
+            )
         except Exception as e:
             print(f"[Vision Agent] CLIP search failed: {e}")
             meta["decision_tier"] = "Error — CLIP Failed"
@@ -161,10 +194,17 @@ class VisionAgent:
             meta["self_learned"]    = result["learned"]
             meta = self._build_meals_from_result(result, meta)
             prompt = self._build_nutrition_prompt(
-                result["identified_food"], result["nutrition"], user_text, result["source"], goal, diet_pref
+                food_name=result["identified_food"], 
+                nutrition=result["nutrition"], 
+                user_text=user_text, 
+                source=result["source"], 
+                goal=goal, 
+                diet_pref=diet_pref,
+                full_name=full_name, age=age, gender=gender, weight_kg=weight_kg, height_cm=height_cm, activity_level=activity_level, tdee_str=tdee_str, injuries=injuries, medical=medical,
+                is_advisory=is_advisory
             )
             llm_response = await self.llm.ainvoke(prompt)
-            return self._build_output(llm_response.content, meta)
+            return self._build_output(llm_response.content, meta, is_advisory=is_advisory)
 
         # ── TIER 1b: Ambiguity Check ─────────────────────────────────────────
         is_high_confidence = True
@@ -217,7 +257,14 @@ class VisionAgent:
             }
             meta = self._build_meals_from_result(result_for_meals, meta)
             prompt = self._build_nutrition_prompt(
-                top_match["category"], nutrition_data, user_text, meta["data_source"], goal, diet_pref
+                food_name=top_match["category"], 
+                nutrition=nutrition_data, 
+                user_text=user_text, 
+                source=meta["data_source"], 
+                goal=goal, 
+                diet_pref=diet_pref,
+                full_name=full_name, age=age, gender=gender, weight_kg=weight_kg, height_cm=height_cm, activity_level=activity_level, tdee_str=tdee_str, injuries=injuries, medical=medical,
+                is_advisory=is_advisory
             )
 
         else:
@@ -249,7 +296,14 @@ class VisionAgent:
 
             meta = self._build_meals_from_result(result, meta)
             prompt = self._build_nutrition_prompt(
-                result["identified_food"], result["nutrition"], user_text, result["source"], goal, diet_pref
+                food_name=result["identified_food"], 
+                nutrition=result["nutrition"], 
+                user_text=user_text, 
+                source=result["source"], 
+                goal=goal, 
+                diet_pref=diet_pref,
+                full_name=full_name, age=age, gender=gender, weight_kg=weight_kg, height_cm=height_cm, activity_level=activity_level, tdee_str=tdee_str, injuries=injuries, medical=medical,
+                is_advisory=is_advisory
             )
 
         # ══════════════════════════════════════════════════════
@@ -258,7 +312,7 @@ class VisionAgent:
         print("[Vision Agent] Sending to LLM for final reasoning...")
         llm_response = await self.llm.ainvoke(prompt)
         print("[Vision Agent] Response ready.")
-        return self._build_output(llm_response.content, meta)
+        return self._build_output(llm_response.content, meta, is_advisory=is_advisory)
 
     # ─── Image Quality Pre-Flight ─────────────────────────────────────────────
 
@@ -357,6 +411,36 @@ class VisionAgent:
             "I can identify thousands of Indian and international dishes — just send the photo! 🍽️"
         )
 
+    async def _is_advisory_query(self, user_text: str) -> bool:
+        """
+        LLM-based intent classifier — determines whether the user is asking
+        for a personalised dietary recommendation vs. just food identification
+        or a macro lookup. Works for any language (English, Hindi, Hinglish, etc.).
+        """
+        if not user_text or not user_text.strip():
+            return False
+        prompt = (
+            "You are a query intent classifier for a Food Vision AI assistant.\n"
+            "Classify the user's message into exactly one of two categories:\n\n"
+            "- 'advisory': The user wants a personalised recommendation about whether "
+            "they should eat this food given their fitness goal or diet "
+            "(e.g. 'should I eat this?', 'is this good for weight loss?', "
+            "'can I have this on keto?', 'yeh khana chahiye mujhe?', 'is this healthy for me?').\n"
+            "- 'other': The user just wants the food identified, or wants calorie/macro "
+            "information, or is making a general statement with no advice needed.\n\n"
+            f"User message: \"{user_text}\"\n\n"
+            "Reply with ONLY one word: 'advisory' or 'other'."
+        )
+        try:
+            response = await self.llm.ainvoke(prompt)
+            result   = response.content.strip().lower()
+            is_adv   = result.startswith("advisory")
+            print(f"[Vision Agent] Advisory classifier → '{result}' (is_advisory={is_adv})")
+            return is_adv
+        except Exception as e:
+            print(f"[Vision Agent] Advisory classifier failed: {e}. Defaulting to False.")
+            return False
+
     def _build_guardrail_b_prompt(self, object_desc: str, user_text: str) -> str:
         """Guardrail B: Non-food image detected by VLM."""
         return (
@@ -377,7 +461,17 @@ class VisionAgent:
         user_text: str,
         source: str,
         goal: str = "General Fitness",
-        diet_pref: str = "None"
+        diet_pref: str = "None",
+        full_name: str = "User",
+        age: str = "Unknown",
+        gender: str = "Unknown",
+        weight_kg: str = "Unknown",
+        height_cm: str = "Unknown",
+        activity_level: str = "Unknown",
+        tdee_str: str = "Unknown",
+        injuries: str = "None",
+        medical: str = "None",
+        is_advisory: bool = False
     ) -> str:
 
         """Universal nutrition prompt — works for Tier 1a (DB) and VLM fallback."""
@@ -405,6 +499,15 @@ class VisionAgent:
             )
 
         if user_text and user_text.strip():
+            advisory_section = (
+                f"\n\n## 💡 Should You Eat This?\n"
+                f"[Answer the user's question directly: '{user_text}'. "
+                f"Based on their goal ({goal}) and dietary preference ({diet_pref}), "
+                f"give a clear 2-3 sentence personalised recommendation — "
+                f"state whether this food helps or hinders their goal, "
+                f"and if they should eat it, suggest a sensible portion size.]"
+            ) if is_advisory else ""
+
             instruction = (
                 f'The user asked: "{user_text}"\n'
                 f"Answer using the nutrition data above. FOLLOW THIS FORMAT STRICTLY:\n\n"
@@ -416,9 +519,10 @@ class VisionAgent:
                 f"- **Calories**: [X] kcal\n"
                 f"- **Protein**: [X] g\n"
                 f"- **Carbohydrates**: [X] g\n"
-                f"- **Fat**: [X] g\n\n"
+                f"- **Fat**: [X] g\n"
+                f"{advisory_section}\n\n"
                 f"STRICT RULES: All values MUST be numeric. Never write 'N/A' or 'Generally high'. "
-                f"Do NOT add a 'Complementary Aspects', 'Tips', or any other section. End after the nutritional breakdown."
+                f"Do NOT add a 'Complementary Aspects' or generic tip section beyond what is specified above."
             )
         else:
             instruction = (
@@ -440,8 +544,16 @@ class VisionAgent:
             f"You are FitBot, a world-class food identification and nutrition AI.\n"
             f"You can identify and provide nutrition for ANY food from ANY global cuisine.\n\n"
             f"USER PROFILE:\n"
-            f"- Goal: {goal}\n"
-            f"- Dietary Preference: {diet_pref}\n\n"
+            f"Name: {full_name}\n"
+            f"Age: {age} | Gender: {gender}\n"
+            f"Weight: {weight_kg} kg | Height: {height_cm} cm\n"
+            f"Activity Level: {activity_level}\n"
+            f"TDEE & Calorie Targets:\n"
+            f"  {tdee_str}\n"
+            f"Goal: {goal}\n"
+            f"Dietary Preference: {diet_pref}\n"
+            f"Injuries/Medical: {injuries}\n"
+            f"Medical Conditions: {medical}\n\n"
             f"You have ALREADY analyzed the user's image using a vision module. The exact nutritional data for their specific meal is provided below.\n\n"
             f"{nutrition_context}\n\n"
             f"{instruction}\n\n"
@@ -499,16 +611,17 @@ class VisionAgent:
             print(f"[Vision Agent] _build_meals_from_result failed: {e}")
         return meta
 
-    def _build_output(self, response_text: str, meta: dict = None) -> Dict[str, Any]:
+    def _build_output(self, response_text: str, meta: dict = None, is_advisory: bool = False) -> Dict[str, Any]:
         """Standard output format for the LangGraph state with optional metadata block."""
         full_response = response_text
         if meta:
             full_response = response_text + "\n\n" + self._format_metadata(meta)
-        
+
         out = {
             "answer": full_response,
             "status": "success",
-            "metadata": meta
+            "metadata": meta,
+            "is_advisory": is_advisory
         }
         if meta and "meals" in meta:
             out["meals"] = meta["meals"]

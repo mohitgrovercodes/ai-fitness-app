@@ -200,37 +200,6 @@ class AIService:
             "tip": output.get("tip", ""),
         }
 
-    @staticmethod
-    def _calculate_tdee(weight_kg, height_cm, age, gender, activity_level) -> dict:
-        try:
-            w = float(weight_kg or 70)
-            h = float(height_cm or 170)
-            a = float(age or 25)
-        except (ValueError, TypeError):
-            w, h, a = 70, 170, 25
-
-        if str(gender).upper() in ("MALE", "M"):
-            bmr = (10 * w) + (6.25 * h) - (5 * a) + 5
-        else:
-            bmr = (10 * w) + (6.25 * h) - (5 * a) - 161
-
-        multipliers = {
-            "SEDENTARY": 1.2,
-            "LIGHTLY_ACTIVE": 1.375,
-            "MODERATELY_ACTIVE": 1.55,
-            "VERY_ACTIVE": 1.725,
-            "EXTRA_ACTIVE": 1.9,
-        }
-        factor = multipliers.get(str(activity_level).upper(), 1.2)
-        tdee = round(bmr * factor)
-
-        return {
-            "bmr": round(bmr),
-            "tdee": tdee,
-            "weight_loss_target": round(max(bmr, tdee * 0.80)),  # 20% deficit, never below BMR
-            "weight_gain_target": round(tdee * 1.15),            # 15% surplus
-            "maintenance_target": tdee,
-        }
 
     @staticmethod
     async def generate_diet_plan(data: dict):
@@ -250,34 +219,47 @@ class AIService:
             profile = ProfileService.get_profile(db, user_id)
             db_context = {}
             if profile:
-                tdee_data = AIService._calculate_tdee(
-                    profile.weight, profile.height, profile.age,
-                    profile.gender.value if profile.gender else "male",
-                    profile.activity_level.value if profile.activity_level else "SEDENTARY"
-                )
-                
-                # Determine target calories based on goal
+                # Inline Mifflin-St Jeor TDEE (same formula as base.py — no external utility).
+                # All three calorie targets stored in user_context; the LLM picks the right
+                # one based on the goal text it reads in its system prompt.
+                try:
+                    w   = float(profile.weight or 0)
+                    h   = float(profile.height or 0)
+                    a   = float(profile.age or 0)
+                    g   = (profile.gender.value if profile.gender else "male").upper()
+                    act = (profile.activity_level.value if profile.activity_level else "SEDENTARY").upper()
+                    _multipliers = {
+                        "SEDENTARY": 1.2, "LIGHTLY_ACTIVE": 1.375,
+                        "MODERATELY_ACTIVE": 1.55, "VERY_ACTIVE": 1.725, "EXTRA_ACTIVE": 1.9,
+                    }
+                    if w > 0 and h > 0 and a > 0:
+                        bmr  = (10*w + 6.25*h - 5*a + 5) if g in ("MALE", "M") else (10*w + 6.25*h - 5*a - 161)
+                        tdee = bmr * _multipliers.get(act, 1.2)
+                        cal_loss        = round(max(bmr, tdee * 0.80))
+                        cal_maintenance = round(tdee)
+                        cal_gain        = round(tdee * 1.15)
+                    else:
+                        cal_loss = cal_maintenance = cal_gain = 0
+                except (ValueError, TypeError):
+                    cal_loss = cal_maintenance = cal_gain = 0
+
                 current_goal = profile.goal or goal
-                if "loss" in current_goal.lower() or "lose" in current_goal.lower():
-                    target_cal = tdee_data["weight_loss_target"]
-                elif "gain" in current_goal.lower() or "bulk" in current_goal.lower():
-                    target_cal = tdee_data["weight_gain_target"]
-                else:
-                    target_cal = tdee_data["maintenance_target"]
-                    
                 db_context = {
-                    "full_name": profile.full_name,
-                    "age": profile.age,
-                    "gender": profile.gender.value if profile.gender else None,
-                    "weight_kg": profile.weight,
-                    "height_cm": profile.height,
-                    "goal": current_goal,
-                    "activity_level": profile.activity_level.value if profile.activity_level else None,
-                    "diet_preference": diet_type or profile.diet_preference,
-                    "injuries": profile.injuries if isinstance(profile.injuries, list) else [],
+                    "full_name":          profile.full_name,
+                    "age":                profile.age,
+                    "gender":             profile.gender.value if profile.gender else None,
+                    "weight_kg":          profile.weight,
+                    "height_cm":          profile.height,
+                    "goal":               current_goal,
+                    "activity_level":     profile.activity_level.value if profile.activity_level else None,
+                    "diet_preference":    diet_type or profile.diet_preference,
+                    "injuries":           profile.injuries if isinstance(profile.injuries, list) else [],
                     "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else [],
-                    "allergies": allergies,
-                    "target_calories": target_cal  # Crucial for Auto-Scaler
+                    "allergies":          allergies,
+                    # Three calorie targets — LLM selects the right one based on the goal
+                    "cal_loss":           cal_loss,
+                    "cal_maintenance":    cal_maintenance,
+                    "cal_gain":           cal_gain,
                 }
         finally:
             db.close()

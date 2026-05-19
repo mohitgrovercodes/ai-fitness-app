@@ -79,6 +79,20 @@ async def synthesis_node(state: AgentState):
     if not results:
         return {"messages": [AIMessage(content="I've analyzed your request but couldn't find a specific answer.")]}
 
+    # ── Advisory Vision Pass-Through ─────────────────────────────────────────
+    # When the Vision Agent handled an advisory query (e.g. "should I eat this?"),
+    # its response already contains the full answer — food description, nutrition,
+    # AND the personalised recommendation. Passing it through the synthesis LLM
+    # would risk rewriting, stripping, or diluting that answer with incorrect
+    # context (e.g. wrong diet suggestions). So we return it directly.
+    vision_data = results.get("vision", {})
+    if isinstance(vision_data, dict) and vision_data.get("is_advisory") and len(results) == 1:
+        logger.info("✨ [Synthesis] Advisory vision query — passing through VisionAgent response directly.")
+        return {
+            "messages": [AIMessage(content=vision_data.get("answer", ""))],
+            "next_node": "output_safety"
+        }
+
     # Format agent outputs for the Master Coach
     agent_outputs = []
     media_attachments = []
@@ -113,6 +127,29 @@ async def synthesis_node(state: AgentState):
     goal = user_context.get("goal", "General Fitness")
     weight_kg = user_context.get("weight_kg", "Unknown")
     height_cm = user_context.get("height_cm", "Unknown")
+    age = user_context.get("age", "Unknown")
+    gender = user_context.get("gender", "Unknown")
+    activity_level = user_context.get("activity_level", "Unknown")
+    diet_pref = user_context.get("diet_preference", "Not specified")
+    
+    injuries_raw = user_context.get("injuries", [])
+    injuries = ", ".join(injuries_raw) if isinstance(injuries_raw, list) and injuries_raw else "None"
+    medical_raw = user_context.get("medical_conditions", [])
+    medical = ", ".join(medical_raw) if isinstance(medical_raw, list) and medical_raw else "None"
+
+    cal_loss        = user_context.get("cal_loss", 0)
+    cal_maintenance = user_context.get("cal_maintenance", 0)
+    cal_gain        = user_context.get("cal_gain", 0)
+    
+    tdee_str = "Unknown — profile data incomplete."
+    if cal_maintenance:
+        tdee_str = (
+            f"TDEE {cal_maintenance} kcal/day\n"
+            f"  Weight-loss target  : {cal_loss} kcal\n"
+            f"  Maintenance target  : {cal_maintenance} kcal\n"
+            f"  Weight-gain target  : {cal_gain} kcal\n"
+            f"  → Choose the target that matches the user's goal above."
+        )
     
     # Master Coach LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=settings.OPENAI_API_KEY)
@@ -121,9 +158,16 @@ async def synthesis_node(state: AgentState):
 Your task is to take the specialized advice from your team (provided below) and weave it into a single response.
 
 USER PROFILE AWARENESS:
-- Name: {full_name}
-- Goal: {goal}
-- Weight: {weight_kg} kg | Height: {height_cm} cm
+Name: {full_name}
+Age: {age} | Gender: {gender}
+Weight: {weight_kg} kg | Height: {height_cm} cm
+Activity Level: {activity_level}
+TDEE & Calorie Targets:
+  {tdee_str}
+Goal: {goal}
+Dietary Preference: {diet_pref}
+Injuries/Medical: {injuries}
+Medical Conditions: {medical}
 *Note: If the user directly asks about their profile (e.g., "What is my weight?"), use the profile above to answer them directly.*
 
 RULES:
@@ -137,7 +181,7 @@ STRICT INSTRUCTIONS FOR IMAGE-BASED REQUESTS:
 - Do NOT add suggestions for other foods, shakes, or unrelated snacks.
 - Keep the tone professional but interactive.
 - ONLY IF a [VISION] result is provided, you MUST present the Nutritional Breakdown exactly point-wise. If NO [VISION] result is provided, you MUST NOT generate any "Nutritional Breakdown" or "Macro" section.
-- NEVER add a "Complementary Aspects" or generic tip section. End the response immediately after the nutritional breakdown.
+- End the response after the nutritional breakdown. Do NOT add generic tips, protein pairing suggestions, or unrelated food recommendations.
 
 GENERAL RULES:
 - Do NOT just list the points. Integrate them.
