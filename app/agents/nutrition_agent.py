@@ -82,6 +82,24 @@ STRICT POLICIES:
     - Carbs MUST be under 50g per day
     - NO grains, NO rice, NO bread, NO sugar, NO high-carb fruits
     - Include: eggs, fatty fish, chicken, nuts, avocado, olive oil, cheese, paneer (if not vegan)
+    
+    PESCATARIAN:
+    - NO red meat (beef, pork, lamb) and NO poultry (chicken, turkey)
+    - Seafood (fish, shellfish) is the ONLY animal protein
+    - Include: whole grains, legumes, vegetables, fruits, nuts, seeds, healthy oils
+    - Optional: eggs and dairy (if not vegan)
+    
+    POLLOTARIAN:
+    - Protein Exclusions: NO red meat (beef, pork, lamb) and NO seafood/fish
+    - Primary Protein: Poultry (chicken, turkey) is the ONLY animal protein
+    - Plant Foods: Include whole grains, legumes, vegetables, fruits, nuts, seeds, and healthy oils  ,Eggs and dairy
+
+    FLEXITARIAN:
+    - Protein Exclusions: No strict exclusions, but overall meat and animal product consumption is actively reduced
+    - Primary Protein: Plant-based proteins (beans, lentils, tofu, tempeh) are the main focus, with meat, poultry, 
+      and seafood consumed only occasionally
+    - Plant Foods: Include whole grains, legumes, vegetables, fruits, nuts, seeds, and healthy oils, Eggs and dairy     
+    
 
   ⚖️ NO PREFERENCE: Provide a balanced mixed diet. No restrictions.
 

@@ -8,11 +8,11 @@ class AuthService:
     @staticmethod
     def register(db: Session, payload):
         # Check if user already exists
-        existing_user = db.query(User).filter(User.email == payload.email).first()
+        existing_user = db.query(User).filter(User.email == payload.email).first() or db.query(User).filter(User.username==payload.username.first)
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User with this email already exists"
+                detail="User with this email or username already exists"
             )
         
         # Create new user
@@ -32,20 +32,24 @@ class AuthService:
         user = db.query(User).filter(
             User.username == payload.username
         ).first()
-
-        if not user or not verify_password(
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+        if  not verify_password(
             payload.password,
             user.password_hash
         ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password",
+                detail="Invalid  password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
         token = create_access_token({
             "sub": str(user.user_id),
-            "email": user.email
+            "email": user.username
         })
 
         return {

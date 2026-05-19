@@ -7,5 +7,5 @@ class RegisterSchema(BaseModel):
     username: Optional[str] = None
 
 class LoginSchema(BaseModel):
-    email: EmailStr
+    username: str
     password: str
