@@ -371,9 +371,30 @@ Current Context: {summary}
                 prot = float(r.get('protein',  0) or 0)
                 fat  = float(r.get('fat',      0) or 0)
 
-                # --- Code-level filter: reject impossible calorie density ---
-                if cal > 500:
-                    logger.warning(f"⚠️ [Nutrition DB Filter] Skipping '{name}': {cal} kcal/100g exceeds limit.")
+                # --- Code-level filter: reject physically impossible calorie density (4-4-9 rule) ---
+                # Compute the theoretical maximum calories this food can have from its macros.
+                # Per-100g base: protein × 4 + carbs × 4 + fat × 9.
+                # If carbs are missing we use the absolute physical ceiling (100g × 9 kcal/g = 900).
+                raw_carbs_check = r.get('carbs', 'Unknown')
+                carbs_check: float | None = None
+                try:
+                    if raw_carbs_check not in ('N/A', 'Unknown', None, '', 0, '0'):
+                        carbs_check = float(raw_carbs_check)
+                except (ValueError, TypeError):
+                    carbs_check = None
+
+                if carbs_check is not None:
+                    # Full 4-4-9 maximum: every gram of macro at its highest caloric equivalent
+                    max_possible_kcal = (prot * 4) + (carbs_check * 4) + (fat * 9)
+                else:
+                    # Carbs unknown — use absolute physical ceiling (pure fat = 9 kcal/g × 100g)
+                    max_possible_kcal = 900.0
+
+                if cal > max_possible_kcal:
+                    logger.warning(
+                        f"⚠️ [Nutrition DB Filter] Skipping '{name}': {cal} kcal/100g exceeds "
+                        f"the 4-4-9 theoretical maximum ({max_possible_kcal:.0f} kcal) — physically impossible."
+                    )
                     continue
 
                 # Mathematically calculate missing carbs using 4-4-9 macro rule
