@@ -127,7 +127,29 @@ async def synthesis_node(state: AgentState):
     goal = user_context.get("goal", "General Fitness")
     weight_kg = user_context.get("weight_kg", "Unknown")
     height_cm = user_context.get("height_cm", "Unknown")
+    age = user_context.get("age", "Unknown")
+    gender = user_context.get("gender", "Unknown")
+    activity_level = user_context.get("activity_level", "Unknown")
     diet_pref = user_context.get("diet_preference", "Not specified")
+    
+    injuries_raw = user_context.get("injuries", [])
+    injuries = ", ".join(injuries_raw) if isinstance(injuries_raw, list) and injuries_raw else "None"
+    medical_raw = user_context.get("medical_conditions", [])
+    medical = ", ".join(medical_raw) if isinstance(medical_raw, list) and medical_raw else "None"
+
+    cal_loss        = user_context.get("cal_loss", 0)
+    cal_maintenance = user_context.get("cal_maintenance", 0)
+    cal_gain        = user_context.get("cal_gain", 0)
+    
+    tdee_str = "Unknown — profile data incomplete."
+    if cal_maintenance:
+        tdee_str = (
+            f"TDEE {cal_maintenance} kcal/day\n"
+            f"  Weight-loss target  : {cal_loss} kcal\n"
+            f"  Maintenance target  : {cal_maintenance} kcal\n"
+            f"  Weight-gain target  : {cal_gain} kcal\n"
+            f"  → Choose the target that matches the user's goal above."
+        )
     
     # Master Coach LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=settings.OPENAI_API_KEY)
@@ -136,10 +158,16 @@ async def synthesis_node(state: AgentState):
 Your task is to take the specialized advice from your team (provided below) and weave it into a single response.
 
 USER PROFILE AWARENESS:
-- Name: {full_name}
-- Goal: {goal}
-- Weight: {weight_kg} kg | Height: {height_cm} cm
-- Dietary Preference: {diet_pref}
+Name: {full_name}
+Age: {age} | Gender: {gender}
+Weight: {weight_kg} kg | Height: {height_cm} cm
+Activity Level: {activity_level}
+TDEE & Calorie Targets:
+  {tdee_str}
+Goal: {goal}
+Dietary Preference: {diet_pref}
+Injuries/Medical: {injuries}
+Medical Conditions: {medical}
 *Note: If the user directly asks about their profile (e.g., "What is my weight?"), use the profile above to answer them directly.*
 
 RULES:

@@ -42,10 +42,16 @@ SEARCH CONTEXT:
 {context}
 
 USER PROFILE:
-- Name: {full_name}
-- Goal: {goal}
-- Weight: {weight_kg} kg | Height: {height_cm} cm | Age: {age}
-- Dietary Preference: {diet_pref}
+Name: {full_name}
+Age: {age} | Gender: {gender}
+Weight: {weight_kg} kg | Height: {height_cm} cm
+Activity Level: {activity_level}
+TDEE & Calorie Targets:
+  {tdee_str}
+Goal: {goal}
+Dietary Preference: {diet_pref}
+Injuries/Medical: {injuries}
+Medical Conditions: {medical}
 
 USER QUERY: {user_input}"""),
             ("human", "{user_input}")
@@ -54,12 +60,30 @@ USER QUERY: {user_input}"""),
     async def run(self, state: AgentState) -> Dict[str, Any]:
         user_input = state['messages'][-1].content
         user_context = state.get("user_context", {})
-        full_name = user_context.get("full_name", "User")
-        goal = user_context.get("goal", "General Fitness")
-        weight_kg = user_context.get("weight_kg", "Unknown")
-        height_cm = user_context.get("height_cm", "Unknown")
-        age = user_context.get("age", "Unknown")
-        diet_pref = user_context.get("diet_preference", "None")
+        full_name      = user_context.get("full_name", "User")
+        goal           = user_context.get("goal", "General Fitness")
+        diet_pref      = user_context.get("diet_preference", "None")
+        weight_kg      = user_context.get("weight_kg", "Unknown")
+        height_cm      = user_context.get("height_cm", "Unknown")
+        age            = user_context.get("age", "Unknown")
+        gender         = user_context.get("gender", "Unknown")
+        activity_level = user_context.get("activity_level", "Unknown")
+        injuries       = ", ".join(user_context.get("injuries", [])) if user_context.get("injuries") else "None"
+        medical        = ", ".join(user_context.get("medical_conditions", [])) if user_context.get("medical_conditions") else "None"
+
+        cal_loss        = user_context.get("cal_loss", 0)
+        cal_maintenance = user_context.get("cal_maintenance", 0)
+        cal_gain        = user_context.get("cal_gain", 0)
+        
+        tdee_str = "Unknown — profile data incomplete."
+        if cal_maintenance:
+            tdee_str = (
+                f"TDEE {cal_maintenance} kcal/day\n"
+                f"  Weight-loss target  : {cal_loss} kcal\n"
+                f"  Maintenance target  : {cal_maintenance} kcal\n"
+                f"  Weight-gain target  : {cal_gain} kcal\n"
+                f"  → Choose the target that matches the user's goal above."
+            )
         logger.info(f"🧬 [Domain Agent] Analyzing general fitness query: '{user_input[:50]}...'")
 
         # Step 1: Attempt to find up-to-date info via Web Search if query is complex
@@ -79,10 +103,15 @@ USER QUERY: {user_input}"""),
             "user_input": user_input,
             "full_name": full_name,
             "goal": goal,
+            "diet_pref": diet_pref,
             "weight_kg": weight_kg,
             "height_cm": height_cm,
             "age": age,
-            "diet_pref": diet_pref
+            "gender": gender,
+            "activity_level": activity_level,
+            "tdee_str": tdee_str,
+            "injuries": injuries,
+            "medical": medical
         })
 
 

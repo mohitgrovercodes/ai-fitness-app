@@ -54,8 +54,33 @@ class VisionAgent:
         image_bytes = state.get("image_bytes")
         user_text   = state["messages"][-1].content if state.get("messages") else ""
         user_context = state.get("user_context", {})
-        goal = user_context.get("goal", "General Fitness")
-        diet_pref = user_context.get("diet_preference", "None")
+        
+        # Profile Data
+        full_name      = user_context.get("full_name", "User")
+        goal           = user_context.get("goal", "General Fitness")
+        diet_pref      = user_context.get("diet_preference", "None")
+        weight_kg      = user_context.get("weight_kg", "Unknown")
+        height_cm      = user_context.get("height_cm", "Unknown")
+        age            = user_context.get("age", "Unknown")
+        gender         = user_context.get("gender", "Unknown")
+        activity_level = user_context.get("activity_level", "Unknown")
+        injuries       = ", ".join(user_context.get("injuries", [])) if user_context.get("injuries") else "None"
+        medical        = ", ".join(user_context.get("medical_conditions", [])) if user_context.get("medical_conditions") else "None"
+        
+        # Calorie Targets
+        cal_loss        = user_context.get("cal_loss", 0)
+        cal_maintenance = user_context.get("cal_maintenance", 0)
+        cal_gain        = user_context.get("cal_gain", 0)
+        
+        tdee_str = "Unknown — profile data incomplete."
+        if cal_maintenance:
+            tdee_str = (
+                f"TDEE {cal_maintenance} kcal/day\n"
+                f"  Weight-loss target  : {cal_loss} kcal\n"
+                f"  Maintenance target  : {cal_maintenance} kcal\n"
+                f"  Weight-gain target  : {cal_gain} kcal\n"
+                f"  → Choose the target that matches the user's goal above."
+            )
 
         # ── Metadata Tracker ───────────────────────────────────────────────────
         meta = {
@@ -169,7 +194,13 @@ class VisionAgent:
             meta["self_learned"]    = result["learned"]
             meta = self._build_meals_from_result(result, meta)
             prompt = self._build_nutrition_prompt(
-                result["identified_food"], result["nutrition"], user_text, result["source"], goal, diet_pref,
+                food_name=result["identified_food"], 
+                nutrition=result["nutrition"], 
+                user_text=user_text, 
+                source=result["source"], 
+                goal=goal, 
+                diet_pref=diet_pref,
+                full_name=full_name, age=age, gender=gender, weight_kg=weight_kg, height_cm=height_cm, activity_level=activity_level, tdee_str=tdee_str, injuries=injuries, medical=medical,
                 is_advisory=is_advisory
             )
             llm_response = await self.llm.ainvoke(prompt)
@@ -226,7 +257,13 @@ class VisionAgent:
             }
             meta = self._build_meals_from_result(result_for_meals, meta)
             prompt = self._build_nutrition_prompt(
-                top_match["category"], nutrition_data, user_text, meta["data_source"], goal, diet_pref,
+                food_name=top_match["category"], 
+                nutrition=nutrition_data, 
+                user_text=user_text, 
+                source=meta["data_source"], 
+                goal=goal, 
+                diet_pref=diet_pref,
+                full_name=full_name, age=age, gender=gender, weight_kg=weight_kg, height_cm=height_cm, activity_level=activity_level, tdee_str=tdee_str, injuries=injuries, medical=medical,
                 is_advisory=is_advisory
             )
 
@@ -259,7 +296,13 @@ class VisionAgent:
 
             meta = self._build_meals_from_result(result, meta)
             prompt = self._build_nutrition_prompt(
-                result["identified_food"], result["nutrition"], user_text, result["source"], goal, diet_pref,
+                food_name=result["identified_food"], 
+                nutrition=result["nutrition"], 
+                user_text=user_text, 
+                source=result["source"], 
+                goal=goal, 
+                diet_pref=diet_pref,
+                full_name=full_name, age=age, gender=gender, weight_kg=weight_kg, height_cm=height_cm, activity_level=activity_level, tdee_str=tdee_str, injuries=injuries, medical=medical,
                 is_advisory=is_advisory
             )
 
@@ -419,6 +462,15 @@ class VisionAgent:
         source: str,
         goal: str = "General Fitness",
         diet_pref: str = "None",
+        full_name: str = "User",
+        age: str = "Unknown",
+        gender: str = "Unknown",
+        weight_kg: str = "Unknown",
+        height_cm: str = "Unknown",
+        activity_level: str = "Unknown",
+        tdee_str: str = "Unknown",
+        injuries: str = "None",
+        medical: str = "None",
         is_advisory: bool = False
     ) -> str:
 
@@ -492,8 +544,16 @@ class VisionAgent:
             f"You are FitBot, a world-class food identification and nutrition AI.\n"
             f"You can identify and provide nutrition for ANY food from ANY global cuisine.\n\n"
             f"USER PROFILE:\n"
-            f"- Goal: {goal}\n"
-            f"- Dietary Preference: {diet_pref}\n\n"
+            f"Name: {full_name}\n"
+            f"Age: {age} | Gender: {gender}\n"
+            f"Weight: {weight_kg} kg | Height: {height_cm} cm\n"
+            f"Activity Level: {activity_level}\n"
+            f"TDEE & Calorie Targets:\n"
+            f"  {tdee_str}\n"
+            f"Goal: {goal}\n"
+            f"Dietary Preference: {diet_pref}\n"
+            f"Injuries/Medical: {injuries}\n"
+            f"Medical Conditions: {medical}\n\n"
             f"You have ALREADY analyzed the user's image using a vision module. The exact nutritional data for their specific meal is provided below.\n\n"
             f"{nutrition_context}\n\n"
             f"{instruction}\n\n"
