@@ -113,6 +113,13 @@ class BaseRAGAgent:
         else:
             tdee_str = "Unknown — profile data incomplete (age / weight / height missing)."
 
+        # ── Build Intelligence Context (Layer 2) ─────────────────────────────
+        # Inject computed biometrics so LLM can make goal-appropriate decisions
+        # WITHOUT any hardcoded if-else rules in our code.
+        intelligence_context = self._build_intelligence_context(
+            weight_kg, goal, tdee, diet_pref, injuries, medical
+        )
+
         logger.info(
             f"🧬 [{self.agent_name}] Profile: name='{full_name}', goal='{goal}', "
             f"diet='{diet_pref}', {weight_kg}kg, TDEE={tdee.get('tdee', '?')} kcal"
@@ -120,26 +127,30 @@ class BaseRAGAgent:
 
         chain = self.prompt | self.llm
 
-        # ── PHASE 1: Local ChromaDB Search ───────────────────────────────────
-        db_results  = await self.rag_tool.search(query, diet_preference=diet_pref)
+        # ── PHASE 1: Profile-Enriched RAG Search (Layer 1) ───────────────────
+        # Enrich the search query with user profile so ChromaDB embeddings
+        # return goal-relevant results — no extra LLM call, zero extra cost.
+        enriched_query = self._build_enriched_query(query, goal, diet_pref, weight_kg, injuries)
+        db_results  = await self.rag_tool.search(enriched_query, diet_preference=diet_pref)
         context_str = self._format_context(db_results)
 
-        # Shared prompt variables — full profile passed to every agent
+        # Shared prompt variables — full profile + intelligence context passed to every agent
         prompt_vars = {
-            "query":          query,
-            "context":        context_str or "No specific data retrieved from local database.",
-            "goal":           goal,
-            "injuries":       injuries,
-            "medical":        medical,
-            "diet_preference": diet_pref,
-            "summary":        summary,
-            "full_name":      full_name,
-            "age":            str(age),
-            "gender":         str(gender),
-            "weight_kg":      str(weight_kg),
-            "height_cm":      str(height_cm),
-            "activity_level": str(activity_level),
-            "tdee":           tdee_str,
+            "query":                query,
+            "context":              context_str or "No specific data retrieved from local database.",
+            "goal":                 goal,
+            "injuries":             injuries,
+            "medical":              medical,
+            "diet_preference":      diet_pref,
+            "summary":              summary,
+            "full_name":            full_name,
+            "age":                  str(age),
+            "gender":               str(gender),
+            "weight_kg":            str(weight_kg),
+            "height_cm":            str(height_cm),
+            "activity_level":       str(activity_level),
+            "tdee":                 tdee_str,
+            "intelligence_context": intelligence_context,
         }
 
         analysis = await chain.ainvoke(prompt_vars)
@@ -208,3 +219,66 @@ class BaseRAGAgent:
     def _format_context(self, results: List[Dict]) -> str:
         """To be implemented by subclasses if they need custom formatting."""
         raise NotImplementedError("Subclasses must implement _format_context")
+
+    @staticmethod
+    def _build_enriched_query(query: str, goal: str, diet: str, weight_kg, injuries: str) -> str:
+        """
+        Layer 1: Profile-enriched RAG search query.
+        Combines user message with their profile so ChromaDB embedding search
+        returns goal-relevant results. No hardcoded keywords — uses actual user data.
+        Zero extra LLM calls.
+        """
+        parts = [query.strip()]
+        if goal and goal.lower() not in ("none", "unknown", "general fitness"):
+            parts.append(f"goal: {goal}")
+        if diet and diet.lower() not in ("none", "unknown"):
+            parts.append(f"diet: {diet}")
+        if weight_kg and str(weight_kg).lower() not in ("none", "unknown"):
+            parts.append(f"body weight: {weight_kg}kg")
+        if injuries and injuries.lower() != "none":
+            parts.append(f"injuries: {injuries}")
+        enriched = ". ".join(parts)
+        return enriched
+
+    @staticmethod
+    def _build_intelligence_context(weight_kg, goal: str, tdee: dict, diet: str, injuries: str, medical: str) -> str:
+        """
+        Layer 2: Intelligence Block.
+        Computes and formats physiologically grounded targets from user biometrics.
+        The LLM uses its OWN expertise to apply these numbers to the user's goal —
+        no hardcoded if-else goal logic here. Zero extra cost.
+        """
+        try:
+            w = float(weight_kg)
+        except (ValueError, TypeError):
+            w = 0.0
+
+        # Physiology-based protein range (universal, not goal-specific)
+        # 1.6g/kg = minimum for active individuals (ISSN consensus)
+        # 2.2g/kg = upper practical limit for most goals
+        if w > 0:
+            protein_min = round(w * 1.6, 1)
+            protein_max = round(w * 2.2, 1)
+            protein_line = f"Protein Target Range: {protein_min}g – {protein_max}g/day (based on {w}kg body weight)"
+        else:
+            protein_line = "Protein Target: Use standard guidelines (body weight unavailable)"
+
+        # TDEE-based calorie context
+        if tdee.get("tdee"):
+            cal_line = (
+                f"Calorie Targets: loss={tdee['cal_loss']} kcal | "
+                f"maintenance={tdee['cal_maintenance']} kcal | "
+                f"gain={tdee['cal_gain']} kcal"
+            )
+        else:
+            cal_line = "Calorie Targets: unavailable (incomplete profile)"
+
+        return (
+            f"INTELLIGENCE CONTEXT (Use your expertise to apply this to the user's goal: '{goal}'):\n"
+            f"  {protein_line}\n"
+            f"  {cal_line}\n"
+            f"  Diet Constraint: {diet}\n"
+            f"  Injury/Medical Constraints: {injuries} | {medical}\n"
+            f"  → Determine the most appropriate exercise type, rep ranges, macro split, "
+            f"    and food priorities based on the goal above. Do NOT use generic defaults."
+        )

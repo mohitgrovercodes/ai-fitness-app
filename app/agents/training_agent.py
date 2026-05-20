@@ -80,6 +80,8 @@ Medical Conditions: {medical}
 Dietary Preference: {diet_preference}
 
 Current Context: {summary}
+
+{intelligence_context}
 """
 
         super().__init__(

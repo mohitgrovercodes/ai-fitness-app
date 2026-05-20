@@ -175,6 +175,8 @@ Dietary Preference: {diet_preference}
 Injuries/Medical: {injuries}
 Medical Conditions: {medical}
 Current Context: {summary}
+
+{intelligence_context}
 """
         
         super().__init__(
@@ -592,6 +594,62 @@ Current Context: {summary}
                         total_prot  += m_prot
                         total_carbs += m_carbs
                         total_fat   += m_fat
+
+        # --- Step 6: PROTEIN FLOOR VALIDATOR (Layer 3) ---
+        # Physiology constant: 1.6g/kg is the minimum protein for any active person.
+        # This is NOT goal-specific — it's a universal floor. No hardcoded goal logic.
+        # If avg daily protein is below this floor, scale protein up while keeping
+        # total calories intact by reducing fat proportionally.
+        try:
+            w_kg = float(state["user_context"].get("weight_kg", 0)) if state and "user_context" in state else 0.0
+        except (ValueError, TypeError):
+            w_kg = 0.0
+
+        if w_kg > 0 and total_prot > 0:
+            protein_floor_total = w_kg * 1.6 * num_days  # total across all days
+            if total_prot < protein_floor_total:
+                prot_ratio = protein_floor_total / total_prot
+                logger.info(
+                    f"💪 [Protein Floor] Avg {round(total_prot/num_days,1)}g/day < floor "
+                    f"{round(w_kg*1.6,1)}g/day → scaling protein ×{prot_ratio:.2f}"
+                )
+                total_prot_new = 0.0
+                total_fat_new  = 0.0
+                total_cal_new  = 0.0
+                for meal in unique_meals:
+                    m_prot  = parse_num(meal.get("protein", 0)) * prot_ratio
+                    m_fat   = parse_num(meal.get("fat",     0))
+                    m_carbs = parse_num(meal.get("carbs",   0))
+                    # Reduce fat to compensate the added protein calories so
+                    # total calories stay close to target (1g protein = 4 kcal,
+                    # 1g fat = 9 kcal — pure physiology, no goal rule).
+                    added_prot_kcal = (m_prot - parse_num(meal.get("protein", 0))) * 4
+                    fat_reduction_g = min(m_fat, added_prot_kcal / 9)
+                    m_fat = max(0.0, m_fat - fat_reduction_g)
+
+                    meal["protein"] = f"{round(m_prot,  1)}g"
+                    meal["fat"]     = f"{round(m_fat,   1)}g"
+                    meal["calories"] = round((m_prot*4) + (m_carbs*4) + (m_fat*9), 1)
+
+                    total_prot_new += m_prot
+                    total_fat_new  += m_fat
+                    total_cal_new  += meal["calories"]
+
+                total_prot  = total_prot_new
+                total_fat   = total_fat_new
+                total_cal   = total_cal_new
+
+                # Rebuild per_day_data after protein scaling
+                per_day_data = {}
+                for meal in unique_meals:
+                    day_label = meal.get("day", "").strip()
+                    if day_label:
+                        if day_label not in per_day_data:
+                            per_day_data[day_label] = {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+                        per_day_data[day_label]["calories"] += meal["calories"]
+                        per_day_data[day_label]["protein"]  += parse_num(meal.get("protein", 0))
+                        per_day_data[day_label]["carbs"]    += parse_num(meal.get("carbs", 0))
+                        per_day_data[day_label]["fat"]      += parse_num(meal.get("fat", 0))
 
         # Format per-day totals for the API response (only for multi-day plans)
         if is_multi_day and per_day_data:

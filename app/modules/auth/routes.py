@@ -13,8 +13,10 @@ def register(payload: RegisterSchema, db: Session = Depends(get_db)):
     return register_user(db, payload)
 
 @router.post("/login")
-def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
-):
-    return login_user(db, form_data)
+# def login(
+#     form_data: OAuth2PasswordRequestForm = Depends(),
+#     db: Session = Depends(get_db)
+# ):
+#     return login_user(db, form_data)
+def login(payload: LoginSchema, db: Session = Depends(get_db)):
+    return login_user(db, payload)
