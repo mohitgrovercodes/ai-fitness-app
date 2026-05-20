@@ -161,8 +161,21 @@ class AIService:
         finally:
             db.close()
         
+        # Extract new fields from API payload
+        new_weight = data.get("weight")
+        new_height = data.get("height")
+        new_gender = data.get("gender")
+
         # Merge: request data overrides DB context
-        merged_context = {**db_context, "goal": goal or db_context.get("goal", ""), "level": level, "injuries": injuries or db_context.get("injuries", [])}
+        merged_context = {
+            **db_context, 
+            "goal": goal or db_context.get("goal", ""), 
+            "level": level, 
+            "injuries": injuries or db_context.get("injuries", []),
+            "weight_kg": new_weight if new_weight else db_context.get("weight_kg"),
+            "height_cm": new_height if new_height else db_context.get("height_cm"),
+            "gender": new_gender if new_gender else db_context.get("gender")
+        }
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message")
         if not user_input:
@@ -224,10 +237,14 @@ class AIService:
                 # All three calorie targets stored in user_context; the LLM picks the right
                 # one based on the goal text it reads in its system prompt.
                 try:
-                    w   = float(profile.weight or 0)
-                    h   = float(profile.height or 0)
+                    w   = float(data.get("weight") or profile.weight or 0)
+                    h   = float(data.get("height") or profile.height or 0)
                     a   = float(profile.age or 0)
-                    g   = (profile.gender.value if profile.gender else "male").upper()
+                    
+                    # Get gender from request, fallback to profile, default to male
+                    req_gender = data.get("gender")
+                    prof_gender = profile.gender.value if profile.gender else "male"
+                    g   = (req_gender or prof_gender).upper()
                     act = (profile.activity_level.value if profile.activity_level else "SEDENTARY").upper()
                     _multipliers = {
                         "SEDENTARY": 1.2, "LIGHTLY_ACTIVE": 1.375,
@@ -265,8 +282,21 @@ class AIService:
         finally:
             db.close()
 
+        # Extract new fields from API payload
+        new_weight = data.get("weight")
+        new_height = data.get("height")
+        new_gender = data.get("gender")
+        new_diet_pref = data.get("diet_prefrence")
+
         # Merge: request data overrides DB context
-        merged_context = {**db_context, "goal": goal or db_context.get("goal", "")}
+        merged_context = {
+            **db_context, 
+            "goal": goal or db_context.get("goal", ""),
+            "weight_kg": new_weight if new_weight else db_context.get("weight_kg"),
+            "height_cm": new_height if new_height else db_context.get("height_cm"),
+            "gender": new_gender if new_gender else db_context.get("gender"),
+            "diet_preference": new_diet_pref if new_diet_pref else db_context.get("diet_preference")
+        }
         
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message")
