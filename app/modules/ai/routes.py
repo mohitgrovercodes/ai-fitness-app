@@ -3,13 +3,14 @@ from fastapi import Form
 from typing import Optional
 import json
 from app.core.security import get_current_user
+from app.modules.ai.schema import ChatRequest, WorkoutGenerationRequest, DietGenerationRequest, DomainQueryRequest
 
 
 router = APIRouter()
 
 @router.post("/chat")
 async def chat_endpoint(
-    data: dict, 
+    request: ChatRequest, 
     user_id: str = Depends(get_current_user)
 ):
     """
@@ -17,6 +18,7 @@ async def chat_endpoint(
     Expects: { "message": "...", "context": { "goal": "...", "injuries": [...] } }
     """
     from app.modules.ai.controller import chat
+    data = request.model_dump()
     data["user_id"] = user_id
     return await chat(data)
 
@@ -38,7 +40,7 @@ async def chat_vision_endpoint(
 
 @router.post("/generate-workout")
 async def generate_workout_endpoint(
-    data: dict,
+    request: WorkoutGenerationRequest,
     user_id: str = Depends(get_current_user)
 ):
     """
@@ -46,13 +48,14 @@ async def generate_workout_endpoint(
     Expects: { "goal": "muscle gain", "level": "beginner", "duration": "1 month", "injuries": [] }
     """
     from app.modules.ai.controller import generate_workout
+    data = request.model_dump()
     data["user_id"] = user_id
     return await generate_workout(data)
 
 
 @router.post("/generate-diet")
 async def generate_diet_endpoint(
-    data: dict,
+    request: DietGenerationRequest,
     user_id: str = Depends(get_current_user)
 ):
     """
@@ -60,13 +63,14 @@ async def generate_diet_endpoint(
     Expects: { "goal": "weight loss", "diet_type": "veg", "allergies": ["peanuts"] }
     """
     from app.modules.ai.controller import generate_diet
+    data = request.model_dump()
     data["user_id"] = user_id
     return await generate_diet(data)
 
 
 @router.post("/ask-domain")
 async def ask_domain_endpoint(
-    data: dict,
+    request: DomainQueryRequest,
     user_id: str = Depends(get_current_user)
 ):
     """
@@ -74,5 +78,6 @@ async def ask_domain_endpoint(
     Expects: { "message": "What is muscle hypertrophy?" }
     """
     from app.modules.ai.controller import ask_domain
+    data = request.model_dump()
     data["user_id"] = user_id
     return await ask_domain(data)
