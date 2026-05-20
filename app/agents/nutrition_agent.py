@@ -337,15 +337,44 @@ Current Context: {summary}
         """
         from langchain_core.prompts import ChatPromptTemplate
 
-        user_context = state.get('user_context', {})
+        user_context = state.get('user_context', {}) or {}
         conv_summary = state.get('conversation_summary', "No previous context.")
-        goal = user_context.get("goal", "General Fitness") if isinstance(user_context, dict) else "General Fitness"
-        injuries = ", ".join(user_context.get("injuries", [])) if isinstance(user_context, dict) and user_context.get("injuries") else "None"
-        diet_pref = user_context.get("diet_preference", "None") if isinstance(user_context, dict) else "None"
 
-        # ── Step 1: ONE RAG search (shared across all chunks) ──────────
+        # ── Extract full profile (same as base.py run_logic) ─────────────────
+        goal           = user_context.get("goal", "General Fitness") or "General Fitness"
+        diet_pref      = user_context.get("diet_preference") or "None"
+        injuries_list  = user_context.get("injuries", []) or []
+        injuries       = ", ".join(str(i) for i in injuries_list) if injuries_list else "None"
+        med_list       = user_context.get("medical_conditions", []) or []
+        medical        = ", ".join(str(m) for m in med_list) if med_list else "None"
+        full_name      = user_context.get("full_name") or "User"
+        age            = str(user_context.get("age") or "Unknown")
+        gender         = str(user_context.get("gender") or "Unknown")
+        weight_kg      = user_context.get("weight_kg") or "Unknown"
+        height_cm      = str(user_context.get("height_cm") or "Unknown")
+        activity_level = str(user_context.get("activity_level") or "Unknown")
+
+        # ── Compute TDEE + Intelligence Context (same as base.py) ─────────
+        from app.agents.base import _compute_tdee
+        tdee = _compute_tdee(weight_kg, height_cm, age, gender, activity_level)
+        if tdee["tdee"]:
+            tdee_str = (
+                f"BMR {tdee['bmr']} kcal | TDEE {tdee['tdee']} kcal/day\n"
+                f"  Weight-loss: {tdee['cal_loss']} kcal | "
+                f"Maintenance: {tdee['cal_maintenance']} kcal | "
+                f"Weight-gain: {tdee['cal_gain']} kcal"
+            )
+        else:
+            tdee_str = "Unknown — profile incomplete."
+
+        intelligence_context = self._build_intelligence_context(
+            weight_kg, goal, tdee, diet_pref, injuries, medical
+        )
+
+        # ── Step 1: Profile-enriched RAG search (Layer 1) ──────────────
         logger.info(f"🔍 [Nutrition Chunked] Single RAG search for context...")
-        db_results = await self.rag_tool.search(original_query, diet_preference=diet_pref)
+        enriched_query = self._build_enriched_query(original_query, goal, diet_pref, weight_kg, injuries)
+        db_results = await self.rag_tool.search(enriched_query, diet_preference=diet_pref)
         context_str = self._format_context(db_results) or "No specific data retrieved."
 
         # ── Step 2: Compute how many days & chunks (all dynamic) ───────
@@ -358,6 +387,18 @@ Current Context: {summary}
             f"rotation={'yes' if is_rotation else 'no'}"
         )
 
+        # ── Compute meal count dynamically from query OR token budget ──────────
+        import re as _re
+        _meal_match = _re.search(r'(\d+)\s*(meal|meals)', original_query.lower())
+        if _meal_match:
+            meal_count = max(1, min(int(_meal_match.group(1)), 8))  # cap at 8 (physics)
+        else:
+            # Derive from token budget: tokens_per_day = meal_count * 85
+            # chunk_size = safe_tokens / (meal_count * 85) → meal_count = safe_tokens / (chunk_size * 85)
+            # Default: use same meals_per_day assumption as _compute_chunk_size (5)
+            meal_count = 5
+        logger.info(f"🍽️ [Nutrition Chunked] Meal count per day: {meal_count} (from query or default)")
+
         # ── Step 3: Chunk prompt ────────────────────────────────────────
         chunk_prompt = ChatPromptTemplate.from_messages([
             ("system", self.prompt.messages[0].prompt.template),
@@ -366,7 +407,9 @@ Current Context: {summary}
                 "ORIGINAL REQUEST: {original_query}\n"
                 "USER GOAL: {goal} | INJURIES: {injuries} | DIET: {diet_pref}\n\n"
                 "TASK: Generate meals ONLY for: {days}\n"
-                "- 5 meals per day (Breakfast, Lunch, Snack, Dinner, Dessert)\n"
+                "- Generate exactly {meal_count} meals per day. "
+                "  Choose meal types (Breakfast / Lunch / Snack / Dinner / Post-Workout / Pre-Workout / etc.) "
+                "  that best fit the user's goal and day type.\n"
                 "- Each day must have DIFFERENT foods — no repeats across days\n"
                 "- In the `day` field use: 'Day X - [Day Type]' where you decide "
                 "  [Day Type] based on user goal (Training Day / Rest Day / Active Recovery / High Carb / etc.)\n"
@@ -382,15 +425,27 @@ Current Context: {summary}
             logger.info(f"🍽️  [Nutrition Chunked] Generating {chunk['label']}...")
             try:
                 analysis = await chunk_chain.ainvoke({
-                    "conv_summary": conv_summary,
-                    "summary": conv_summary,          # system prompt uses {summary}
-                    "original_query": original_query,
-                    "goal": goal,
-                    "injuries": injuries,
-                    "diet_pref": diet_pref,
-                    "diet_preference": diet_pref,     # system prompt uses {diet_preference}
-                    "days": chunk["days"],
-                    "context": context_str,
+                    # Human prompt variables
+                    "conv_summary":         conv_summary,
+                    "original_query":       original_query,
+                    "goal":                 goal,
+                    "injuries":             injuries,
+                    "diet_pref":            diet_pref,
+                    "meal_count":           meal_count,
+                    "days":                 chunk["days"],
+                    "context":              context_str,
+                    # System prompt variables
+                    "summary":              conv_summary,
+                    "diet_preference":      diet_pref,
+                    "full_name":            full_name,
+                    "age":                  age,
+                    "gender":               gender,
+                    "weight_kg":            str(weight_kg),
+                    "height_cm":            height_cm,
+                    "activity_level":       activity_level,
+                    "tdee":                 tdee_str,
+                    "medical":              medical,
+                    "intelligence_context": intelligence_context,
                 })
                 chunk_meals = analysis.meals if hasattr(analysis, 'meals') else []
                 all_meals.extend([m.model_dump() if hasattr(m, 'model_dump') else m for m in chunk_meals])
