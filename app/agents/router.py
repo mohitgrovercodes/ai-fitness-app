@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List,Optional
 from app.core.state import AgentState
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -7,7 +7,7 @@ from app.utils.logger import logger
 
 class SafetyResult(BaseModel):
     is_safe: bool
-    reason: str
+    reason:  Optional[str]
     suggested_response: str = ""
 
 class SafetyGuardrail:

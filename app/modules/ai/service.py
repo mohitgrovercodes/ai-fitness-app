@@ -2,6 +2,7 @@
 from app.core.graph import build_graph
 from langchain_core.messages import HumanMessage
 import uuid
+from app.agents.base import _compute_tdee
 
 # Global variable for lazy init
 _fitness_graph = None
@@ -34,7 +35,7 @@ class AIService:
             profile = ProfileService.get_profile(db, user_id)
             db_context = {}
             if profile:
-                tdee_data = AIService._calculate_tdee(
+                tdee_data =_compute_tdee(
                     profile.weight, profile.height, profile.age,
                     profile.gender.value if profile.gender else "male",
                     profile.activity_level.value if profile.activity_level else "SEDENTARY"
