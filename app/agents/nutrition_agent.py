@@ -8,14 +8,14 @@ from app.utils.logger import logger
 
 class MealPlanItem(BaseModel):
     day: Optional[str] = Field(default="", description="Day label for multi-day plans (e.g., 'Day 1 - Monday (Training Day)'). Leave empty for single-day plans.")
-    type: str = Field(description="Meal type (e.g., Breakfast, Lunch, Pre-Workout Snack, Dinner).")
-    name: str = Field(description="Name of the dish/food.")
-    portion: str = Field(description="Amount of food to eat (e.g. '300g' or '2 cups'). MUST scale to hit the daily calorie goal!")
-    calories: float = Field(description="Total calories for this specific portion (can be decimal).")
-    protein: str = Field(description="Total protein for this portion in grams (e.g., '12g').")
-    carbs: str = Field(description="Total carbs for this portion in grams (e.g., '18g').")
-    fat: str = Field(description="Total fat for this portion in grams (e.g., '6g').")
-    benefit: str = Field(description="Why this meal helps the user's goal.")
+    type: Optional[str] = Field(default="", description="Meal type (e.g., Breakfast, Lunch, Pre-Workout Snack, Dinner).")
+    name: Optional[str] = Field(default="", description="Name of the dish/food.")
+    portion: Optional[str] = Field(default="", description="Amount of food to eat (e.g. '300g' or '2 cups'). MUST scale to hit the daily calorie goal!")
+    calories: float = Field(default=0.0, description="Total calories for this specific portion (can be decimal).")
+    protein: Optional[str] = Field(default="", description="Total protein for this portion in grams (e.g., '12g').")
+    carbs: Optional[str] = Field(default="", description="Total carbs for this portion in grams (e.g., '18g').")
+    fat: Optional[str] = Field(default="", description="Total fat for this portion in grams (e.g., '6g').")
+    benefit: Optional[str] = Field(default="", description="Why this meal helps the user's goal.")
 
 class DailyTotals(BaseModel):
     calories: float = Field(description="Total daily calories.")
@@ -84,21 +84,21 @@ STRICT POLICIES:
     - Include: eggs, fatty fish, chicken, nuts, avocado, olive oil, cheese, paneer (if not vegan)
     
     PESCATARIAN:
-    - NO red meat (beef, pork, lamb) and NO poultry (chicken, turkey)
-    - Seafood (fish, shellfish) is the ONLY animal protein
-    - Include: whole grains, legumes, vegetables, fruits, nuts, seeds, healthy oils
-    - Optional: eggs and dairy (if not vegan)
+    - NO red meat (beef, pork, lamb, mutton) and NO poultry (chicken, turkey).
+    - Seafood (fish, shellfish) is the ONLY animal protein.
+    - Include: whole grains, legumes, vegetables, fruits, nuts, seeds, healthy oils.
+    - Optional: eggs and dairy (if not vegan).
     
     POLLOTARIAN:
-    - Protein Exclusions: NO red meat (beef, pork, lamb) and NO seafood/fish
-    - Primary Protein: Poultry (chicken, turkey) is the ONLY animal protein
-    - Plant Foods: Include whole grains, legumes, vegetables, fruits, nuts, seeds, and healthy oils  ,Eggs and dairy
+    - NO red meat (beef, pork, lamb, mutton) and NO seafood/fish.
+    - Poultry (chicken, turkey) is the ONLY animal protein.
+    - Include: whole grains, legumes, vegetables, fruits, nuts, seeds, healthy oils, eggs and dairy.
 
     FLEXITARIAN:
-    - Protein Exclusions: No strict exclusions, but overall meat and animal product consumption is actively reduced
-    - Primary Protein: Plant-based proteins (beans, lentils, tofu, tempeh) are the main focus, with meat, poultry, 
-      and seafood consumed only occasionally
-    - Plant Foods: Include whole grains, legumes, vegetables, fruits, nuts, seeds, and healthy oils, Eggs and dairy     
+    - STRICT RULE: NEVER include lamb, beef, pork, or mutton.
+    - Primary Protein: Plant-based proteins (beans, lentils, tofu, tempeh) are the main focus.
+    - Meat allowance: Chicken or fish can be consumed occasionally, but NO red meat.
+    - Include: whole grains, legumes, vegetables, fruits, nuts, seeds, healthy oils, eggs and dairy.
     
 
   ⚖️ NO PREFERENCE: Provide a balanced mixed diet. No restrictions.
@@ -163,7 +163,7 @@ GOAL-SPECIFIC DIETARY RULES (MANDATORY):
 - Daily calories: Estimated TDEE.
 - Protein: 1.0–1.2g per kg of estimated body weight.
 
-USER DATA:
+USER BIOMETRIC DATA:
 Name: {full_name}
 Age: {age} | Gender: {gender}
 Weight: {weight_kg} kg | Height: {height_cm} cm
@@ -171,14 +171,14 @@ Activity Level: {activity_level}
 TDEE & Calorie Targets:
   {tdee}
 Goal: {goal}
+Medical Conditions/Allergies: {medical}
 Dietary Preference: {diet_preference}
-Injuries/Medical: {injuries}
-Medical Conditions: {medical}
+
 Current Context: {summary}
 
 {intelligence_context}
 """
-        
+
         super().__init__(
             agent_name="Nutrition Agent",
             rag_tool=NutritionRAGTool(),
@@ -186,12 +186,9 @@ Current Context: {summary}
             output_schema=NutritionAnalysis,
             system_prompt=system_prompt
         )
+        self._rotation_size = self._compute_chunk_size()
 
     async def _detect_n_days(self, query: str) -> int:
-        """
-        Dynamically detects plan duration from user query using LLM.
-        No hardcoded rules — the LLM understands any language/phrasing naturally.
-        """
         from langchain_openai import ChatOpenAI
         from app.core.config import settings
 
@@ -203,54 +200,41 @@ Current Context: {summary}
             "If no duration is mentioned, return 1.\n"
             "Reply with ONLY a single integer. No explanation, no units, just the number.\n\n"
             f"User message: {query}\n\n"
-            "STRICT USER QUERY RULE:\n"
-            "- Follow the user's requested duration exactly.\n"
-            "- Follow requested day types (training/rest/weekdays/etc).\n"
-            "- Follow requested meal frequency.\n"
-            "- Do not assume default schedules if user specified one.\n"
-            "- Every day must have unique meals.\n\n"
         )
         try:
             response = await llm.ainvoke(prompt)
             n = int(response.content.strip())
-            logger.info(f"📅 [Nutrition Agent] LLM detected duration: {n} day(s) from query.")
             return max(n, 1)
-        except Exception as e:
-            logger.warning(f"⚠️ [Nutrition Agent] Duration detection failed ({e}), defaulting to 1 day.")
+        except Exception:
             return 1
+
     async def run(self, state: AgentState) -> Dict[str, Any]:
-        """
-        Smart runner:
-        - Detects requested duration via LLM.
-        - Single call for short plans (within token budget).
-        - Chunked generation for longer plans.
-        """
+        state = dict(state)
+        self._rotation_size = self._compute_chunk_size()
+        state.setdefault("_extra_prompt_vars", {})["rotation_size"] = self._rotation_size
+
         query = state['messages'][-1].content
         n_days = await self._detect_n_days(query)
         chunk_size = self._compute_chunk_size()
 
         if n_days > chunk_size:
-            logger.info(f"📅 [Nutrition Agent] {n_days} days detected — chunk size={chunk_size}. Using chunked generation.")
             return await self._run_chunked(state, query, n_days)
         else:
             return await self.run_logic(state, specialist_key="nutrition", topic="nutrition")
 
     def _compute_chunk_size(self) -> int:
         """
-        Compute how many days can safely fit in ONE LLM call's output.
-        Based purely on model token limits — no hardcoded business values.
-
         Formula:
           chunk_size = floor(safe_output_tokens / (meals_per_day × tokens_per_meal))
 
         These are physical model constraints, not business rules:
           - safe_output_tokens: gpt-4o-mini max output (4096), with 10% safety margin
-          - tokens_per_meal: ~85 tokens per structured meal JSON object
+          - tokens_per_meal: 130 tokens per structured meal JSON object (safer buffer)
           - meals_per_day: 5 (standard full-day coverage)
         """
         safe_output_tokens = int(self.llm.max_tokens * 0.90) if hasattr(self.llm, 'max_tokens') and self.llm.max_tokens else 3680
-        tokens_per_meal = 85    # approximate JSON token cost per MealPlanItem
-        meals_per_day = 5       # standard meals: breakfast, lunch, snack, dinner, dessert
+        tokens_per_meal = 130
+        meals_per_day = 5
         return max(1, safe_output_tokens // (tokens_per_meal * meals_per_day))
 
     def _compute_days_to_generate(self, n_days: int) -> int:
@@ -260,7 +244,7 @@ Current Context: {summary}
         Otherwise generate as many as possible within a reasonable API call budget.
 
         max_api_calls is derived from UX budget (each call ~15s, total <90s acceptable):
-          max_api_calls = floor(acceptable_wait_seconds / seconds_per_call)
+        max_api_calls = floor(acceptable_wait_seconds / seconds_per_call)
         """
         seconds_per_call = 15       # approximate LLM call latency
         acceptable_wait = 90        # max seconds user waits comfortably
@@ -377,14 +361,17 @@ Current Context: {summary}
         db_results = await self.rag_tool.search(enriched_query, diet_preference=diet_pref)
         context_str = self._format_context(db_results) or "No specific data retrieved."
 
-        # ── Step 2: Compute how many days & chunks (all dynamic) ───────
-        days_to_generate = self._compute_days_to_generate(n_days)
-        DAY_CHUNKS = self._build_chunks(days_to_generate)
-        is_rotation = n_days > days_to_generate
+        # ── Step 2: Compute rotation/chunk plan (all dynamic) ────────────────
+        rotation_size    = self._compute_chunk_size()        # token-budget derived (e.g. 8)
+        is_rotation      = n_days > rotation_size             # long plan = rotation template
+        days_to_generate = rotation_size if is_rotation else n_days  # generate only 1 cycle for long plans
+        DAY_CHUNKS       = self._build_chunks(days_to_generate)
+        import math as _math
+        repeat_times     = _math.ceil(n_days / rotation_size) if is_rotation else 1
         logger.info(
-            f"📦 [Nutrition Chunked] n_days={n_days} | days_to_generate={days_to_generate} | "
-            f"chunk_size={self._compute_chunk_size()} | chunks={[c['label'] for c in DAY_CHUNKS]} | "
-            f"rotation={'yes' if is_rotation else 'no'}"
+            f"📦 [Nutrition Chunked] n_days={n_days} | rotation={is_rotation} | "
+            f"rotation_size={rotation_size} | days_to_generate={days_to_generate} | "
+            f"repeat={repeat_times}x | chunks={[c['label'] for c in DAY_CHUNKS]}"
         )
 
         # ── Compute meal count dynamically from query OR token budget ──────────
@@ -406,6 +393,7 @@ Current Context: {summary}
                 "CONVERSATION SUMMARY:\n{conv_summary}\n\n"
                 "ORIGINAL REQUEST: {original_query}\n"
                 "USER GOAL: {goal} | INJURIES: {injuries} | DIET: {diet_pref}\n\n"
+                "{rotation_instruction}"
                 "TASK: Generate meals ONLY for: {days}\n"
                 "- Generate exactly {meal_count} meals per day. "
                 "  Choose meal types (Breakfast / Lunch / Snack / Dinner / Post-Workout / Pre-Workout / etc.) "
@@ -434,6 +422,11 @@ Current Context: {summary}
                     "meal_count":           meal_count,
                     "days":                 chunk["days"],
                     "context":              context_str,
+                    "rotation_instruction": (
+                        f"THIS IS A ROTATION TEMPLATE (not {n_days} unique days).\n"
+                        f"User wants {n_days} days. Generate {rotation_size} unique days as a repeating cycle.\n"
+                        f"They will repeat this cycle {repeat_times}x to complete {n_days} days.\n\n"
+                    ) if is_rotation else "",
                     # System prompt variables
                     "summary":              conv_summary,
                     "diet_preference":      diet_pref,
@@ -446,6 +439,7 @@ Current Context: {summary}
                     "tdee":                 tdee_str,
                     "medical":              medical,
                     "intelligence_context": intelligence_context,
+                    "rotation_size":        rotation_size,
                 })
                 chunk_meals = analysis.meals if hasattr(analysis, 'meals') else []
                 all_meals.extend([m.model_dump() if hasattr(m, 'model_dump') else m for m in chunk_meals])
@@ -454,6 +448,74 @@ Current Context: {summary}
                 logger.error(f"❌ [Nutrition Chunked] Failed {chunk['label']}: {e}")
 
         logger.info(f"✅ [Nutrition Chunked] {len(all_meals)} total meals across {days_to_generate} days.")
+
+        # ── Step 4.5: Expand rotation cycle to cover n_days (Frontend Expects Full Array) ──
+        if is_rotation and all_meals:
+            logger.info(f"🔄 [Nutrition Chunked] Expanding {days_to_generate}-day cycle to {n_days} days for UI.")
+            import math
+            import re
+            
+            # Group meals by original day string
+            day_groups = []
+            current_day_str = None
+            current_group = []
+            
+            for m in all_meals:
+                m_day = m.get("day", "")
+                if m_day != current_day_str:
+                    if current_group:
+                        day_groups.append(current_group)
+                    current_day_str = m_day
+                    current_group = []
+                current_group.append(m)
+            if current_group:
+                day_groups.append(current_group)
+                
+            actual_cycle_length = len(day_groups)
+            expanded_meals = []
+            
+            if actual_cycle_length > 0:
+                for target_day in range(1, n_days + 1):
+                    # Zero-indexed day in the cycle
+                    cycle_idx = (target_day - 1) % actual_cycle_length
+                    cycle_num = math.ceil(target_day / actual_cycle_length)
+                    
+                    original_group = day_groups[cycle_idx]
+                    
+                    for m in original_group:
+                        new_meal = m.copy()
+                        orig_day = new_meal.get("day", "")
+                        # Try to remove the "Day X - " prefix if it exists
+                        day_type = orig_day
+                        match = re.search(r'Day \d+\s*-\s*(.*)', orig_day, re.IGNORECASE)
+                        if match:
+                            day_type = match.group(1).strip()
+                            
+                        # Format the new day string: Day 15 - Training Day (Cycle 3)
+                        new_meal["day"] = f"Day {target_day} - {day_type} (Cycle {cycle_num})"
+                        
+                        # DYNAMIC PROGRESSION: Slightly adjust portions/calories for later cycles
+                        # This ensures the plan is not 100% statically copied, matching real-world macro progression.
+                        if cycle_num > 1:
+                            try:
+                                p_val = float(str(new_meal.get("protein", "0")).replace("g", "")) * (1 + 0.02 * (cycle_num - 1))
+                                c_val = float(str(new_meal.get("carbs", "0")).replace("g", "")) * (1 + 0.02 * (cycle_num - 1))
+                                f_val = float(str(new_meal.get("fat", "0")).replace("g", "")) * (1 + 0.02 * (cycle_num - 1))
+                                portion_val = float(str(new_meal.get("portion", "0")).replace("g", "")) * (1 + 0.02 * (cycle_num - 1))
+                                
+                                new_meal["protein"] = f"{round(p_val, 1)}g"
+                                new_meal["carbs"] = f"{round(c_val, 1)}g"
+                                new_meal["fat"] = f"{round(f_val, 1)}g"
+                                new_meal["calories"] = round((p_val * 4) + (c_val * 4) + (f_val * 9), 1)
+                                if portion_val > 0:
+                                    new_meal["portion"] = f"{round(portion_val)}g"
+                            except Exception:
+                                pass
+
+                        expanded_meals.append(new_meal)
+                        
+                all_meals = expanded_meals
+                logger.info(f"✅ [Nutrition Chunked] Expanded to {len(all_meals)} total meals for {n_days} days.")
 
         # ── Step 5: Generate summary/tip/answer POST-MERGE (full plan aware) ──
         summary_str, tip_str, answer_str = await self._generate_plan_summary(
@@ -605,6 +667,11 @@ Current Context: {summary}
                         m_carbs = parse_num(meal.get("carbs",   0)) * ratio
                         m_fat   = parse_num(meal.get("fat",     0)) * ratio
 
+                        # CAP unrealistic protein in a single non-supplement meal (Fix for 67g salad issue)
+                        meal_name = meal.get("name", "").lower()
+                        if m_prot > 50.0 and "shake" not in meal_name and "protein powder" not in meal_name and "whey" not in meal_name:
+                            m_prot = 50.0
+
                         meal["protein"] = f"{round(m_prot,  1)}g"
                         meal["carbs"]   = f"{round(m_carbs, 1)}g"
                         meal["fat"]     = f"{round(m_fat,   1)}g"
@@ -635,6 +702,11 @@ Current Context: {summary}
                         m_prot  = parse_num(meal.get("protein", 0)) * ratio
                         m_carbs = parse_num(meal.get("carbs",   0)) * ratio
                         m_fat   = parse_num(meal.get("fat",     0)) * ratio
+
+                        # CAP unrealistic protein
+                        meal_name = meal.get("name", "").lower()
+                        if m_prot > 50.0 and "shake" not in meal_name and "protein powder" not in meal_name and "whey" not in meal_name:
+                            m_prot = 50.0
 
                         meal["protein"] = f"{round(m_prot,  1)}g"
                         meal["carbs"]   = f"{round(m_carbs, 1)}g"

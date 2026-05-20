@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import Dict, Any, List,Optional
 from app.core.state import AgentState
 from app.tools.training_tools import TrainingRAGTool
 from app.tools.web_search_tool import WebSearchTool
@@ -8,15 +8,15 @@ from app.utils.logger import logger
 
 
 class WorkoutExercise(BaseModel):
-    day: str = Field(default="", description="Day label for multi-day splits (e.g., 'Day 1 - Upper Body'). Leave empty for single-day plans.")
-    name: str = Field(description="Name of the exercise.")
-    target_muscle: List[str] = Field(description="List of target muscles.")
-    benefit: str = Field(description="Benefit of this exercise.")
-    description: str = Field(description="Step-by-step instructions on how to perform the exercise.")
-    sets: str = Field(description="DYNAMIC: Recommended number of sets based on goal (e.g., '4', '3', '5').")
-    reps: str = Field(description="DYNAMIC: Recommended reps or duration based on goal (e.g., '5-8' for strength, '15-20' for endurance, '60 seconds').")
-    gif_path: str = Field(default="", description="Exact relative path to the GIF (e.g., videos/0044-XlZ4lAC.gif)")
-    image_path: str = Field(default="", description="Exact relative path to the Image (e.g., images/0044-XlZ4lAC.jpg)")
+    day: Optional[str] = Field(default="", description="Day label for multi-day splits (e.g., 'Day 1 - Upper Body'). Leave empty for single-day plans.")
+    name: Optional[str] = Field(default="", description="Name of the exercise.")
+    target_muscle: List[str] = Field(default_factory=list, description="List of target muscles.")
+    benefit: Optional[str] = Field(default="", description="Benefit of this exercise.")
+    description: Optional[str] = Field(default="", description="Step-by-step instructions on how to perform the exercise.")
+    sets: Optional[str] = Field(default="", description="DYNAMIC: Recommended number of sets based on goal (e.g., '4', '3', '5').")
+    reps: Optional[str] = Field(default="", description="DYNAMIC: Recommended reps or duration based on goal (e.g., '5-8' for strength, '15-20' for endurance, '60 seconds').")
+    gif_path: Optional[str] = Field(default="", description="Exact relative path to the GIF (e.g., videos/0044-XlZ4lAC.gif)")
+    image_path: Optional[str] = Field(default="", description="Exact relative path to the Image (e.g., images/0044-XlZ4lAC.jpg)")
 
 class TrainingAnalysis(BaseModel):
     is_accurate: bool = Field(description="Are the retrieved exercises relevant and safe?")
@@ -50,12 +50,26 @@ STRICT POLICIES:
 7. CLEAN TEXT RESPONSE: The `final_answer` string MUST ONLY contain a polite greeting and a brief 1-2 sentence intro. DO NOT list the exercises, sets, reps, or media paths inside `final_answer`. Put the data ONLY in the structured JSON fields.
 8. NO SYSTEM TALK: NEVER use phrases like "based on the retrieved data", "the database doesn't have", or "the retrieved exercises". Speak directly as an expert coach.
 
+9. ANTI-LAZINESS RULE (CRITICAL): The `workout` list MUST NEVER BE EMPTY. You MUST generate the complete workout routine with actual exercises using your expert knowledge, even if the retrieved data is empty or generic web results.
+
 MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
 - Detect exactly what duration (N days) the user is asking for from their message (e.g., "today" = 1, "4 days" = 4, "a week" = 7, "a month" = 30).
 - DYNAMIC SPLIT SELECTION: You MUST dynamically assign an optimal, professional workout split based on the requested days:
   • N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty.
-  • N = 2 to 7 (Weekly Splits): Generate exactly N unique days. Apply a logical split (e.g., N=3 is Push/Pull/Legs; N=4 is Upper/Lower; N=5 is Bro Split). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push", "Day 3 - Rest").
-  • N > 7 (Monthly/Long-term): DO NOT generate 30 different days of workouts. Real gym programming relies on microcycles. Generate exactly a 7-DAY or 14-DAY MICROCYCLE TEMPLATE (e.g., exactly 7 unique days) that the user will repeat. Explain in the `summary` and `tip` how to progressively overload (increase weight/reps) over the coming weeks. You MUST populate the `day` field for every exercise (e.g., "Day 1 - Monday", "Day 7 - Sunday").
+  • N = 2 to {max_training_days} (Short Plans): Generate exactly N unique days. Apply a logical split (e.g., N=3 is Push/Pull/Legs; N=4 is Upper/Lower; N=5 is Bro Split). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push", "Day 3 - Rest").
+  • N > {max_training_days} (Long-term Plans): This is real gym programming. DO NOT generate N different workout days.
+    STEP 1 — DETERMINE CYCLE LENGTH: Use your fitness expertise to select the optimal split cycle for the user's goal.
+      Examples: Muscle Gain → PPL (6-day cycle) or Upper/Lower (4-day cycle)
+               Fat Loss → Full Body (3-day cycle) or Circuit (4-day cycle)
+               General Fitness → 3 or 4-day full body split
+      The cycle length is YOUR decision based on fitness science — it is NOT fixed.
+    STEP 2 — GENERATE THE CYCLE: Generate exactly that many unique days as a REPEATING MICROCYCLE.
+    CRITICAL HARD LIMIT: YOU MUST STOP GENERATING AFTER THE BASE CYCLE. DO NOT generate Day 7, Day 8, Day 9, etc., if your cycle is only 6 days. DO NOT output exercises named "Repeat Day 1". The backend Python engine will handle the mathematical expansion and progressive overload automatically.
+    STEP 3 — PROGRESSION PLAN: In `summary`, explain:
+      - How many times to repeat this cycle to complete N days (e.g. ceil(N / cycle_length))
+      - Week-by-week progressive overload: Week 1 = baseline, Week 2 = +2 reps, Week 3 = +weight, etc.
+    STEP 4 — `tip`: State exactly: "Repeat this X-day cycle Y times over N days. Increase [metric] each week."
+    You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push (Cycle Day 1)").
 - DYNAMIC REST DAYS: You are authorized to create Rest Days where the exercise name is "Rest" or "Light Stretching".
 - DYNAMIC DAILY VOLUME: DO NOT just divide the retrieved exercises across the days. A single day MUST be a complete workout session on its own. Dynamically decide the number of exercises per day based on the split type (e.g., an intense Leg Day might need 5-7 exercises, while an Active Recovery day might only need 2-3 stretches). If the database didn't provide enough exercises for a complete daily session, use your expert knowledge to inject the missing exercises.
 
@@ -92,8 +106,132 @@ Current Context: {summary}
             system_prompt=system_prompt
         )
 
+    async def _detect_n_days(self, query: str) -> int:
+        from langchain_openai import ChatOpenAI
+        from app.core.config import settings
+
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=settings.OPENAI_API_KEY)
+        prompt = (
+            "You are a duration parser. Read the user's message and determine how many total days "
+            "they are requesting a fitness or diet plan for.\n"
+            "Convert any time expression (in any language) to a number of days.\n"
+            "If no duration is mentioned, return 1.\n"
+            "Reply with ONLY a single integer. No explanation, no units, just the number.\n\n"
+            f"User message: {query}\n\n"
+        )
+        try:
+            response = await llm.ainvoke(prompt)
+            n = int(response.content.strip())
+            return max(n, 1)
+        except Exception:
+            return 1
+
+    def _expand_with_progression(self, workout_list: list, n_days: int) -> list:
+        import math
+        import re
+        
+        # 1. Group exercises by original day
+        day_groups = []
+        current_day_str = None
+        current_group = []
+        
+        for ex in workout_list:
+            ex_day = ex.get("day", "") if isinstance(ex, dict) else getattr(ex, "day", "")
+            
+            # FILTER OUT LLM HALLUCINATED STATIC REPEATS!
+            if "repeat" in str(ex_day).lower() or "repeat" in str(ex.get("name", "") if isinstance(ex, dict) else getattr(ex, "name", "")).lower():
+                continue
+                
+            if ex_day != current_day_str:
+                if current_group:
+                    day_groups.append(current_group)
+                current_day_str = ex_day
+                current_group = []
+            current_group.append(ex)
+            
+        if current_group:
+            day_groups.append(current_group)
+            
+        cycle_length = len(day_groups)
+        if cycle_length == 0 or cycle_length >= n_days:
+            return workout_list # No expansion needed
+            
+        expanded = []
+        for target_day in range(1, n_days + 1):
+            cycle_idx = (target_day - 1) % cycle_length
+            cycle_num = math.ceil(target_day / cycle_length)
+            original_group = day_groups[cycle_idx]
+            
+            for ex in original_group:
+                new_ex = ex.model_dump() if hasattr(ex, "model_dump") else dict(ex)
+                
+                orig_day = new_ex.get("day", "")
+                day_type = orig_day
+                match = re.search(r'Day \d+\s*-\s*(.*)', orig_day, re.IGNORECASE)
+                if match:
+                    # Clean out any existing (Cycle X) string from LLM output
+                    day_type = re.sub(r'\(Cycle.*?\)', '', match.group(1)).strip()
+                    
+                new_ex["day"] = f"Day {target_day} - {day_type} (Cycle {cycle_num})"
+                
+                # Apply Progressive Overload
+                if cycle_num > 1 and "rest" not in str(new_ex.get("name", "")).lower() and "stretch" not in str(new_ex.get("name", "")).lower():
+                    # Modify sets slightly
+                    sets_str = str(new_ex.get("sets", "3"))
+                    sets_match = re.search(r'(\d+)', sets_str)
+                    if sets_match:
+                        s_val = int(sets_match.group(1))
+                        if cycle_num % 2 == 0:
+                            s_val += 1
+                        new_ex["sets"] = sets_str.replace(sets_match.group(1), str(min(s_val, 6)))
+                        
+                    # Modify reps slightly
+                    reps_str = str(new_ex.get("reps", ""))
+                    if "sec" not in reps_str.lower() and "min" not in reps_str.lower():
+                        reps_match = re.findall(r'(\d+)', reps_str)
+                        if len(reps_match) == 2:
+                            r1, r2 = int(reps_match[0]), int(reps_match[1])
+                            r1 += (cycle_num - 1) * 2
+                            r2 += (cycle_num - 1) * 2
+                            new_ex["reps"] = f"{r1}-{r2}"
+                        elif len(reps_match) == 1:
+                            r1 = int(reps_match[0])
+                            r1 += (cycle_num - 1) * 2
+                            new_ex["reps"] = f"{r1}"
+                            
+                    # Add overload tip
+                    desc = new_ex.get("description", "")
+                    if "Progressive Overload" not in desc:
+                        new_ex["description"] = desc + f"\n\n🔥 **Progressive Overload (Cycle {cycle_num})**: Try to increase the weight by 2.5kg or push for extra reps compared to Cycle 1."
+                        
+                expanded.append(new_ex)
+                
+        return expanded
+
     async def run(self, state: AgentState) -> Dict[str, Any]:
-        return await self.run_logic(state, specialist_key="training", topic="fitness workout exercise")
+        # Inject max_training_days into state so run_logic passes it to the prompt.
+        safe_output_tokens = 3680   # gpt-4o-mini with 10% safety margin
+        tokens_per_exercise = 150   # sets + reps + description + benefit (safer buffer)
+        exercises_per_day   = 6     # typical session volume max
+        max_days = max(1, safe_output_tokens // (tokens_per_exercise * exercises_per_day))
+        # Store so run_logic picks it up via prompt_vars injection below
+        state = dict(state)
+        state.setdefault("_extra_prompt_vars", {})["max_training_days"] = max_days
+        
+        query = state['messages'][-1].content
+        n_days = await self._detect_n_days(query)
+        
+        result = await self.run_logic(state, specialist_key="training", topic="fitness workout exercise")
+        
+        if n_days > 1 and "specialist_results" in result and "training" in result["specialist_results"]:
+            training_data = result["specialist_results"]["training"]
+            workout_list = training_data.get("workout", [])
+            
+            if workout_list:
+                expanded_workout = self._expand_with_progression(workout_list, n_days)
+                training_data["workout"] = expanded_workout
+                
+        return result
 
     def _format_context(self, results: List[Dict]) -> str:
         """Convert DB results into meaningful exercise context."""
