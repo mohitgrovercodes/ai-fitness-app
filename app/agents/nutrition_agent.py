@@ -85,7 +85,8 @@ STRICT POLICIES:
     
     PESCATARIAN:
     - NO red meat (beef, pork, lamb, mutton) and NO poultry (chicken, turkey).
-    - Seafood (fish, shellfish) is the ONLY animal protein.
+    - CRITICAL: You MUST include seafood (e.g., Salmon, Tuna, Shrimp, Sardines) in at least 30-40% of the main meals. Do NOT output a purely vegetarian plan.
+    - Seafood (fish, shellfish) is the primary animal protein.
     - Include: whole grains, legumes, vegetables, fruits, nuts, seeds, healthy oils.
     - Optional: eggs and dairy (if not vegan).
     
@@ -108,6 +109,7 @@ STRICT POLICIES:
 - PORTION SIZING & MACRO MATH: The database provides values per 100g. Scale portions appropriately so that the `daily_totals` actually sum up to the target calories required for their goal!
 - STRUCTURED JSON FIELDS: You MUST populate the `summary`, `meals`, `daily_totals`, and `tip` fields with structured data for interactive UI display.
 - CLEAN TEXT RESPONSE: The `final_answer` string MUST be a warm, motivating paragraph (3-4 sentences) explaining how this meal plan strategically helps the user's goal. However, DO NOT list the individual meals, bullet points, or raw macros inside `final_answer`.
+- CONTEXT-AWARE MEAL TIMING (CRITICAL): If a day is labeled as a "Rest Day" or "Active Recovery Day", you MUST NOT include 'Pre-Workout' or 'Post-Workout' meal types. Substitute them dynamically with standard snack types like 'Morning Snack' or 'Evening Snack'. 'Pre-Workout' and 'Post-Workout' meal types are ONLY allowed on active 'Training Days'.
 - CRITICAL: If the user is referring to an uploaded image (e.g. "what is this?", "these calories"), DO NOT guess the food. The Vision Agent will handle it. ONLY provide nutrition info for foods the user EXPLICITLY names in their text. If they didn't name a food, just give general advice and do not mention any specific food from the database.
 
 DATA SANITY CHECK (MANDATORY — apply to EVERY retrieved food before using it):
@@ -119,7 +121,7 @@ DATA SANITY CHECK (MANDATORY — apply to EVERY retrieved food before using it):
   • For Standard Weight/Muscle Gain diets, moderate fat is acceptable, but scale it dynamically to fit their goal without forcing an arbitrary ceiling.
 - SANITY RULE 4 (CEILING): No single meal may exceed its allocated % of the daily target.
 - SANITY RULE 5 (SUM VERIFICATION): After generating all meals, SUM their calories. If sum < daily target, SCALE UP portions of healthy foods already chosen.
-- SANITY RULE 6 (NO DUPLICATES & EXPERT FALLBACK): NEVER repeat the same food item in more than one meal slot. If the database returns limited items, use your EXPERT KNOWLEDGE to generate healthy, goal-aligned meals consistent with the user's dietary preference.
+- SANITY RULE 6 (ANTI-REPETITION & UNIQUE MEAL ENGINE): Banish all repeating meal loops. You are STRICTLY FORBIDDEN from using an A/B alternating day pattern (where Day 3 repeats Day 1, or Day 4 repeats Day 2). Every single day in the cycle MUST feature completely unique main meals and smoothies that have not appeared on any previous day. Give meals practical, descriptive names (e.g., "Grilled Salmon with Quinoa") and STRICTLY AVOID vague, unrealistic, or dessert-heavy titles like "One Minute Decadence" or "Choc Chip Ice Cream" in a fitness plan. If the database returns limited items, use your EXPERT KNOWLEDGE to generate healthy, diverse, goal-aligned meals.
 
 MULTI-DAY PLAN RULES (CRITICAL):
 - Detect exactly what duration (N days) the user is asking for from their message:
@@ -149,14 +151,14 @@ GOAL-SPECIFIC DIETARY RULES (MANDATORY):
 
 🔴 WEIGHT LOSS (when user mentions: lose weight, fat loss, slim down, lose Xkg):
 - Daily calories: Dynamically calculate a sustainable, healthy calorie deficit based on the user's estimated TDEE. You MUST strictly avoid generating unsustainably low calorie counts.
-- Protein: Dynamically calculate optimal protein intake based on the user's estimated body weight to preserve muscle mass.
+- Protein: MUST exceed 90g-130g daily to preserve muscle mass. Heavily utilize high-protein sources like Greek yogurt, eggs, tofu, whey, or fish (if allowed by diet).
 - CLEAN EATING MANDATE: You MUST prioritize clean, high-volume, single-ingredient foods (e.g., dal, oats, sprouts, roasted chana, grilled tofu/paneer, huge green salads, khichdi, boiled vegetables).
 - STRICTLY AVOID recommending heavy comfort foods, fried foods (pakoras, nuggets, vada, fries), and calorie-dense pasta/lasagne/burgers on a daily basis. These are NOT fat loss foods.
 - Prefer: High-protein lean sources tailored dynamically to the user's specific diet type.
 
 🟢 WEIGHT GAIN / MUSCLE GAIN (when user mentions: gain weight, muscle gain, bulking):
 - Daily calories: Dynamically calculate a healthy calorie surplus based on the user's estimated TDEE to support steady weight gain.
-- Protein: Dynamically calculate optimal high-protein intake required to support muscle hypertrophy and recovery.
+- Protein: MUST exceed 100g-140g daily to support muscle hypertrophy and recovery. Use high-protein sources.
 - Prefer: Dynamically select high-quality, calorie-dense nutritious foods that strictly align with the user's specific dietary preferences.
 
 ⚖️ GENERAL FITNESS / MAINTENANCE:
@@ -743,20 +745,44 @@ Current Context: {summary}
                 total_prot_new = 0.0
                 total_fat_new  = 0.0
                 total_cal_new  = 0.0
+                diet_pref = "None"
+                if state and "user_context" in state:
+                    diet_pref = str(state["user_context"].get("diet_preference") or "None").lower()
+
                 for meal in unique_meals:
-                    m_prot  = parse_num(meal.get("protein", 0)) * prot_ratio
+                    old_prot = parse_num(meal.get("protein", 0))
+                    m_prot  = old_prot * prot_ratio
                     m_fat   = parse_num(meal.get("fat",     0))
                     m_carbs = parse_num(meal.get("carbs",   0))
                     # Reduce fat to compensate the added protein calories so
                     # total calories stay close to target (1g protein = 4 kcal,
                     # 1g fat = 9 kcal — pure physiology, no goal rule).
-                    added_prot_kcal = (m_prot - parse_num(meal.get("protein", 0))) * 4
+                    added_prot = m_prot - old_prot
+                    added_prot_kcal = added_prot * 4
                     fat_reduction_g = min(m_fat, added_prot_kcal / 9)
                     m_fat = max(0.0, m_fat - fat_reduction_g)
 
                     meal["protein"] = f"{round(m_prot,  1)}g"
                     meal["fat"]     = f"{round(m_fat,   1)}g"
                     meal["calories"] = round((m_prot*4) + (m_carbs*4) + (m_fat*9), 1)
+
+                    # Dynamic portion scaling & justification
+                    if added_prot >= 5.0:
+                        meal_name = meal.get("name", "")
+                        if "(+" not in meal_name and "fortified" not in meal_name.lower():
+                            is_veg = any(v in diet_pref for v in ["vegan", "veg", "vegetarian"])
+                            added_source = "Protein Powder" if is_veg else "Lean Protein Source"
+                            meal["name"] = f"{meal_name} (+ {round(added_prot)}g {added_source})"
+                        
+                        portion_str = str(meal.get("portion", "100g"))
+                        if portion_str.endswith("g"):
+                            try:
+                                portion_val = float(portion_str[:-1].strip())
+                                # Scale portion assuming average protein source is 30% protein density
+                                added_portion_weight = added_prot / 0.3
+                                meal["portion"] = f"{round(portion_val + added_portion_weight)}g"
+                            except ValueError:
+                                pass
 
                     total_prot_new += m_prot
                     total_fat_new  += m_fat
