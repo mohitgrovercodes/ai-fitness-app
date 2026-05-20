@@ -161,29 +161,32 @@ class AIService:
         finally:
             db.close()
         
-        # Extract new fields from API payload
-        new_weight = data.get("weight")
-        new_height = data.get("height")
-        new_gender = data.get("gender")
-
         # Merge: request data overrides DB context
         merged_context = {
-            **db_context, 
-            "goal": goal or db_context.get("goal", ""), 
-            "level": level, 
-            "injuries": injuries or db_context.get("injuries", []),
-            "weight_kg": new_weight if new_weight else db_context.get("weight_kg"),
-            "height_cm": new_height if new_height else db_context.get("height_cm"),
-            "gender": new_gender if new_gender else db_context.get("gender")
+            **db_context,
+            "goal":           goal or db_context.get("goal", ""),
+            "activity_level": level or db_context.get("activity_level", ""),
+            "injuries":       injuries or db_context.get("injuries", []),
         }
+        
+        # Override body-level fields if explicitly sent in the payload
+        if data.get("height"):  merged_context["height_cm"]  = data.get("height")
+        if data.get("weight"):  merged_context["weight_kg"]  = data.get("weight")
+        if data.get("gender"):  merged_context["gender"]     = data.get("gender")
+
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
-        user_input = data.get("message")
-        if not user_input:
+        user_input = data.get("message", "").strip() if data.get("message") else ""
+        if user_input:
+            from app.utils.logger import logger as _log
+            _log.info(f"📩 [generate_workout] Using user message: '{user_input}'")
+        else:
             parts = ["Create a structured workout plan"]
-            if goal: parts.append(f"for {goal}")
-            if level: parts.append(f"at a {level} fitness level")
+            if goal:     parts.append(f"for {goal}")
+            if level:    parts.append(f"at a {level} fitness level")
             if duration: parts.append(f"for a duration of {duration}")
             user_input = " ".join(parts) + "."
+            from app.utils.logger import logger as _log
+            _log.info(f"📩 [generate_workout] No message in body — auto-built: '{user_input}'")
         
         state = {
             "messages": [HumanMessage(content=user_input)],
@@ -299,8 +302,11 @@ class AIService:
         }
         
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
-        user_input = data.get("message")
-        if not user_input:
+        user_input = data.get("message", "").strip() if data.get("message") else ""
+        if user_input:
+            from app.utils.logger import logger as _log
+            _log.info(f"📩 [generate_diet] Using user message: '{user_input}'")
+        else:
             duration = data.get("duration", "")  # e.g. "daily", "weekly", "monthly", "10 days", "45 days"
             parts = ["Create a structured meal plan"]
             if duration:
@@ -314,6 +320,8 @@ class AIService:
             if allergies:
                 parts.append(f". Avoid these allergens: {', '.join(allergies)}")
             user_input = " ".join(parts) + "."
+            from app.utils.logger import logger as _log
+            _log.info(f"📩 [generate_diet] No message in body — auto-built: '{user_input}'")
         
         state = {
             "messages": [HumanMessage(content=user_input)],

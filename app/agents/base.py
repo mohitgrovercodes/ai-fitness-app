@@ -153,6 +153,11 @@ class BaseRAGAgent:
             "intelligence_context": intelligence_context,
         }
 
+        # Merge any extra variables injected by subclasses (e.g. max_training_days)
+        extra_vars = state.get("_extra_prompt_vars", {})
+        if extra_vars:
+            prompt_vars.update(extra_vars)
+
         analysis = await chain.ainvoke(prompt_vars)
 
         logger.info(f"[{self.agent_name}] Accurate: {analysis.is_accurate} | Web needed: {analysis.needs_web_search}")
@@ -279,6 +284,6 @@ class BaseRAGAgent:
             f"  {cal_line}\n"
             f"  Diet Constraint: {diet}\n"
             f"  Injury/Medical Constraints: {injuries} | {medical}\n"
-            f"  → Determine the most appropriate exercise type, rep ranges, macro split, "
+            f"  \u2192 Determine the most appropriate exercise type, rep ranges, macro split, "
             f"    and food priorities based on the goal above. Do NOT use generic defaults."
         )
