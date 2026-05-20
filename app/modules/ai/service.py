@@ -42,11 +42,11 @@ class AIService:
                 )
                 current_goal = profile.goal or ""
                 if "loss" in current_goal.lower() or "lose" in current_goal.lower() or "decrease" in current_goal.lower():
-                    target_cal = tdee_data["weight_loss_target"]
+                    target_cal = tdee_data["cal_loss"]
                 elif "gain" in current_goal.lower() or "bulk" in current_goal.lower() or "increase" in current_goal.lower():
-                    target_cal = tdee_data["weight_gain_target"]
+                    target_cal = tdee_data["cal_gain"]
                 else:
-                    target_cal = tdee_data["maintenance_target"]
+                    target_cal = tdee_data["cal_maintenance"]
 
                 db_context = {
                     "full_name": profile.full_name,

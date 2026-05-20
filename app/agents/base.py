@@ -44,9 +44,9 @@ def _compute_tdee(weight_kg, height_cm, age, gender: str, activity_level: str) -
     return {
         "bmr":             round(bmr),
         "tdee":            round(tdee),
-        "weight_loss_target":        round(max(bmr, tdee * 0.80)),   # 20 % deficit, never below BMR
-        "maintenance_target": round(tdee),
-        "weight_gain_target":        round(tdee * 1.15),             # 15 % surplus
+        "cal_loss":        round(max(bmr, tdee * 0.80)),   # 20 % deficit, never below BMR
+        "cal_maintenance": round(tdee),
+        "cal_gain":        round(tdee * 1.15),             # 15 % surplus
     }
 
 
