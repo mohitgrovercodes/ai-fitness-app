@@ -265,6 +265,15 @@ class AIService:
                     cal_loss = cal_maintenance = cal_gain = 0
 
                 current_goal = profile.goal or goal
+                
+                target_cal = cal_maintenance
+                if current_goal:
+                    g_lower = current_goal.lower()
+                    if "loss" in g_lower or "lose" in g_lower or "decrease" in g_lower:
+                        target_cal = cal_loss
+                    elif "gain" in g_lower or "bulk" in g_lower or "increase" in g_lower:
+                        target_cal = cal_gain
+
                 db_context = {
                     "full_name":          profile.full_name,
                     "age":                profile.age,
@@ -281,6 +290,7 @@ class AIService:
                     "cal_loss":           cal_loss,
                     "cal_maintenance":    cal_maintenance,
                     "cal_gain":           cal_gain,
+                    "target_calories":    target_cal
                 }
         finally:
             db.close()

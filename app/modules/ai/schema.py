@@ -20,7 +20,6 @@ class DietGenerationRequest(BaseModel):
     gender: str = Field(..., description="Gender male or female or not specified")
     height: int = Field(..., description="height of the user")
     weight: int = Field(..., description="user weight")
-    diet_prefrence: str = Field(..., description="User diet preference")
     allergies: Optional[List[str]] = Field(default_factory=list, description="Food allergies to avoid.")
     message: Optional[str] = Field(None, description="Optional custom instructions or query override.")
 

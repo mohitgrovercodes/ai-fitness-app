@@ -18,13 +18,19 @@ class WorkoutExercise(BaseModel):
     gif_path: Optional[str] = Field(default="", description="Exact relative path to the GIF (e.g., videos/0044-XlZ4lAC.gif)")
     image_path: Optional[str] = Field(default="", description="Exact relative path to the Image (e.g., images/0044-XlZ4lAC.jpg)")
 
+class RestDay(BaseModel):
+    day: str = Field(description="Day label (e.g., 'Day 3 - Rest')")
+    benefit: str = Field(description="Why resting is important here.")
+    description: str = Field(description="What the user should do on this rest day (e.g. hydration, active recovery).")
+
 class TrainingAnalysis(BaseModel):
     is_accurate: bool = Field(description="Are the retrieved exercises relevant and safe?")
     needs_web_search: bool = Field(description="True if exercise is unknown or local DB lacks info.")
     sub_queries: List[str] = Field(default=[], description="Alternative search terms for routines.")
     final_answer: str = Field(description="Full text markdown response for chat users.")
     summary: str = Field(default="", description="Brief introduction/summary of the workout.")
-    workout: List[WorkoutExercise] = Field(default=[], description="List of structured exercises.")
+    workout: List[WorkoutExercise] = Field(default=[], description="List of structured active physical exercises.")
+    rest_days: List[RestDay] = Field(default=[], description="List of rest days. Must be completely separate from the workout list.")
     tip: str = Field(default="", description="Closing tip for safety or cooldown.")
     exercise_gifs: Dict[str, str] = Field(default={}, description="Mapping of exercise name to GIF relative path.")
     exercise_images: Dict[str, str] = Field(default={}, description="Mapping of exercise name to Image relative path.")
@@ -42,10 +48,10 @@ Your goal is to provide accurate, safe workout advice based on retrieved data.
 
 STRICT POLICIES:
 1. SAFETY FIRST: Always mention proper form or warm-ups if appropriate.
-2. HYBRID DATABASE & EXPERT USAGE: You MUST prioritize building the workout using the exercises provided in the retrieved data. However, if the retrieved exercises are NOT SUFFICIENT for the user's specific goal (e.g., losing 8kg requires significant cardio/full-body movements, but DB only has push-ups), you are AUTHORIZED to use your expert knowledge to inject necessary exercises (like Brisk Walking, Jogging, Cycling). For expert-added exercises, leave `gif_path` and `image_path` completely empty (""). Set `is_accurate` to true.
+2. MASTER TRAINER HYBRID DB USAGE: You must pull from the retrieved database, BUT YOU ARE THE MASTER TRAINER. If the retrieved exercises do not perfectly map to the required muscles for the given day, you MUST DISCARD THEM and use your expert knowledge to generate proper, biomechanically accurate exercises. For expert-added exercises, leave `gif_path` and `image_path` completely empty ("").
 3. COMPREHENSIVE WORKOUT PLAN: A proper workout plan MUST cover a full routine based on the user's goal. It should dynamically include a mix of necessary components (e.g., warm-up/cardio, main strength/core exercises, and cool-down). Do NOT just provide 1 or 2 isolated exercises. If the database only gives you 1 exercise, you MUST use your expert knowledge to dynamically build out the rest of a complete, balanced routine that realistically addresses the user's goal.
 4. ADAPTABILITY & DYNAMIC PROGRAMMING: Adapt advice based on injuries and dietary preferences (e.g., if a user is Vegan or Keto, suggest appropriate intensity or recovery based on their likely macro intake if relevant). Critically, you MUST dynamically calculate sets and reps for EACH exercise based on the user's goal (e.g., Hypertrophy = 8-12 reps, Strength = 3-5 reps, Endurance = 15+ reps, Planks = 30-60s). DO NOT give a static 3 sets of 10-12 reps for everything.
-5. STRUCTURED JSON FIELDS: You MUST populate the `summary`, `workout` (list of exercises), and `tip` fields with structured data for interactive UI display.
+5. STRUCTURED JSON FIELDS: You MUST populate the `summary`, `workout` (list of exercises), `rest_days` (list of rest days), and `tip` fields with structured data. `workout` MUST ONLY contain actual physical exercises.
 6. MEDIA PATHS: You MUST include the correct `gif_path` and `image_path` directly inside each exercise object in the `workout` list.
 7. CLEAN TEXT RESPONSE: The `final_answer` string MUST ONLY contain a polite greeting and a brief 1-2 sentence intro. DO NOT list the exercises, sets, reps, or media paths inside `final_answer`. Put the data ONLY in the structured JSON fields.
 8. NO SYSTEM TALK: NEVER use phrases like "based on the retrieved data", "the database doesn't have", or "the retrieved exercises". Speak directly as an expert coach.
@@ -70,15 +76,15 @@ MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
       - Week-by-week progressive overload: Week 1 = baseline, Week 2 = +2 reps, Week 3 = +weight, etc.
     STEP 4 — `tip`: State exactly: "Repeat this X-day cycle Y times over N days. Increase [metric] each week."
     You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push (Cycle Day 1)").
-- DYNAMIC REST DAYS: You are authorized to create Rest Days where the exercise name is "Rest" or "Light Stretching".
-- DYNAMIC DAILY VOLUME: DO NOT just divide the retrieved exercises across the days. A single day MUST be a complete workout session on its own. Dynamically decide the number of exercises per day based on the split type (e.g., an intense Leg Day might need 5-7 exercises, while an Active Recovery day might only need 2-3 stretches). If the database didn't provide enough exercises for a complete daily session, use your expert knowledge to inject the missing exercises.
-- ANATOMICAL BALANCE MANDATE: Every active workout day generated MUST be anatomically balanced. For example, if a day is "Full Body Strength", you MUST dynamically include at least one chest exercise, one back exercise, one shoulder exercise, and one core/mobility exercise. Do not spam a single region (like legs or lunges) while ignoring upper body.
+- DYNAMIC REST DAYS (CRITICAL): If a day is meant for rest or active recovery, you MUST put it entirely inside the `rest_days` array. DO NOT create a fake 'Rest' exercise inside the `workout` array. The `workout` array must remain 100% clean, containing only active physical exercises.
+- DYNAMIC DAILY VOLUME & VARIETY: DO NOT just divide the retrieved exercises across the days, and DO NOT repeat the exact same exercises on different days of a cycle. Generate a massive pool of 20-30 DIVERSE exercises across the cycle (e.g. Incline Press on Day 1, Flat Press on Day 4). An intense day should have 5-8 exercises.
+- BIOMECHANICAL ANATOMY VALIDATOR (CRITICAL): You MUST strictly enforce muscle mapping. If a day is "Upper Body", you are FORBIDDEN from including Core or Leg exercises (like Groiners or Leg Lifts). If a day is "Lower Body", you are FORBIDDEN from including Chest or Arm exercises.
+- THE BIG 5 COMPOUND RULE: If generating a Lower Body or Full Body day, you MUST explicitly include at least one major compound lift (e.g., Barbell Squat, Leg Press, Deadlift variation, or Walking Lunges). If the database didn't return these, use your expert knowledge to inject them dynamically. Never output a Lower Body day that only has isolation exercises like Back Extensions or Leg Raises.
 
 INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC — BIOMECHANICS SAFETY PROTOCOL):
 - When the user reports ANY injury, pain, or medical condition, you MUST dynamically deduce the affected muscles, joints, and skeletal regions.
-- CRITICAL: You are STRICTLY FORBIDDEN from including any exercise that loads, stresses, or impacts the deduced injured/painful areas.
-  • If knee, leg, ankle, or hip pain is mentioned: You MUST dynamically ban all lunges, squats, leg presses, thigh-focused movements, and high-impact leg exercises. Forcefully replace them with seated exercises, upper body work, swimming, cycling, or active recovery mobility stretching.
-  • If shoulder, elbow, or wrist pain/injury is mentioned: Dynamically ban overhead presses, heavy pushups, or loading wrist positions. Substitute with safe back/chest/core work.
+- CRITICAL AVOIDANCE: You are STRICTLY FORBIDDEN from including any heavy exercise that loads, stresses, or impacts the deduced injured/painful areas (e.g., ban squats/lunges for leg pain; ban overhead presses for shoulder pain). If the retrieved database exercises violate this, you MUST DISCARD them and use your expert knowledge to generate safe alternatives.
+- REAL RECOVERY PROTOCOL: Instead of just ignoring the injured area, you MUST dynamically include specific Rehab, Mobility, or Stretching exercises targeted at safely recovering the injured joint (e.g., gentle seated stretches for knee pain, wrist flexor stretches for wrist pain). Also dynamically include warm-ups and cooldowns in your routine.
 - You MUST explicitly state in the `description` or `benefit` field how you adapted the selection to protect the injury (e.g., "Substituted with Seated Press to protect your injured joint").
 - Always include a specific injury-safe warning in the `tip` field.
 
@@ -143,57 +149,53 @@ Current Context: {summary}
         except Exception:
             return 1
 
-    def _expand_with_progression(self, workout_list: list, n_days: int) -> list:
+    def _expand_cycle(self, workout_list: list, rest_list: list, n_days: int) -> tuple:
         import math
         import re
-        
-        # 1. Group exercises by original day
-        day_groups = []
-        current_day_str = None
-        current_group = []
-        
+
+        # Filter out LLM static repeats
+        workout_list = [ex for ex in workout_list if "repeat" not in str(ex.get("day", "") if isinstance(ex, dict) else getattr(ex, "day", "")).lower()]
+        rest_list = [r for r in rest_list if "repeat" not in str(r.get("day", "") if isinstance(r, dict) else getattr(r, "day", "")).lower()]
+
+        # Combine all days to find cycle sequence
+        all_days = set()
         for ex in workout_list:
-            ex_day = ex.get("day", "") if isinstance(ex, dict) else getattr(ex, "day", "")
-            
-            # FILTER OUT LLM HALLUCINATED STATIC REPEATS!
-            if "repeat" in str(ex_day).lower() or "repeat" in str(ex.get("name", "") if isinstance(ex, dict) else getattr(ex, "name", "")).lower():
-                continue
-                
-            if ex_day != current_day_str:
-                if current_group:
-                    day_groups.append(current_group)
-                current_day_str = ex_day
-                current_group = []
-            current_group.append(ex)
-            
-        if current_group:
-            day_groups.append(current_group)
-            
-        cycle_length = len(day_groups)
+            all_days.add(ex.get("day", "") if isinstance(ex, dict) else getattr(ex, "day", ""))
+        for r in rest_list:
+            all_days.add(r.get("day", "") if isinstance(r, dict) else getattr(r, "day", ""))
+        
+        # Sort by day number
+        def extract_day_num(d_str):
+            match = re.search(r'Day\s*(\d+)', d_str, re.IGNORECASE)
+            return int(match.group(1)) if match else 999
+
+        sorted_days = sorted(list(all_days), key=extract_day_num)
+        cycle_length = len(sorted_days)
+
         if cycle_length == 0 or cycle_length >= n_days:
-            return workout_list # No expansion needed
-            
-        expanded = []
+            return workout_list, rest_list
+
+        expanded_workouts = []
+        expanded_rests = []
+
         for target_day in range(1, n_days + 1):
             cycle_idx = (target_day - 1) % cycle_length
             cycle_num = math.ceil(target_day / cycle_length)
-            original_group = day_groups[cycle_idx]
+            orig_day_str = sorted_days[cycle_idx]
             
-            for ex in original_group:
+            day_type = orig_day_str
+            match = re.search(r'Day \d+\s*-\s*(.*)', orig_day_str, re.IGNORECASE)
+            if match:
+                day_type = re.sub(r'\(Cycle.*?\)', '', match.group(1)).strip()
+            new_day_str = f"Day {target_day} - {day_type} (Cycle {cycle_num})"
+
+            # Workouts
+            w_items = [ex for ex in workout_list if (ex.get("day", "") if isinstance(ex, dict) else getattr(ex, "day", "")) == orig_day_str]
+            for ex in w_items:
                 new_ex = ex.model_dump() if hasattr(ex, "model_dump") else dict(ex)
+                new_ex["day"] = new_day_str
                 
-                orig_day = new_ex.get("day", "")
-                day_type = orig_day
-                match = re.search(r'Day \d+\s*-\s*(.*)', orig_day, re.IGNORECASE)
-                if match:
-                    # Clean out any existing (Cycle X) string from LLM output
-                    day_type = re.sub(r'\(Cycle.*?\)', '', match.group(1)).strip()
-                    
-                new_ex["day"] = f"Day {target_day} - {day_type} (Cycle {cycle_num})"
-                
-                # Apply Progressive Overload
                 if cycle_num > 1 and "rest" not in str(new_ex.get("name", "")).lower() and "stretch" not in str(new_ex.get("name", "")).lower():
-                    # Modify sets slightly
                     sets_str = str(new_ex.get("sets", "3"))
                     sets_match = re.search(r'(\d+)', sets_str)
                     if sets_match:
@@ -201,8 +203,7 @@ Current Context: {summary}
                         if cycle_num % 2 == 0:
                             s_val += 1
                         new_ex["sets"] = sets_str.replace(sets_match.group(1), str(min(s_val, 6)))
-                        
-                    # Modify reps slightly
+
                     reps_str = str(new_ex.get("reps", ""))
                     if "sec" not in reps_str.lower() and "min" not in reps_str.lower():
                         reps_match = re.findall(r'(\d+)', reps_str)
@@ -215,15 +216,20 @@ Current Context: {summary}
                             r1 = int(reps_match[0])
                             r1 += (cycle_num - 1) * 2
                             new_ex["reps"] = f"{r1}"
-                            
-                    # Add overload tip
+
                     desc = new_ex.get("description", "")
                     if "Progressive Overload" not in desc:
                         new_ex["description"] = desc + f"\n\n🔥 **Progressive Overload (Cycle {cycle_num})**: Try to increase the weight by 2.5kg or push for extra reps compared to Cycle 1."
-                        
-                expanded.append(new_ex)
-                
-        return expanded
+                expanded_workouts.append(new_ex)
+
+            # Rests
+            r_items = [r for r in rest_list if (r.get("day", "") if isinstance(r, dict) else getattr(r, "day", "")) == orig_day_str]
+            for r in r_items:
+                new_r = r.model_dump() if hasattr(r, "model_dump") else dict(r)
+                new_r["day"] = new_day_str
+                expanded_rests.append(new_r)
+
+        return expanded_workouts, expanded_rests
 
     async def run(self, state: AgentState) -> Dict[str, Any]:
         # Inject max_training_days into state so run_logic passes it to the prompt.
@@ -243,10 +249,12 @@ Current Context: {summary}
         if n_days > 1 and "specialist_results" in result and "training" in result["specialist_results"]:
             training_data = result["specialist_results"]["training"]
             workout_list = training_data.get("workout", [])
+            rest_list = training_data.get("rest_days", [])
             
-            if workout_list:
-                expanded_workout = self._expand_with_progression(workout_list, n_days)
-                training_data["workout"] = expanded_workout
+            if workout_list or rest_list:
+                e_workout, e_rest = self._expand_cycle(workout_list, rest_list, n_days)
+                training_data["workout"] = e_workout
+                training_data["rest_days"] = e_rest
                 
         return result
 

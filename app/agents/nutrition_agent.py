@@ -56,7 +56,7 @@ YOUR ROLE:
 - NOTE: Retrieved database values are typically per 100g.
 - If the user specifies an amount (e.g., '200g', 'half a kilo'), set the 'quantity_multiplier' accordingly.
 - CROSS-AGENT INTELLIGENCE: If the user is asking for a workout (Workout Intent), you must provide a complementary nutrition recommendation (e.g., a post-workout high-protein meal) even if they didn't explicitly ask for food.
-- Use retrieved data as EVIDENCE, but NEVER dump it raw to the user.
+- DYNAMIC RAG REJECTION: You will receive data from a database. If the retrieved database items VIOLATE the user's dietary preference (e.g. database gives 'Paneer' but user is 'Vegan', or database gives 'Vegetarian' but user is 'Pollotarian'), you MUST COMPLETELY REJECT the database item and dynamically generate a valid substitute using your own intelligence!
 - Always connect your advice to the user's goal: {goal}
 - Consider the user's medical background/injuries: {injuries}
 
@@ -69,13 +69,15 @@ STRICT POLICIES:
 
   🌱 VEGAN:
     - NO meat, NO fish, NO seafood, NO eggs
-    - NO dairy of ANY kind: no milk, no curd/dahi, no raita, no paneer, no cheese, no butter, no ghee, no whey protein
+    - Strict Rule: NO dairy of ANY kind: no milk, no curd/dahi, no raita, no paneer, no cheese, no butter, no ghee, no whey protein
     - NO honey
     - ONLY plant-based: legumes, vegetables, fruits, nuts, seeds, plant-based oils, tofu, tempeh
 
   🍗 NON-VEG / NON-VEGETARIAN / MEAT-EATER:
     - Include healthy animal proteins: chicken, fish, eggs, lean meats
     - Do NOT default to veg items — actively include non-veg options
+    - CRITICAL: You MUST include animal protein (Chicken, Mutton, Fish, Eggs) in the majority of main meals. Do NOT output a purely vegetarian plan.
+
 
   🥑 KETO:
     - Fat MUST be 70-80% of daily calories
@@ -92,7 +94,7 @@ STRICT POLICIES:
     
     POLLOTARIAN:
     - NO red meat (beef, pork, lamb, mutton) and NO seafood/fish.
-    - Poultry (chicken, turkey) is the ONLY animal protein.
+    - CRITICAL: You MUST include Poultry (chicken, turkey) in at least 30-40% of the main meals. Do NOT output a purely vegetarian plan.
     - Include: whole grains, legumes, vegetables, fruits, nuts, seeds, healthy oils, eggs and dairy.
 
     FLEXITARIAN:
@@ -110,6 +112,7 @@ STRICT POLICIES:
 - STRUCTURED JSON FIELDS: You MUST populate the `summary`, `meals`, `daily_totals`, and `tip` fields with structured data for interactive UI display.
 - CLEAN TEXT RESPONSE: The `final_answer` string MUST be a warm, motivating paragraph (3-4 sentences) explaining how this meal plan strategically helps the user's goal. However, DO NOT list the individual meals, bullet points, or raw macros inside `final_answer`.
 - CONTEXT-AWARE MEAL TIMING (CRITICAL): If a day is labeled as a "Rest Day" or "Active Recovery Day", you MUST NOT include 'Pre-Workout' or 'Post-Workout' meal types. Substitute them dynamically with standard snack types like 'Morning Snack' or 'Evening Snack'. 'Pre-Workout' and 'Post-Workout' meal types are ONLY allowed on active 'Training Days'.
+- MEAL NAMING: DO NOT artificially append " (+ Xg Protein Powder)" to meal names. Rely on whole foods or add a dedicated separate shake meal if needed.
 - CRITICAL: If the user is referring to an uploaded image (e.g. "what is this?", "these calories"), DO NOT guess the food. The Vision Agent will handle it. ONLY provide nutrition info for foods the user EXPLICITLY names in their text. If they didn't name a food, just give general advice and do not mention any specific food from the database.
 
 DATA SANITY CHECK (MANDATORY — apply to EVERY retrieved food before using it):
@@ -121,7 +124,9 @@ DATA SANITY CHECK (MANDATORY — apply to EVERY retrieved food before using it):
   • For Standard Weight/Muscle Gain diets, moderate fat is acceptable, but scale it dynamically to fit their goal without forcing an arbitrary ceiling.
 - SANITY RULE 4 (CEILING): No single meal may exceed its allocated % of the daily target.
 - SANITY RULE 5 (SUM VERIFICATION): After generating all meals, SUM their calories. If sum < daily target, SCALE UP portions of healthy foods already chosen.
-- SANITY RULE 6 (ANTI-REPETITION & UNIQUE MEAL ENGINE): Banish all repeating meal loops. You are STRICTLY FORBIDDEN from using an A/B alternating day pattern (where Day 3 repeats Day 1, or Day 4 repeats Day 2). Every single day in the cycle MUST feature completely unique main meals and smoothies that have not appeared on any previous day. Give meals practical, descriptive names (e.g., "Grilled Salmon with Quinoa") and STRICTLY AVOID vague, unrealistic, or dessert-heavy titles like "One Minute Decadence" or "Choc Chip Ice Cream" in a fitness plan. If the database returns limited items, use your EXPERT KNOWLEDGE to generate healthy, diverse, goal-aligned meals.
+- SANITY RULE 6 (ANTI-REPETITION & UNIQUE MEAL ENGINE): Banish all repeating meal loops. You are STRICTLY FORBIDDEN from using an A/B alternating day pattern (where Day 3 repeats Day 1, or Day 4 repeats Day 2). Every single day in the cycle MUST feature completely unique main meals. DO NOT REPEAT ANY MEAL NAMES FROM THE PREVIOUSLY GENERATED CHUNK MEMORY. Give meals practical, descriptive names (e.g., "Grilled Salmon with Quinoa") and STRICTLY AVOID vague, unrealistic, or dessert-heavy titles.
+- SANITY RULE 7 (PRACTICAL & CHEWABLE FOOD): You MUST prioritize whole, chewable, and culturally relevant practical meals. LIMIT smoothies or protein shakes to an absolute maximum of 1 per day.
+- SANITY RULE 8 (CALORIE PACING): Enforce realistic digestion pacing across the day. Do not clump 1000 calories into one meal. Distribute approximately: Breakfast 25%, Lunch 30%, Snack 15%, Dinner 30%.
 
 MULTI-DAY PLAN RULES (CRITICAL):
 - Detect exactly what duration (N days) the user is asking for from their message:
@@ -210,6 +215,35 @@ Current Context: {summary}
         except Exception:
             return 1
 
+    async def _generate_dynamic_queries(self, goal: str, diet_pref: str) -> list:
+        """
+        Dynamically generates optimized search keywords for the database based on the user's diet.
+        This solves the RAG bias where 'Non-Veg' fetches Vegetarian Indian dishes.
+        """
+        from langchain_openai import ChatOpenAI
+        from app.core.config import settings
+        import json
+
+        if not diet_pref or diet_pref.lower() == "unknown":
+            return [f"{goal} diet plan meals"]
+
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.5, api_key=settings.OPENAI_API_KEY)
+        prompt = (
+            f"You are an expert food database search engineer.\n"
+            f"A user wants to find foods in a massive database for: Goal: {goal}, Diet: {diet_pref}.\n"
+            f"Generate exactly 3 specific Google-style search strings to fetch the correct meals.\n"
+            f"CRITICAL: If the diet is Non-Veg, Pollotarian, or Pescatarian, you MUST explicitly include names of animal proteins (e.g. chicken, fish, eggs) in the search strings! Do NOT just say 'non-veg'.\n"
+            f"Reply ONLY with a JSON array of 3 strings. Example: [\"chicken breast meals\", \"high protein turkey\", \"egg breakfast\"]\n"
+        )
+        try:
+            response = await llm.ainvoke(prompt)
+            queries = json.loads(response.content.strip())
+            if isinstance(queries, list) and len(queries) > 0:
+                return queries
+        except Exception as e:
+            logger.error(f"⚠️ [Nutrition Agent] Failed to generate dynamic queries: {e}")
+        return [f"{diet_pref} meals for {goal}", f"high protein {diet_pref} foods"]
+
     async def run(self, state: AgentState) -> Dict[str, Any]:
         state = dict(state)
         self._rotation_size = self._compute_chunk_size()
@@ -289,9 +323,9 @@ Current Context: {summary}
 
         llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=settings.OPENAI_API_KEY)
         prompt = (
-            f"You are a nutrition coach. A {days_generated}-day meal plan has been generated for a user with goal: {goal}.\n"
+            f"You are a nutrition coach. A {n_days}-day meal plan has been generated for a user with goal: {goal}.\n"
             f"The plan covers: {day_labels_str}{'...' if len(day_labels) > 5 else ''}.\n"
-            + (f"This is a rotation template — the user should repeat it to cover all {n_days} days.\n" if is_rotation else "")
+            + (f"(Note: It was built using a {days_generated}-day core rotation that repeats across the {n_days} days).\n" if is_rotation else "")
             + f"Original request: '{original_query}'\n\n"
             "Write THREE short paragraphs in JSON format:\n"
             '{"summary": "<2 sentences: what the plan covers and how it supports the goal>", '
@@ -358,9 +392,13 @@ Current Context: {summary}
         )
 
         # ── Step 1: Profile-enriched RAG search (Layer 1) ──────────────
-        logger.info(f"🔍 [Nutrition Chunked] Single RAG search for context...")
+        logger.info(f"🔍 [Nutrition Chunked] Multi-Query RAG search for context...")
+        dynamic_queries = await self._generate_dynamic_queries(goal, diet_pref)
+        logger.info(f"🧠 [Smart Search Agent] Generated keywords: {dynamic_queries}")
         enriched_query = self._build_enriched_query(original_query, goal, diet_pref, weight_kg, injuries)
-        db_results = await self.rag_tool.search(enriched_query, diet_preference=diet_pref)
+        
+        # Use multi_query_search to execute parallel parallel dynamic searches
+        db_results = await self.rag_tool.multi_query_search(enriched_query, sub_queries=dynamic_queries, diet_preference=diet_pref)
         context_str = self._format_context(db_results) or "No specific data retrieved."
 
         # ── Step 2: Compute rotation/chunk plan (all dynamic) ────────────────
@@ -393,6 +431,7 @@ Current Context: {summary}
             ("system", self.prompt.messages[0].prompt.template),
             ("human", (
                 "CONVERSATION SUMMARY:\n{conv_summary}\n\n"
+                "PREVIOUSLY GENERATED MEALS (DO NOT REPEAT THESE):\n{previous_meals_memory}\n\n"
                 "ORIGINAL REQUEST: {original_query}\n"
                 "USER GOAL: {goal} | INJURIES: {injuries} | DIET: {diet_pref}\n\n"
                 "{rotation_instruction}"
@@ -413,8 +452,10 @@ Current Context: {summary}
         all_meals = []
         for chunk in DAY_CHUNKS:
             logger.info(f"🍽️  [Nutrition Chunked] Generating {chunk['label']}...")
+            previous_meals_memory = ", ".join(list(set([m.get("name", "") for m in all_meals if m.get("name")]))) or "None"
             try:
                 analysis = await chunk_chain.ainvoke({
+                    "previous_meals_memory": previous_meals_memory,
                     # Human prompt variables
                     "conv_summary":         conv_summary,
                     "original_query":       original_query,
@@ -492,8 +533,12 @@ Current Context: {summary}
                         match = re.search(r'Day \d+\s*-\s*(.*)', orig_day, re.IGNORECASE)
                         if match:
                             day_type = match.group(1).strip()
+                            if "training" in day_type.lower() or "rest" in day_type.lower():
+                                day_type = "Meal Plan"
+                        else:
+                            day_type = "Meal Plan"
                             
-                        # Format the new day string: Day 15 - Training Day (Cycle 3)
+                        # Format the new day string: Day 15 - Meal Plan (Cycle 3)
                         new_meal["day"] = f"Day {target_day} - {day_type} (Cycle {cycle_num})"
                         
                         # DYNAMIC PROGRESSION: Slightly adjust portions/calories for later cycles
@@ -563,6 +608,8 @@ Current Context: {summary}
                 unique_meals.append(meal)
             else:
                 logger.warning(f"❌ [Nutrition Validator] Duplicate in same day: '{meal.get('name')}' on '{day_label}'")
+
+
         # --- Step 2: Correct per-meal calories using 4-4-9 macro rule ---
         def parse_num(val) -> float:
             try:
@@ -577,17 +624,28 @@ Current Context: {summary}
             portion_str = str(meal.get("portion", "100g"))
             portion_g = parse_num(portion_str) or 100.0
 
-            # Physics Validator: Macros cannot exceed portion size
+            # Hydration & Physics Validator: Real food contains water.
             total_macros = prot + carbs + fat
-            if total_macros > portion_g:
-                logger.warning(f"⚠️ [Physics Validator] {meal.get('name')}: macros ({total_macros}g) exceed portion ({portion_g}g). Scaling down.")
-                ratio = portion_g / max(total_macros, 1)
-                prot *= ratio
-                carbs *= ratio
-                fat *= ratio
-                meal["protein"] = f"{round(prot, 1)}g"
-                meal["carbs"] = f"{round(carbs, 1)}g"
-                meal["fat"] = f"{round(fat, 1)}g"
+            meal_name_lower = meal.get("name", "").lower()
+            
+            if any(x in meal_name_lower for x in ["stew", "soup", "shake", "smoothie", "drink", "dal"]):
+                # Liquids/Stews are mostly water. Max 25% macros by weight.
+                if total_macros > portion_g * 0.25:
+                    portion_g = round(total_macros / 0.20)
+                    meal["portion"] = f"{portion_g}g"
+                    logger.warning(f"💧 [Hydration Validator] '{meal.get('name')}': Scaled portion up to {portion_g}g for realistic liquid density.")
+            elif any(x in meal_name_lower for x in ["salad", "bowl", "greens"]):
+                # Salads have high water veggies. Max 40% macros by weight.
+                if total_macros > portion_g * 0.40:
+                    portion_g = round(total_macros / 0.35)
+                    meal["portion"] = f"{portion_g}g"
+                    logger.warning(f"🥗 [Hydration Validator] '{meal.get('name')}': Scaled portion up to {portion_g}g for realistic veggie density.")
+            else:
+                # General Physics: Dry foods still have minimum ~15% water (max 85% macros)
+                if total_macros > portion_g * 0.85:
+                    portion_g = round(total_macros / 0.85)
+                    meal["portion"] = f"{portion_g}g"
+                    logger.warning(f"⚠️ [Physics Validator] '{meal.get('name')}': Scaled portion up to {portion_g}g to respect minimum physical weight.")
 
             macro_calories = round((prot * 4) + (carbs * 4) + (fat * 9), 1)
             llm_calories = parse_num(meal.get("calories", 0))
@@ -766,14 +824,8 @@ Current Context: {summary}
                     meal["fat"]     = f"{round(m_fat,   1)}g"
                     meal["calories"] = round((m_prot*4) + (m_carbs*4) + (m_fat*9), 1)
 
-                    # Dynamic portion scaling & justification
+                    # Dynamic portion scaling
                     if added_prot >= 5.0:
-                        meal_name = meal.get("name", "")
-                        if "(+" not in meal_name and "fortified" not in meal_name.lower():
-                            is_veg = any(v in diet_pref for v in ["vegan", "veg", "vegetarian"])
-                            added_source = "Protein Powder" if is_veg else "Lean Protein Source"
-                            meal["name"] = f"{meal_name} (+ {round(added_prot)}g {added_source})"
-                        
                         portion_str = str(meal.get("portion", "100g"))
                         if portion_str.endswith("g"):
                             try:
@@ -791,6 +843,38 @@ Current Context: {summary}
                 total_prot  = total_prot_new
                 total_fat   = total_fat_new
                 total_cal   = total_cal_new
+
+        # --- Step 7: FAT CAP VALIDATOR (Master Trainer Rule) ---
+        # Hard cap fat to ~35% of total calories to prevent dirty bulking
+        # (unless keto which needs high fat)
+        is_keto = False
+        if state and "user_context" in state:
+            diet_pref = str(state["user_context"].get("diet_preference") or "None").lower()
+            is_keto = "keto" in diet_pref
+            
+        if not is_keto and total_cal > 0:
+            max_fat_cals = total_cal * 0.35
+            max_fat_g = max_fat_cals / 9
+            
+            if total_fat > max_fat_g:
+                fat_ratio = max_fat_g / total_fat
+                logger.info(f"🥑 [Fat Cap Validator] Daily fat ({round(total_fat,1)}g) exceeds 35% cap ({round(max_fat_g,1)}g). Scaling fat down by {fat_ratio:.2f}")
+                
+                total_fat_new = 0.0
+                total_cal_new = 0.0
+                for meal in unique_meals:
+                    m_fat = parse_num(meal.get("fat", 0)) * fat_ratio
+                    m_prot = parse_num(meal.get("protein", 0))
+                    m_carbs = parse_num(meal.get("carbs", 0))
+                    
+                    meal["fat"] = f"{round(m_fat, 1)}g"
+                    meal["calories"] = round((m_prot*4) + (m_carbs*4) + (m_fat*9), 1)
+                    
+                    total_fat_new += m_fat
+                    total_cal_new += meal["calories"]
+                
+                total_fat = total_fat_new
+                total_cal = total_cal_new
 
                 # Rebuild per_day_data after protein scaling
                 per_day_data = {}
