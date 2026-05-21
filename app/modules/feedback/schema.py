@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List,Dict,Any
 from datetime import datetime
 from enum import Enum
 
@@ -14,9 +14,11 @@ class FeedbackCreate(BaseModel):
     session_id: Optional[str] = Field(default=None, description="The conversation thread/session ID.")
     agent_intents: Optional[str] = Field(default=None, description="Comma-separated intents used, e.g. 'nutrition,workout'.")
     user_message: Optional[str] = Field(default=None, description="The user's original query.")
-    ai_response_snippet: Optional[str] = Field(default=None, description="First 500 chars of the AI response.")
+    ai_response_snippet: Dict[str, Any]=Field(default=None,description="AI response ")
     comment: Optional[str] = Field(default=None, description="Optional free-text comment from user.")
 
+
+from typing import Optional, Dict, Any
 
 class FeedbackResponse(BaseModel):
     id: str
@@ -25,9 +27,10 @@ class FeedbackResponse(BaseModel):
     rating: RatingEnum
     agent_intents: Optional[str]
     user_message: Optional[str]
-    ai_response_snippet: Optional[str]
+    ai_response_snippet: Optional[Dict[str, Any]]
     comment: Optional[str]
     created_at: datetime
+
 
     class Config:
         from_attributes = True

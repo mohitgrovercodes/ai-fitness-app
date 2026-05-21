@@ -3,7 +3,7 @@ from sqlalchemy import Column, String, Text, DateTime, Enum as SAEnum
 from app.core.sql_db import Base
 import uuid
 import enum
-
+from sqlalchemy.dialects.mysql import JSON
 
 class RatingEnum(str, enum.Enum):
     up = "up"
@@ -19,7 +19,7 @@ class Feedback(Base):
     rating = Column(SAEnum(RatingEnum), nullable=False)
     agent_intents = Column(String(255), nullable=True)           # e.g. "nutrition,workout"
     user_message = Column(Text, nullable=True)                   # The user's original query
-    ai_response_snippet = Column(Text, nullable=True)            # First 500 chars of AI response
+    ai_response_snippet = Column(JSON, nullable=True)            # First 500 chars of AI response
     comment = Column(Text, nullable=True)                        # Optional free-text from user
     created_at = Column(DateTime, default=datetime.utcnow)
 

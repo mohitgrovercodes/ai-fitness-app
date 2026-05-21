@@ -10,9 +10,8 @@ class FeedbackService:
 
     @staticmethod
     def submit(db: Session, user_id: str, data: FeedbackCreate) -> Feedback:
-        """Store a new feedback entry from the user."""
-        # Truncate the AI response snippet to 500 chars to keep the DB lean
-        snippet = (data.ai_response_snippet or "")[:500] or None
+
+        snippet = data.ai_response_snippet or None
 
         entry = Feedback(
             user_id=user_id,
@@ -23,10 +22,15 @@ class FeedbackService:
             ai_response_snippet=snippet,
             comment=(data.comment or "")[:2000] or None,
         )
+
         db.add(entry)
         db.commit()
         db.refresh(entry)
-        logger.info(f"👍 [Feedback] User '{user_id}' rated '{data.rating}' | intents: {data.agent_intents}")
+
+        logger.info(
+            f"👍 [Feedback] User '{user_id}' rated '{data.rating}' | intents: {data.agent_intents}"
+        )
+
         return entry
 
     @staticmethod
