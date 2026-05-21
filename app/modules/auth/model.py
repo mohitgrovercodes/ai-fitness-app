@@ -13,6 +13,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow)    
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
  
  
 
@@ -23,5 +24,6 @@ class User(Base):
             "email": self.email,
             "username": self.username,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "is_active": self.is_active
+            "is_active": self.is_active,
+            "is_admin": self.is_admin
         }

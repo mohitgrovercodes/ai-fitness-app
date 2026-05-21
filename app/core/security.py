@@ -40,3 +40,19 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
         return user_id
     except JWTError:
         raise credentials_exception
+
+def get_current_admin(user_id: str = Depends(get_current_user)) -> str:
+    from app.core.sql_db import SessionLocal
+    from app.modules.auth.model import User
+    
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.user_id == user_id).first()
+        if not user or not user.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough privileges"
+            )
+        return user_id
+    finally:
+        db.close()

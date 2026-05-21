@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.core.sql_db import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_current_admin
 from app.modules.feedback.schema import FeedbackCreate, FeedbackResponse, FeedbackSummary
 from app.modules.feedback.service import FeedbackService
 
@@ -60,10 +60,29 @@ async def get_my_summary(
 
 @router.get("/admin/summary", response_model=FeedbackSummary, summary="Global feedback summary (admin)")
 async def get_global_summary(
+    intent: Optional[str] = None,
+    admin_id: str = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     """
     Admin endpoint — returns aggregated satisfaction metrics across ALL users.
-    No auth required (can be secured with an API key in production).
+    Requires the calling user to have is_admin=True in the database.
     """
-    return FeedbackService.get_global_summary(db)
+    return FeedbackService.get_global_summary(db, intent=intent)
+
+
+@router.get("/admin/list", response_model=List[FeedbackResponse], summary="Paginated list of all feedback (admin)")
+async def get_global_list(
+    page: int = 1,
+    size: int = 50,
+    intent: Optional[str] = None,
+    rating: Optional[str] = None,
+    admin_id: str = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Admin endpoint — returns a paginated list of feedback entries.
+    Useful for reading all negative comments in detail.
+    Requires the calling user to have is_admin=True in the database.
+    """
+    return FeedbackService.get_global_list(db, page=page, size=size, intent=intent, rating=rating)

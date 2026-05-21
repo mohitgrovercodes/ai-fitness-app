@@ -75,20 +75,23 @@ class FeedbackService:
         )
 
     @staticmethod
-    def get_global_summary(db: Session) -> FeedbackSummary:
-        """Admin-level aggregated metrics across ALL users."""
-        total = db.query(func.count(Feedback.id)).scalar() or 0
+    def get_global_summary(db: Session, intent: str = None) -> FeedbackSummary:
+        """Admin-level aggregated metrics across ALL users, with optional intent filtering."""
+        query_base = db.query(Feedback)
+        if intent:
+            query_base = query_base.filter(Feedback.agent_intents.like(f"%{intent}%"))
+
+        total = query_base.with_entities(func.count(Feedback.id)).scalar() or 0
         thumbs_up = (
-            db.query(func.count(Feedback.id))
-            .filter(Feedback.rating == RatingEnum.up)
+            query_base.filter(Feedback.rating == RatingEnum.up)
+            .with_entities(func.count(Feedback.id))
             .scalar() or 0
         )
         thumbs_down = total - thumbs_up
         satisfaction_rate = round((thumbs_up / total) * 100, 1) if total > 0 else 0.0
 
         recent_rows = (
-            db.query(Feedback.comment)
-            .filter(Feedback.comment.isnot(None))
+            query_base.filter(Feedback.comment.isnot(None))
             .order_by(Feedback.created_at.desc())
             .limit(5)
             .all()
@@ -102,3 +105,19 @@ class FeedbackService:
             satisfaction_rate=satisfaction_rate,
             recent_comments=recent_comments,
         )
+
+    @staticmethod
+    def get_global_list(db: Session, page: int = 1, size: int = 50, intent: str = None, rating: str = None) -> List[Feedback]:
+        """Paginated list of feedback entries for Admin Analytics."""
+        query = db.query(Feedback)
+        if intent:
+            query = query.filter(Feedback.agent_intents.like(f"%{intent}%"))
+        if rating:
+            try:
+                rating_enum = RatingEnum(rating)
+                query = query.filter(Feedback.rating == rating_enum)
+            except ValueError:
+                pass
+        
+        offset = (page - 1) * size
+        return query.order_by(Feedback.created_at.desc()).offset(offset).limit(size).all()

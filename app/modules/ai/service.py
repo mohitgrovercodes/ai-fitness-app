@@ -349,8 +349,8 @@ class AIService:
                 human_msg = {"type": "human", "content": user_input}
                 ai_msg = {
                     "type": "ai",
-                    "structured_data": {"training": output},
-                    "intents": ["workout"]
+                    "structured_data": {"Nutrition": output},
+                    "intents": ["nutrition"]
                 }
                 redis_manager.client.rpush(redis_key, json.dumps(human_msg))
                 redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
