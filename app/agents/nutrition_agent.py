@@ -600,8 +600,8 @@ Current Context: {summary}
         seen = set()
         unique_meals = []
         for meal in meals:
-            day_label  = meal.get("day",  "").strip()
-            name_label = meal.get("name", "").lower().strip()
+            day_label  = str(meal.get("day") or "").strip()
+            name_label = str(meal.get("name") or "").lower().strip()
             key = f"{day_label}|{name_label}"
             if key not in seen:
                 seen.add(key)
@@ -673,9 +673,9 @@ Current Context: {summary}
 
         # --- Step 3: Detect plan duration from day fields ---
         unique_days = set(
-            m.get("day", "").strip()
+            str(m.get("day") or "").strip()
             for m in unique_meals
-            if m.get("day", "").strip()  # only non-empty day fields
+            if str(m.get("day") or "").strip()  # only non-empty day fields
         )
         num_days = max(len(unique_days), 1)  # 1 = daily plan, 7 = weekly, 4 = monthly patterns
         is_multi_day = num_days > 1
@@ -685,7 +685,7 @@ Current Context: {summary}
         per_day_data = {}
 
         for meal in unique_meals:
-            day_label = meal.get("day", "").strip()
+            day_label = str(meal.get("day") or "").strip()
             
             c = parse_num(meal.get("calories", 0))
             p = parse_num(meal.get("protein", 0))
@@ -746,7 +746,7 @@ Current Context: {summary}
                         total_carbs += m_carbs
                         total_fat   += m_fat
                         
-                        day_label = meal.get("day", "").strip()
+                        day_label = str(meal.get("day") or "").strip()
                         if day_label:
                             per_day_data[day_label]["calories"] += meal["calories"]
                             per_day_data[day_label]["protein"] += m_prot
@@ -879,7 +879,7 @@ Current Context: {summary}
                 # Rebuild per_day_data after protein scaling
                 per_day_data = {}
                 for meal in unique_meals:
-                    day_label = meal.get("day", "").strip()
+                    day_label = str(meal.get("day") or "").strip()
                     if day_label:
                         if day_label not in per_day_data:
                             per_day_data[day_label] = {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}

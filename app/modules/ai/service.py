@@ -230,85 +230,85 @@ class AIService:
         diet_type = data.get("diet_type", "")
         allergies = data.get("allergies", [])
 
-        # Fetch real user profile from DB
+        # ── Step 1: Load DB profile (for supplemental info) ───────────────────
         db = SessionLocal()
         try:
             profile = ProfileService.get_profile(db, user_id)
-            db_context = {}
-            if profile:
-                # Inline Mifflin-St Jeor TDEE (same formula as base.py — no external utility).
-                # All three calorie targets stored in user_context; the LLM picks the right
-                # one based on the goal text it reads in its system prompt.
-                try:
-                    w   = float(data.get("weight") or profile.weight or 0)
-                    h   = float(data.get("height") or profile.height or 0)
-                    a   = float(profile.age or 0)
-                    
-                    # Get gender from request, fallback to profile, default to male
-                    req_gender = data.get("gender")
-                    prof_gender = profile.gender.value if profile.gender else "male"
-                    g   = (req_gender or prof_gender).upper()
-                    act = (profile.activity_level.value if profile.activity_level else "SEDENTARY").upper()
-                    _multipliers = {
-                        "SEDENTARY": 1.2, "LIGHTLY_ACTIVE": 1.375,
-                        "MODERATELY_ACTIVE": 1.55, "VERY_ACTIVE": 1.725, "EXTRA_ACTIVE": 1.9,
-                    }
-                    if w > 0 and h > 0 and a > 0:
-                        bmr  = (10*w + 6.25*h - 5*a + 5) if g in ("MALE", "M") else (10*w + 6.25*h - 5*a - 161)
-                        tdee = bmr * _multipliers.get(act, 1.2)
-                        cal_loss        = round(max(bmr, tdee * 0.80))
-                        cal_maintenance = round(tdee)
-                        cal_gain        = round(tdee * 1.15)
-                    else:
-                        cal_loss = cal_maintenance = cal_gain = 0
-                except (ValueError, TypeError):
-                    cal_loss = cal_maintenance = cal_gain = 0
-
-                current_goal = profile.goal or goal
-                
-                target_cal = cal_maintenance
-                if current_goal:
-                    g_lower = current_goal.lower()
-                    if "loss" in g_lower or "lose" in g_lower or "decrease" in g_lower:
-                        target_cal = cal_loss
-                    elif "gain" in g_lower or "bulk" in g_lower or "increase" in g_lower:
-                        target_cal = cal_gain
-
-                db_context = {
-                    "full_name":          profile.full_name,
-                    "age":                profile.age,
-                    "gender":             profile.gender.value if profile.gender else None,
-                    "weight_kg":          profile.weight,
-                    "height_cm":          profile.height,
-                    "goal":               current_goal,
-                    "activity_level":     profile.activity_level.value if profile.activity_level else None,
-                    "diet_preference":    diet_type or profile.diet_preference,
-                    "injuries":           profile.injuries if isinstance(profile.injuries, list) else [],
-                    "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else [],
-                    "allergies":          allergies,
-                    # Three calorie targets — LLM selects the right one based on the goal
-                    "cal_loss":           cal_loss,
-                    "cal_maintenance":    cal_maintenance,
-                    "cal_gain":           cal_gain,
-                    "target_calories":    target_cal
-                }
         finally:
             db.close()
 
-        # Extract new fields from API payload
-        new_weight = data.get("weight")
-        new_height = data.get("height")
-        new_gender = data.get("gender")
-        new_diet_pref = data.get("diet_prefrence")
+        # ── Step 2: Resolve biometric inputs — Payload ALWAYS takes priority ──
+        # This is the source of truth ordering: payload > DB profile > safe default
+        w = float(data.get("weight") or (profile.weight if profile else 0) or 0)
+        h = float(data.get("height") or (profile.height if profile else 0) or 0)
+        a = float(data.get("age")    or (profile.age    if profile else 0) or 0)
 
-        # Merge: request data overrides DB context
+        # Gender: payload > profile > default male
+        req_gender  = data.get("gender")
+        prof_gender = (profile.gender.value if profile and profile.gender else "male")
+        g = str(req_gender or prof_gender).upper()
+
+        # Activity level: payload > profile > default SEDENTARY
+        req_activity  = data.get("activity_level")
+        prof_activity = (profile.activity_level.value if profile and profile.activity_level else "SEDENTARY")
+        act = str(req_activity or prof_activity).upper()
+
+        # ── Step 3: Compute TDEE unconditionally ──────────────────────────────
+        # Always runs — even if there is no DB profile — as long as payload has the numbers.
+        _multipliers = {
+            "SEDENTARY": 1.2, "LIGHTLY_ACTIVE": 1.375,
+            "MODERATELY_ACTIVE": 1.55, "VERY_ACTIVE": 1.725, "EXTRA_ACTIVE": 1.9,
+        }
+        try:
+            if w > 0 and h > 0 and a > 0:
+                bmr  = (10*w + 6.25*h - 5*a + 5) if g in ("MALE", "M") else (10*w + 6.25*h - 5*a - 161)
+                tdee = bmr * _multipliers.get(act, 1.2)
+                cal_loss        = round(max(bmr, tdee * 0.80))   # −20 % deficit, never below BMR
+                cal_maintenance = round(tdee)
+                cal_gain        = round(tdee * 1.15)             # +15 % surplus
+            else:
+                bmr = tdee = cal_loss = cal_maintenance = cal_gain = 0
+        except (ValueError, TypeError):
+            bmr = tdee = cal_loss = cal_maintenance = cal_gain = 0
+
+        # Goal-based calorie selection
+        current_goal = goal or (profile.goal if profile else "") or "General Fitness"
+        target_cal = cal_maintenance
+        if current_goal:
+            g_lower = current_goal.lower()
+            if "loss" in g_lower or "lose" in g_lower or "decrease" in g_lower:
+                target_cal = cal_loss
+            elif "gain" in g_lower or "bulk" in g_lower or "increase" in g_lower:
+                target_cal = cal_gain
+
+        # ── Step 4: Build merged context — profile fills supplemental fields ──
+        db_context = {}
+        if profile:
+            db_context = {
+                "full_name":          profile.full_name,
+                "goal":               profile.goal,
+                "diet_preference":    profile.diet_preference,
+                "injuries":           profile.injuries if isinstance(profile.injuries, list) else [],
+                "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else [],
+            }
+
         merged_context = {
-            **db_context, 
-            "goal": goal or db_context.get("goal", ""),
-            "weight_kg": new_weight if new_weight else db_context.get("weight_kg"),
-            "height_cm": new_height if new_height else db_context.get("height_cm"),
-            "gender": new_gender if new_gender else db_context.get("gender"),
-            "diet_preference": new_diet_pref if new_diet_pref else db_context.get("diet_preference")
+            **db_context,
+            # Biometrics: always use the resolved (payload-priority) values
+            "weight_kg":       w,
+            "height_cm":       h,
+            "age":             a,
+            "gender":          g,
+            "activity_level":  act,
+            # Goal & Diet
+            "goal":            current_goal,
+            "diet_preference": diet_type or db_context.get("diet_preference"),
+            "allergies":       allergies,
+            # Pre-computed TDEE targets — LLM picks the right one based on goal
+            "cal_loss":        cal_loss,
+            "cal_maintenance": cal_maintenance,
+            "cal_gain":        cal_gain,
+            "target_calories": target_cal,
         }
         
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
