@@ -63,45 +63,60 @@ EXISTING SUMMARY: {existing_summary}"""),
                 logger.error(f"❌ [Memory] Redis Save Error: {e}")
 
         # 2. Check for Summary Trigger
-        # Use Redis LIST count (not LangGraph RAM count) so trigger survives server restarts.
         if redis_manager.is_available():
             total_messages = redis_manager.client.llen(redis_key)
+            index_key = f"chat_summary_index:{user_id}"
+            last_index_str = redis_manager.client.get(index_key)
+            last_index = int(last_index_str) if last_index_str else 0
         else:
-            total_messages = len(messages)  # fallback if Redis is down
+            total_messages = len(messages)
+            last_index = 0
+
         existing_summary = state.get("conversation_summary", "")
-        
-        # Load summary from Redis if not in state
         if not existing_summary and redis_manager.is_available():
             existing_summary = redis_manager.client.get(summary_key) or ""
 
-        # Logic: If messages > 20, we summarize and prune
-        if total_messages > self.summary_trigger:
-            logger.info(f"🧠 [Memory] Threshold reached ({total_messages}). Summarizing...")
+        # Logic: Summarize incrementally using a cursor
+        if total_messages - last_index >= self.summary_trigger:
+            logger.info(f"🧠 [Memory] Threshold reached (New msgs: {total_messages - last_index}). Summarizing...")
             
-            # Keep only the last 6 messages
-            msgs_to_summarize = messages[:-self.keep_recent]
-            active_messages = messages[-self.keep_recent:]
-            
-            msg_str = "\n".join([f"{m.type}: {m.content}" for m in msgs_to_summarize])
-            
-            chain = self.summary_prompt | self.llm
-            res = await chain.ainvoke({
-                "existing_summary": existing_summary,
-                "messages_str": msg_str
-            })
-            
-            new_summary = res.content.strip()
-            # Force exactly 2 lines if possible, or at least very short
-            logger.info(f"🧠 [Memory] New 2-line summary created: {new_summary[:50]}...")
-            
+            msg_str = ""
             if redis_manager.is_available():
-                redis_manager.client.set(summary_key, new_summary)
-            
-            return {
-                "conversation_summary": new_summary,
-                "messages": {"type": "replace", "messages": active_messages}
-            }
+                # Fetch only unsummarized messages from Redis (safely preserving full history)
+                raw_msgs = redis_manager.client.lrange(redis_key, last_index, total_messages - 1)
+                parsed_msgs = []
+                for raw in raw_msgs:
+                    try:
+                        parsed = json.loads(raw)
+                        parsed_msgs.append(f"{parsed.get('type', 'unknown')}: {parsed.get('content', '')}")
+                    except:
+                        pass
+                msg_str = "\n".join(parsed_msgs)
+            else:
+                msgs_to_summarize = messages[:-self.keep_recent]
+                msg_str = "\n".join([f"{m.type}: {m.content}" for m in msgs_to_summarize])
 
+            if msg_str.strip():
+                chain = self.summary_prompt | self.llm
+                res = await chain.ainvoke({
+                    "existing_summary": existing_summary,
+                    "messages_str": msg_str
+                })
+                
+                new_summary = res.content.strip()
+                logger.info(f"🧠 [Memory] New summary created: {new_summary[:50]}...")
+                
+                if redis_manager.is_available():
+                    redis_manager.client.set(summary_key, new_summary)
+                    # Update cursor so we don't summarize these again, and NO messages are deleted.
+                    redis_manager.client.set(index_key, total_messages)
+                
+                existing_summary = new_summary
+
+        # Always return only the recent messages in RAM for LangGraph context
+        active_messages = messages[-self.keep_recent:] if len(messages) > self.keep_recent else messages
+        
         return {
-            "conversation_summary": existing_summary
+            "conversation_summary": existing_summary,
+            "messages": {"type": "replace", "messages": active_messages}
         }
