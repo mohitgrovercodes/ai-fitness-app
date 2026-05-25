@@ -151,6 +151,31 @@ async def synthesis_node(state: AgentState):
             f"  → Choose the target that matches the user's goal above."
         )
     
+    target_lang = state.get("language") or "english"
+    target_lang = target_lang.strip().lower()
+
+    # Dynamic language synthesis instructions
+    if target_lang == "hindi":
+        lang_instruction = """
+OUTPUT LANGUAGE & SCRIPT DIRECTIVE: HINDI (DEVANAGARI SCRIPT)
+- You MUST synthesize and write the entire final response in natural, encouraging Hindi using the Devanagari script (e.g. "नमस्ते, आज हम आपका लेग्स वर्कआउट शुरू करेंगे।").
+- Use standard phonetic Hindi for fitness words (e.g., write "कैलरी", "वर्कआउट", "डाइट", "प्रोटीन" instead of complex formal terms like "ऊष्मा", "शारीरिक व्यायाम", "आहार", "नत्रजन").
+- Format all instructions, summaries, and descriptions in Devanagari script.
+- Ensure the tone is highly motivating, polite, and professional.
+"""
+    elif target_lang == "hinglish":
+        lang_instruction = """
+OUTPUT LANGUAGE & SCRIPT DIRECTIVE: HINGLISH (ROMAN SCRIPT)
+- You MUST synthesize and write the entire final response in Hinglish using strictly the Roman/Latin alphabet (e.g., "Namaste, aapka chest workout ready hai. Aaj hum focus karenge focus aur form par...").
+- Hinglish is the natural, conversational blend of Hindi grammar with English vocabulary, popular in social media/texting.
+- Avoid Devanagari characters completely. Keep the layout clean, engaging, and professional.
+"""
+    else:
+        lang_instruction = """
+OUTPUT LANGUAGE & SCRIPT DIRECTIVE: ENGLISH
+- Synthesize and write the entire final response in high-quality, professional, and encouraging English.
+"""
+
     # Master Coach LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=settings.OPENAI_API_KEY)
     
@@ -169,6 +194,8 @@ Dietary Preference: {diet_pref}
 Injuries/Medical: {injuries}
 Medical Conditions: {medical}
 *Note: If the user directly asks about their profile (e.g., "What is my weight?"), use the profile above to answer them directly.*
+
+{lang_instruction}
 
 RULES:
 - Do NOT just list the points. Integrate them nicely into paragraphs.
@@ -194,15 +221,27 @@ SPECIALIST ADVICE:
 
 FINAL RESPONSE:"""
 
-    logger.info("✨ [Synthesis] Weaving specialist responses into a master plan.")
+    logger.info(f"✨ [Synthesis] Weaving specialist responses into a master plan in language: {target_lang}")
     res = await llm.ainvoke(prompt)
     
     final_content = res.content
     if media_attachments:
         final_content += "\n\n### Exercise Demonstrations:\n" + "\n\n".join(media_attachments)
     
+    # ── Restore User's Original Query in State Memory ───────────────────────
+    # We substitute back the original Hindi/Hinglish message so that Redis history
+    # and final API responses accurately show the user's original input script.
+    current_messages = list(state.get("messages", []))
+    if current_messages and state.get("original_query"):
+        from langchain_core.messages import HumanMessage
+        for i in range(len(current_messages) - 1, -1, -1):
+            if isinstance(current_messages[i], HumanMessage):
+                logger.info("📝 [Synthesis] Restoring original query in conversation history.")
+                current_messages[i] = HumanMessage(content=state["original_query"])
+                break
+
     return {
-        "messages": [AIMessage(content=final_content)],
+        "messages": {"type": "replace", "messages": current_messages + [AIMessage(content=final_content)]},
         "next_node": "output_safety"
     }
 

@@ -74,6 +74,80 @@ def _resolve_list(payload_val, db_val, default_val=None):
         
     return default_val
 
+async def _detect_and_translate_query(user_input: str) -> tuple[str, str]:
+    if not user_input:
+        return "english", ""
+        
+    # Check for simple English common queries to avoid unnecessary LLM calls
+    lower_input = user_input.strip().lower()
+    if lower_input.isascii() and any(word in lower_input for word in ("workout", "diet", "plan", "lose", "gain", "legs", "hypertrophy", "cardio")):
+        return "english", user_input
+
+    from langchain_openai import ChatOpenAI
+    from app.core.config import settings
+    from pydantic import BaseModel, Field
+    
+    class TranslationResult(BaseModel):
+        detected_language: str = Field(description="Must be 'english', 'hindi', or 'hinglish'")
+        english_translation: str = Field(description="The English translation of the query")
+        
+    try:
+        llm = ChatOpenAI(
+            model="gpt-4o-mini", 
+            temperature=0, 
+            api_key=settings.OPENAI_API_KEY
+        ).with_structured_output(TranslationResult, method="function_calling")
+        
+        prompt = f"""Analyze this user request from a fitness app:
+"{user_input}"
+
+Detect the language ('english', 'hindi' for Devanagari script, or 'hinglish' for Hindi grammar/vocabulary in Roman alphabet) and translate it to clean English for fitness planning.
+
+Return the result matching the required schema."""
+        
+        res = await llm.ainvoke(prompt)
+        return res.detected_language, res.english_translation
+    except Exception:
+        return "english", user_input
+
+async def _translate_structured_output(output: dict, target_lang: str) -> dict:
+    if not output or not target_lang or target_lang.strip().lower() == "english":
+        return output
+        
+    from langchain_openai import ChatOpenAI
+    from app.core.config import settings
+    import json
+    
+    try:
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=settings.OPENAI_API_KEY)
+        
+        prompt = f"""You are a dynamic translation engine for a fitness application.
+Your task is to translate all user-facing natural language text fields inside the provided JSON object into '{target_lang.upper()}'.
+
+STRICT RULES:
+1. Maintain the EXACT same JSON keys, array sizes, and structure. Do NOT add or remove any keys.
+2. Maintain all numeric values, sets, reps, and URLs exactly as-is (e.g. keep gif_path and image_path URLs unmodified).
+3. If the target language is 'HINDI', translate into high-quality Devanagari script (e.g., "नमस्ते", "वर्कआउट").
+4. If the target language is 'HINGLISH', translate into natural, social-media-style transliterated Hindi/English blend written in the Roman/Latin alphabet (e.g., "Aapka chest workout ready hai").
+5. Only translate natural language fields (such as 'summary', 'tip', 'description', 'benefit', 'day', 'type', 'name' if applicable). Keep technical labels, IDs, or schemas identical.
+
+JSON OBJECT TO TRANSLATE:
+{json.dumps(output, ensure_ascii=False)}
+
+TRANSLATED JSON:"""
+        
+        res = await llm.ainvoke(prompt)
+        content = res.content.strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.endswith("```"):
+            content = content[:-3]
+        return json.loads(content.strip())
+    except Exception as e:
+        from app.utils.logger import logger
+        logger.error(f"Error during structured translation of direct API output: {e}")
+        return output
+
 class AIService:
 
 
@@ -105,6 +179,7 @@ class AIService:
             payload_diet = raw_context.get("diet_preference")
             payload_injuries = raw_context.get("injuries")
             payload_med = raw_context.get("medical_conditions")
+            payload_language = raw_context.get("language") or raw_context.get("preferred_language")
 
             # Priority 1: Manual payload values (with fallback if null/empty). Priority 2: DB profile values. Priority 3: safe defaults.
             w_val = _resolve_numeric(payload_weight, profile.weight if profile else None, None)
@@ -153,6 +228,7 @@ class AIService:
                 "cal_loss":           tdee_data.get("cal_loss", 0),
                 "cal_maintenance":    tdee_data.get("cal_maintenance", 0),
                 "cal_gain":           tdee_data.get("cal_gain", 0),
+                "language":           _resolve_string(payload_language, None, None)
             }
         finally:
             db.close()
@@ -164,7 +240,10 @@ class AIService:
             "conversation_summary": "", # This will be updated by the memory_manager
             "user_id": user_id,
             "specialist_results": {"__clear__": True},  # Wipe old zombie data from previous turns
-            "image_bytes": image_bytes  # Always set explicitly — None clears old image from MemorySaver
+            "image_bytes": image_bytes,  # Always set explicitly — None clears old image from MemorySaver
+            "language": None,
+            "original_query": None,
+            "translated_query": None
         }
             
         # Run the graph
@@ -292,6 +371,17 @@ class AIService:
             from app.utils.logger import logger as _log
             _log.info(f"📩 [generate_workout] No message in body — auto-built: '{user_input}'")
         
+        # ── Multilingual Input Resolution ──
+        payload_language = data.get("language") or data.get("preferred_language")
+        detected_lang, translated_input = await _detect_and_translate_query(user_input)
+        target_lang = (payload_language or detected_lang).strip().lower()
+        
+        original_workout_query = user_input
+        if target_lang != "english" and translated_input:
+            from app.utils.logger import logger as _log
+            _log.info(f"🌐 [generate_workout] Translating Hinglish/Hindi query '{user_input}' to English: '{translated_input}'")
+            user_input = translated_input
+
         state = {
             "messages": [HumanMessage(content=user_input)],
             "user_context": merged_context,
@@ -300,12 +390,19 @@ class AIService:
         }
         result = await TrainingAgent().run(state)
         output = result.get("specialist_results", {}).get("training", {})
+        
+        # ── Multilingual Output Rendering ──
+        if target_lang != "english":
+            from app.utils.logger import logger as _log
+            _log.info(f"🌐 [generate_workout] Rendering structured plan output in target language: {target_lang}")
+            output = await _translate_structured_output(output, target_lang)
+
         import json
         from app.core.redis_client import redis_manager
         try:
             if redis_manager.is_available():
                 redis_key = f"chat_history:{user_id}"
-                human_msg = {"type": "human", "content": user_input}
+                human_msg = {"type": "human", "content": original_workout_query}
                 ai_msg = {
                     "type": "ai",
                     "structured_data": {"training": output},

@@ -26,9 +26,9 @@ class RedisClient:
                 )
                 cls._client = redis.Redis(connection_pool=pool)
                 cls._client.ping() # Verify connection
-                logger.info("✅ [Redis] Connected successfully with ConnectionPool.")
+                logger.info("[Redis] Connected successfully with ConnectionPool.")
             except Exception as e:
-                logger.error(f"❌ [Redis] Connection failed: {e}")
+                logger.error(f"[Redis] Connection failed: {e}")
                 cls._client = None
         return cls._instance
 
