@@ -695,6 +695,21 @@ class AIService:
             _log.info(f"🌐 [ask_domain] Translating response text to target language: {target_lang}")
             response_text = await _translate_plain_text(response_text, target_lang)
 
+        import json
+        from app.core.redis_client import redis_manager
+        try:
+            if redis_manager.is_available():
+                redis_key = f"chat_history:{user_id}"
+                human_msg = {"type": "human", "content": user_input}
+                ai_msg = {
+                    "type": "ai",
+                    "structured_data": {"Domain": output},
+                    "intents": ["domain intent"]
+                }
+                redis_manager.client.rpush(redis_key, json.dumps(human_msg))
+                redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
+        except Exception as e:
+            print(f"Redis save error in generate_workout: {e}")
         return {
             "response": response_text,
             "sources": output.get("sources", "internal_knowledge")
