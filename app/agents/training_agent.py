@@ -74,7 +74,7 @@ MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
     STEP 3 — PROGRESSION PLAN: In `summary`, explain:
       - How many times to repeat this cycle to complete N days (e.g. ceil(N / cycle_length))
       - Week-by-week progressive overload: Week 1 = baseline, Week 2 = +2 reps, Week 3 = +weight, etc.
-    STEP 4 — `tip`: State exactly: "Repeat this X-day cycle Y times over N days. Increase [metric] each week."
+    STEP 4 — ROOT LEVEL `tip`: In the top-level `tip` JSON field (outside of the rest_days array), state exactly: "Repeat this X-day cycle Y times over N days. Increase [metric] each week."
     You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push (Cycle Day 1)").
 - DYNAMIC REST DAYS (CRITICAL): If a day is meant for rest or active recovery, you MUST put it entirely inside the `rest_days` array. DO NOT create a fake 'Rest' exercise inside the `workout` array. The `workout` array must remain 100% clean, containing only active physical exercises.
 - DYNAMIC DAILY VOLUME & VARIETY: DO NOT just divide the retrieved exercises across the days, and DO NOT repeat the exact same exercises on different days of a cycle. Generate a massive pool of 20-30 DIVERSE exercises across the cycle (e.g. Incline Press on Day 1, Flat Press on Day 4). An intense day should have 5-8 exercises.
@@ -87,6 +87,20 @@ INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC — BIOMECHANICS SAFETY PROTOCOL):
 - REAL RECOVERY PROTOCOL: Instead of just ignoring the injured area, you MUST dynamically include specific Rehab, Mobility, or Stretching exercises targeted at safely recovering the injured joint (e.g., gentle seated stretches for knee pain, wrist flexor stretches for wrist pain). Also dynamically include warm-ups and cooldowns in your routine.
 - You MUST explicitly state in the `description` or `benefit` field how you adapted the selection to protect the injury (e.g., "Substituted with Seated Press to protect your injured joint").
 - Always include a specific injury-safe warning in the `tip` field.
+
+NEW RULE (100% DYNAMIC WARMUPS & COOLDOWNS):
+- You MUST explicitly include 1-2 Warmup/Mobility exercises at the start of the workout, and 1 Cooldown stretch at the end.
+- CRITICAL: The warmup must be DYNAMICALLY tailored to that day's target muscles (e.g., do NOT prescribe generic jogging for an Upper Body day; prescribe dynamic shoulder/chest openers).
+
+NEW RULE (DYNAMIC SAFETY & VOLUME SCALING):
+- If the user's fitness level is "Beginner" (or if no fitness level is provided), you MUST dynamically downgrade complex plyometrics (like Box Jumps) to safer functional alternatives (like Step-Ups).
+- You MUST dynamically calculate sets and reps for ALL exercises, especially HIIT, to match the user's exact conditioning level. Never prescribe elite-level volume (e.g., 5 sets of Burpees) to a beginner or unknown user.
+
+
+NEW RULE (100% DYNAMIC SPLIT SELECTION):
+- You are strictly forbidden from repeatedly spamming "Full Body" for multi-day plans unless explicitly requested.
+- DYNAMIC SPLIT GENERATION: You MUST dynamically invent and apply the most biomechanically optimal training split based purely on the user's N days and Goal (e.g., Muscle Gain might require a Push/Pull/Legs sequence, while general conditioning might require an Upper/Lower/HIIT sequence). 
+- The split you choose must ensure no single muscle group is overtrained.
 
 Example JSON mapping: exercise_gifs = {{"Push-up": "videos/0662-I4hDWkc.gif"}}, exercise_images = {{"Push-up": "images/0662-I4hDWkc.jpg"}}.
 
