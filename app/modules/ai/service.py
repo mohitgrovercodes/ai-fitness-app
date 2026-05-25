@@ -14,6 +14,66 @@ def get_graph():
         _fitness_graph = build_graph()
     return _fitness_graph
 
+def _is_null_or_empty(val):
+    if val is None:
+        return True
+    if isinstance(val, str):
+        v_stripped = val.strip().lower()
+        return v_stripped in ("", "null", "none", "undefined")
+    if isinstance(val, (list, set, tuple)):
+        return len(val) == 0 or all(_is_null_or_empty(item) for item in val)
+    return False
+
+def _resolve_numeric(payload_val, db_val, default_val=None):
+    if not _is_null_or_empty(payload_val):
+        try:
+            return float(payload_val)
+        except (ValueError, TypeError):
+            pass
+    if not _is_null_or_empty(db_val):
+        try:
+            return float(db_val)
+        except (ValueError, TypeError):
+            pass
+    return default_val
+
+def _resolve_string(payload_val, db_val, default_val=None):
+    if not _is_null_or_empty(payload_val):
+        return str(payload_val).strip()
+    if not _is_null_or_empty(db_val):
+        return str(db_val).strip()
+    return default_val
+
+def _resolve_list(payload_val, db_val, default_val=None):
+    if default_val is None:
+        default_val = []
+        
+    def to_clean_list(val):
+        if val is None:
+            return None
+        if isinstance(val, str):
+            parts = [item.strip() for item in val.split(",") if item.strip()]
+            return parts if parts else None
+        if isinstance(val, list):
+            parts = []
+            for item in val:
+                if item is not None:
+                    s = str(item).strip()
+                    if s and s.lower() not in ("null", "none", "undefined"):
+                        parts.append(s)
+            return parts if parts else None
+        return None
+
+    clean_payload = to_clean_list(payload_val)
+    if clean_payload is not None:
+        return clean_payload
+        
+    clean_db = to_clean_list(db_val)
+    if clean_db is not None:
+        return clean_db
+        
+    return default_val
+
 class AIService:
 
 
@@ -33,37 +93,67 @@ class AIService:
         db = SessionLocal()
         try:
             profile = ProfileService.get_profile(db, user_id)
-            db_context = {}
-            if profile:
-                tdee_data =_compute_tdee(
-                    profile.weight, profile.height, profile.age,
-                    profile.gender.value if profile.gender else "male",
-                    profile.activity_level.value if profile.activity_level else "SEDENTARY"
-                )
-                current_goal = profile.goal or ""
+            
+            # ── Normalization: Extract and align keys from incoming payload context ──
+            raw_context = context or {}
+            payload_weight = raw_context.get("weight") if raw_context.get("weight") is not None else raw_context.get("weight_kg")
+            payload_height = raw_context.get("height") if raw_context.get("height") is not None else raw_context.get("height_cm")
+            payload_age    = raw_context.get("age")
+            payload_gender = raw_context.get("gender")
+            payload_activity = raw_context.get("activity_level")
+            payload_goal = raw_context.get("goal")
+            payload_diet = raw_context.get("diet_preference")
+            payload_injuries = raw_context.get("injuries")
+            payload_med = raw_context.get("medical_conditions")
+
+            # Priority 1: Manual payload values (with fallback if null/empty). Priority 2: DB profile values. Priority 3: safe defaults.
+            w_val = _resolve_numeric(payload_weight, profile.weight if profile else None, None)
+            h_val = _resolve_numeric(payload_height, profile.height if profile else None, None)
+            a_val = _resolve_numeric(payload_age, profile.age if profile else None, None)
+            
+            inj = _resolve_list(payload_injuries, profile.injuries if profile else None, [])
+            med = _resolve_list(payload_med, profile.medical_conditions if profile else None, [])
+            g_val = _resolve_string(payload_goal, profile.goal if profile else None, None)
+            d_val = _resolve_string(payload_diet, profile.diet_preference if profile else None, None)
+
+            # Resolve gender and activity level
+            req_gender = _resolve_string(payload_gender, profile.gender.value if profile and profile.gender else None, "male")
+            req_activity = _resolve_string(payload_activity, profile.activity_level.value if profile and profile.activity_level else None, "SEDENTARY")
+            
+            gender_str = req_gender.lower()
+            activity_str = req_activity.upper()
+
+            # ── Dynamic TDEE Math ──
+            # Recompute TDEE and target calories dynamically based on the final resolved biometric state
+            if w_val and h_val and a_val:
+                tdee_data = _compute_tdee(w_val, h_val, a_val, gender_str, activity_str)
+                current_goal = g_val or ""
                 if "loss" in current_goal.lower() or "lose" in current_goal.lower() or "decrease" in current_goal.lower():
                     target_cal = tdee_data["cal_loss"]
                 elif "gain" in current_goal.lower() or "bulk" in current_goal.lower() or "increase" in current_goal.lower():
                     target_cal = tdee_data["cal_gain"]
                 else:
                     target_cal = tdee_data["cal_maintenance"]
+            else:
+                tdee_data = {"bmr": 0, "tdee": 0, "cal_loss": 0, "cal_maintenance": 0, "cal_gain": 0}
+                target_cal = 0
 
-                db_context = {
-                    "full_name": profile.full_name,
-                    "age": profile.age,
-                    "gender": profile.gender.value if profile.gender else None,
-                    "weight_kg": profile.weight,
-                    "height_cm": profile.height,
-                    "goal": profile.goal or None,
-                    "activity_level": profile.activity_level.value if profile.activity_level else None,
-                    "diet_preference": profile.diet_preference,
-                    "injuries": profile.injuries if isinstance(profile.injuries, list) else [],
-                    "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else [],
-                    "target_calories": target_cal  # ✅ Activates Auto-Scaler in _validate_output
-                }
-            
-            # Merge: Incoming context overrides DB context
-            merged_context = {**db_context, **(context or {})}
+            merged_context = {
+                "full_name":          profile.full_name if profile else "User",
+                "age":                a_val,
+                "gender":             gender_str.upper(),
+                "weight_kg":          w_val,
+                "height_cm":          h_val,
+                "goal":               g_val,
+                "activity_level":     activity_str,
+                "diet_preference":    d_val,
+                "injuries":           inj if isinstance(inj, list) else [],
+                "medical_conditions": med if isinstance(med, list) else [],
+                "target_calories":    target_cal,
+                "cal_loss":           tdee_data.get("cal_loss", 0),
+                "cal_maintenance":    tdee_data.get("cal_maintenance", 0),
+                "cal_gain":           tdee_data.get("cal_gain", 0),
+            }
         finally:
             db.close()
             
@@ -144,35 +234,49 @@ class AIService:
         db = SessionLocal()
         try:
             profile = ProfileService.get_profile(db, user_id)
-            db_context = {}
-            if profile:
-                db_context = {
-                    "full_name": profile.full_name,
-                    "age": profile.age,
-                    "gender": profile.gender.value if profile.gender else None,
-                    "weight_kg": profile.weight,
-                    "height_cm": profile.height,
-                    "goal": profile.goal or goal,
-                    "activity_level": profile.activity_level.value if profile.activity_level else None,
-                    "diet_preference": profile.diet_preference,
-                    "injuries": profile.injuries if isinstance(profile.injuries, list) else [],
-                    "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else []
-                }
+            
+            # ── Normalization: Extract and align keys from incoming payload data ──
+            payload_weight = data.get("weight") if data.get("weight") is not None else data.get("weight_kg")
+            payload_height = data.get("height") if data.get("height") is not None else data.get("height_cm")
+            payload_age    = data.get("age")
+            payload_gender = data.get("gender")
+            payload_activity = data.get("activity_level") or level
+            payload_goal = data.get("goal") or goal
+            payload_diet = data.get("diet_preference")
+            payload_injuries = data.get("injuries") or injuries
+            payload_med = data.get("medical_conditions")
+
+            # Priority 1: Manual payload values (with fallback if null/empty). Priority 2: DB profile values. Priority 3: safe defaults.
+            w_val = _resolve_numeric(payload_weight, profile.weight if profile else None, None)
+            h_val = _resolve_numeric(payload_height, profile.height if profile else None, None)
+            a_val = _resolve_numeric(payload_age, profile.age if profile else None, None)
+            
+            inj = _resolve_list(payload_injuries, profile.injuries if profile else None, [])
+            med = _resolve_list(payload_med, profile.medical_conditions if profile else None, [])
+            g_val = _resolve_string(payload_goal, profile.goal if profile else None, None)
+            d_val = _resolve_string(payload_diet, profile.diet_preference if profile else None, None)
+
+            # Resolve gender and activity level
+            req_gender = _resolve_string(payload_gender, profile.gender.value if profile and profile.gender else None, "male")
+            req_activity = _resolve_string(payload_activity, profile.activity_level.value if profile and profile.activity_level else None, "SEDENTARY")
+            
+            gender_str = req_gender.lower()
+            activity_str = req_activity.upper()
+
+            merged_context = {
+                "full_name":          profile.full_name if profile else "User",
+                "age":                a_val,
+                "gender":             gender_str.upper(),
+                "weight_kg":          w_val,
+                "height_cm":          h_val,
+                "goal":               g_val,
+                "activity_level":     activity_str,
+                "diet_preference":    d_val,
+                "injuries":           inj if isinstance(inj, list) else [],
+                "medical_conditions": med if isinstance(med, list) else [],
+            }
         finally:
             db.close()
-        
-        # Merge: request data overrides DB context
-        merged_context = {
-            **db_context,
-            "goal":           goal or db_context.get("goal", ""),
-            "activity_level": level or db_context.get("activity_level", ""),
-            "injuries":       injuries or db_context.get("injuries", []),
-        }
-        
-        # Override body-level fields if explicitly sent in the payload
-        if data.get("height"):  merged_context["height_cm"]  = data.get("height")
-        if data.get("weight"):  merged_context["weight_kg"]  = data.get("weight")
-        if data.get("gender"):  merged_context["gender"]     = data.get("gender")
 
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message", "").strip() if data.get("message") else ""
@@ -230,85 +334,85 @@ class AIService:
         diet_type = data.get("diet_type", "")
         allergies = data.get("allergies", [])
 
-        # Fetch real user profile from DB
+        # ── Step 1: Load DB profile (for supplemental info) ───────────────────
         db = SessionLocal()
         try:
             profile = ProfileService.get_profile(db, user_id)
-            db_context = {}
-            if profile:
-                # Inline Mifflin-St Jeor TDEE (same formula as base.py — no external utility).
-                # All three calorie targets stored in user_context; the LLM picks the right
-                # one based on the goal text it reads in its system prompt.
-                try:
-                    w   = float(data.get("weight") or profile.weight or 0)
-                    h   = float(data.get("height") or profile.height or 0)
-                    a   = float(profile.age or 0)
-                    
-                    # Get gender from request, fallback to profile, default to male
-                    req_gender = data.get("gender")
-                    prof_gender = profile.gender.value if profile.gender else "male"
-                    g   = (req_gender or prof_gender).upper()
-                    act = (profile.activity_level.value if profile.activity_level else "SEDENTARY").upper()
-                    _multipliers = {
-                        "SEDENTARY": 1.2, "LIGHTLY_ACTIVE": 1.375,
-                        "MODERATELY_ACTIVE": 1.55, "VERY_ACTIVE": 1.725, "EXTRA_ACTIVE": 1.9,
-                    }
-                    if w > 0 and h > 0 and a > 0:
-                        bmr  = (10*w + 6.25*h - 5*a + 5) if g in ("MALE", "M") else (10*w + 6.25*h - 5*a - 161)
-                        tdee = bmr * _multipliers.get(act, 1.2)
-                        cal_loss        = round(max(bmr, tdee * 0.80))
-                        cal_maintenance = round(tdee)
-                        cal_gain        = round(tdee * 1.15)
-                    else:
-                        cal_loss = cal_maintenance = cal_gain = 0
-                except (ValueError, TypeError):
-                    cal_loss = cal_maintenance = cal_gain = 0
+            
+            # ── Normalization: Extract and align keys from incoming payload data ──
+            payload_weight = data.get("weight") if data.get("weight") is not None else data.get("weight_kg")
+            payload_height = data.get("height") if data.get("height") is not None else data.get("height_cm")
+            payload_age    = data.get("age")
+            payload_gender = data.get("gender")
+            payload_activity = data.get("activity_level")
+            payload_goal = data.get("goal")
+            payload_diet = data.get("diet_preference") or diet_type
+            payload_injuries = data.get("injuries")
+            payload_med = data.get("medical_conditions")
 
-                current_goal = profile.goal or goal
-                
-                target_cal = cal_maintenance
-                if current_goal:
-                    g_lower = current_goal.lower()
-                    if "loss" in g_lower or "lose" in g_lower or "decrease" in g_lower:
-                        target_cal = cal_loss
-                    elif "gain" in g_lower or "bulk" in g_lower or "increase" in g_lower:
-                        target_cal = cal_gain
+            # Priority 1: Manual payload values (with fallback if null/empty). Priority 2: DB profile values. Priority 3: safe defaults.
+            w_val = _resolve_numeric(payload_weight, profile.weight if profile else None, 0.0)
+            h_val = _resolve_numeric(payload_height, profile.height if profile else None, 0.0)
+            a_val = _resolve_numeric(payload_age, profile.age if profile else None, 0.0)
+            
+            inj = _resolve_list(payload_injuries, profile.injuries if profile else None, [])
+            med = _resolve_list(payload_med, profile.medical_conditions if profile else None, [])
+            g_val = _resolve_string(payload_goal, profile.goal if profile else None, None)
+            d_val = _resolve_string(payload_diet, profile.diet_preference if profile else None, None)
 
-                db_context = {
-                    "full_name":          profile.full_name,
-                    "age":                profile.age,
-                    "gender":             profile.gender.value if profile.gender else None,
-                    "weight_kg":          profile.weight,
-                    "height_cm":          profile.height,
-                    "goal":               current_goal,
-                    "activity_level":     profile.activity_level.value if profile.activity_level else None,
-                    "diet_preference":    diet_type or profile.diet_preference,
-                    "injuries":           profile.injuries if isinstance(profile.injuries, list) else [],
-                    "medical_conditions": profile.medical_conditions if isinstance(profile.medical_conditions, list) else [],
-                    "allergies":          allergies,
-                    # Three calorie targets — LLM selects the right one based on the goal
-                    "cal_loss":           cal_loss,
-                    "cal_maintenance":    cal_maintenance,
-                    "cal_gain":           cal_gain,
-                    "target_calories":    target_cal
-                }
+            # Resolve gender and activity level
+            req_gender = _resolve_string(payload_gender, profile.gender.value if profile and profile.gender else None, "male")
+            req_activity = _resolve_string(payload_activity, profile.activity_level.value if profile and profile.activity_level else None, "SEDENTARY")
+            
+            gender_str = req_gender.lower()
+            activity_str = req_activity.upper()
         finally:
             db.close()
 
-        # Extract new fields from API payload
-        new_weight = data.get("weight")
-        new_height = data.get("height")
-        new_gender = data.get("gender")
-        new_diet_pref = data.get("diet_prefrence")
+        # ── Step 3: Compute TDEE unconditionally ──────────────────────────────
+        # Always runs — even if there is no DB profile — as long as payload has the numbers.
+        _multipliers = {
+            "SEDENTARY": 1.2, "LIGHTLY_ACTIVE": 1.375,
+            "MODERATELY_ACTIVE": 1.55, "VERY_ACTIVE": 1.725, "EXTRA_ACTIVE": 1.9,
+        }
+        try:
+            if w_val > 0 and h_val > 0 and a_val > 0:
+                bmr  = (10*w_val + 6.25*h_val - 5*a_val + 5) if gender_str in ("male", "m") else (10*w_val + 6.25*h_val - 5*a_val - 161)
+                tdee = bmr * _multipliers.get(activity_str, 1.2)
+                cal_loss        = round(max(bmr, tdee * 0.80))   # −20 % deficit, never below BMR
+                cal_maintenance = round(tdee)
+                cal_gain        = round(tdee * 1.15)             # +15 % surplus
+            else:
+                bmr = tdee = cal_loss = cal_maintenance = cal_gain = 0
+        except (ValueError, TypeError):
+            bmr = tdee = cal_loss = cal_maintenance = cal_gain = 0
 
-        # Merge: request data overrides DB context
+        # Goal-based calorie selection
+        current_goal = g_val or "General Fitness"
+        target_cal = cal_maintenance
+        if current_goal:
+            g_lower = current_goal.lower()
+            if "loss" in g_lower or "lose" in g_lower or "decrease" in g_lower:
+                target_cal = cal_loss
+            elif "gain" in g_lower or "bulk" in g_lower or "increase" in g_lower:
+                target_cal = cal_gain
+
         merged_context = {
-            **db_context, 
-            "goal": goal or db_context.get("goal", ""),
-            "weight_kg": new_weight if new_weight else db_context.get("weight_kg"),
-            "height_cm": new_height if new_height else db_context.get("height_cm"),
-            "gender": new_gender if new_gender else db_context.get("gender"),
-            "diet_preference": new_diet_pref if new_diet_pref else db_context.get("diet_preference")
+            "full_name":          profile.full_name if profile else "User",
+            "age":                a_val if a_val > 0 else None,
+            "gender":             gender_str.upper(),
+            "weight_kg":          w_val if w_val > 0 else None,
+            "height_cm":          h_val if h_val > 0 else None,
+            "goal":               current_goal,
+            "activity_level":     activity_str,
+            "diet_preference":    d_val,
+            "injuries":           inj if isinstance(inj, list) else [],
+            "medical_conditions": med if isinstance(med, list) else [],
+            "allergies":          allergies,
+            "cal_loss":           cal_loss,
+            "cal_maintenance":    cal_maintenance,
+            "cal_gain":           cal_gain,
+            "target_calories":    target_cal,
         }
         
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
