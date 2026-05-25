@@ -20,7 +20,15 @@ class Orchestrator:
         
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """You are the Orchestrator for 'Agentic AI Gym'.
-Your task is to classify user intent based on the current message and the conversation context.
+Your task is to:
+1. Classify user intent based on the current message and the conversation context.
+2. Detect the language of the incoming message:
+   - 'english': If written in English (e.g. "I want a chest workout plan").
+   - 'hindi': If written in Hindi grammar and in the native Devanagari script (e.g. "मुझे वजन कम करने के लिए डाइट चार्ट चाहिए").
+   - 'hinglish': If written in Hindi grammar/vocabulary but transliterated into the Latin/Roman script (e.g. "Mera weight loss plan bana do", "kya main weight loss ke dauran rice kha sakta hu?").
+3. Translate the query to English:
+   - Translate all Hindi or Hinglish queries accurately into grammatically correct English so that downstream fitness/diet RAG agents can perform highly accurate search queries.
+   - If the user query is already in English, keep the `english_translation` identical to the original message.
 
 CONTEXT SUMMARY: {summary}
 
@@ -78,8 +86,32 @@ MULTI-INTENT RULES (CRITICAL):
             logger.info("🧠 [Orchestrator] Stripping 'nutrition' intent because an image is present. Vision Agent will handle the nutritional breakdown.")
             final_intents.remove("nutrition")
 
+        # ── Multilingual Translation & Substitution ─────────────────────────
+        detected_lang = res.detected_language.strip().lower() if res.detected_language else "english"
+        if detected_lang not in ("english", "hindi", "hinglish"):
+            detected_lang = "english"  # Fallback safety
+
+        # Read optional override language from payload context
+        payload_context = state.get("user_context", {}) or {}
+        resolved_lang = payload_context.get("language") or state.get("language") or detected_lang
+        resolved_lang = resolved_lang.strip().lower()
+
+        logger.info(f"🌐 [Orchestrator] Detected query language: {detected_lang} | Resolved target language: {resolved_lang}")
+
+        # Substitute the last message in LangGraph active memory with the translated English text
+        # this ensures downstream specialized agents query their RAG in English with high precision.
+        current_messages = list(state.get("messages", []))
+        if current_messages and resolved_lang != "english":
+            from langchain_core.messages import HumanMessage
+            logger.info(f"📝 [Orchestrator] Substituting query with English translation: '{res.english_translation}'")
+            current_messages[-1] = HumanMessage(content=res.english_translation)
+
         return {
             "intent": final_intents,
             "is_fitness_domain": res.is_fitness_domain,
-            "next_node": route
+            "next_node": route,
+            "language": resolved_lang,
+            "original_query": last_message,
+            "translated_query": res.english_translation,
+            "messages": {"type": "replace", "messages": current_messages}
         }
