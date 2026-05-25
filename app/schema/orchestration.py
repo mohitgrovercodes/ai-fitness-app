@@ -21,6 +21,8 @@ class IntentResponse(BaseModel):
     has_body_transformation_goal: bool = Field(description="True if the user's message involves a body transformation goal that requires BOTH workout AND nutrition — e.g. losing weight, gaining muscle, slimming down, bulking up, body recomposition, fat loss, or any goal that implies changing their body composition. False for single-topic queries like 'how many calories in X?' or 'show me a push-up'.")
     reasoning: str = Field(description="Short explanation of the classification")
     confidence: float = Field(ge=0, le=1)
+    detected_language: str = Field(description="The detected language of the query. Must be one of: 'english', 'hindi' (if Devanagari script), or 'hinglish' (if Hindi grammar/vocabulary in Roman script).")
+    english_translation: str = Field(description="The English translation of the user's message. If the user message is already in English, return the original message as-is.")
 
 class SafetyResult(BaseModel):
     """Schema for safety guardrail results."""

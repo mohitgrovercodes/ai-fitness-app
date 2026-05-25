@@ -45,3 +45,8 @@ class AgentState(TypedDict):
     is_safe: bool
     safety_reason: Optional[str]
     safety_response: Optional[str] # Added for the polite rejection message
+    
+    # Multilingual State
+    language: Optional[str]  # e.g., 'english', 'hindi', 'hinglish'
+    original_query: Optional[str]  # Raw user message
+    translated_query: Optional[str]  # English translation of the user message
