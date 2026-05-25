@@ -246,26 +246,70 @@ FINAL RESPONSE:"""
     }
 
 async def out_of_scope_handler(state: AgentState):
-    """Handles general/non-fitness queries."""
-    msg = "I'm your AI Fitness & Nutrition coach. I specialize in workouts and diet. Could we stick to those topics?"
+    """Handles general/non-fitness queries dynamically in the target language."""
+    target_lang = state.get("language") or "english"
+    target_lang = target_lang.strip().lower()
+
+    messages = {
+        "english": "I'm your AI Fitness & Nutrition coach. I specialize in workouts and diet. Could we stick to those topics?",
+        "hindi": "मैं आपका एआई फिटनेस और न्यूट्रिशन कोच हूं। मैं वर्कआउट और डाइट में विशेषज्ञ हूं। क्या हम इन विषयों पर बात कर सकते हैं?",
+        "hinglish": "Main aapka AI Fitness & Nutrition coach hu. Main workouts aur diet me specialize karta hu. Kya hum in topics par baat kar sakte hain?"
+    }
+    msg = messages.get(target_lang, messages["english"])
+
+    current_messages = list(state.get("messages", []))
+    if current_messages and state.get("original_query"):
+        from langchain_core.messages import HumanMessage
+        for i in range(len(current_messages) - 1, -1, -1):
+            if isinstance(current_messages[i], HumanMessage):
+                current_messages[i] = HumanMessage(content=state["original_query"])
+                break
+
     return {
-        "messages": [AIMessage(content=msg)],
+        "messages": {"type": "replace", "messages": current_messages + [AIMessage(content=msg)]},
         "next_node": END
     }
 
 async def safe_response_node(state: AgentState):
-    """Handles queries blocked by the safety guardrail."""
-    msg = state.get("safety_response", "I cannot fulfill this request due to safety or policy guidelines.")
+    """Handles queries blocked by the safety guardrail in the native language/script."""
+    msg = state.get("safety_response")
+    if not msg:
+        target_lang = state.get("language") or "english"
+        target_lang = target_lang.strip().lower()
+        messages = {
+            "english": "I cannot fulfill this request due to safety or policy guidelines.",
+            "hindi": "मैं सुरक्षा या नीति दिशानिर्देशों के कारण इस अनुरोध को पूरा नहीं कर सकता।",
+            "hinglish": "Main safety aur policy guidelines ke chalte is request ko fulfill nahi kar sakta."
+        }
+        msg = messages.get(target_lang, messages["english"])
+
+    current_messages = list(state.get("messages", []))
+    if current_messages and state.get("original_query"):
+        from langchain_core.messages import HumanMessage
+        for i in range(len(current_messages) - 1, -1, -1):
+            if isinstance(current_messages[i], HumanMessage):
+                current_messages[i] = HumanMessage(content=state["original_query"])
+                break
+
     return {
-        "messages": [AIMessage(content=msg)],
+        "messages": {"type": "replace", "messages": current_messages + [AIMessage(content=msg)]},
         "next_node": END
     }
 
 async def global_error_handler(state: AgentState):
-    """Fallback node for unexpected graph failures."""
+    """Fallback node for unexpected graph failures with multilingual error messages."""
     logger.error("🚨 [Global Error] An unexpected error occurred during graph execution.")
+    target_lang = state.get("language") or "english"
+    target_lang = target_lang.strip().lower()
+    
+    messages = {
+        "english": "I'm sorry, I encountered an unexpected error while processing your request. Please try again in a moment or ask something else! 🛠️",
+        "hindi": "मुझे खेद है, आपका अनुरोध संसाधित करते समय एक अप्रत्याशित त्रुटि हुई। कृपया थोड़ी देर में पुनः प्रयास करें या कुछ और पूछें! 🛠️",
+        "hinglish": "I'm sorry, aapki request process karte waqt ek unexpected error aa gayi. Please thodi der baad fir se try karein ya kuch aur poochein! 🛠️"
+    }
+    msg = messages.get(target_lang, messages["english"])
     return {
-        "messages": [AIMessage(content="I'm sorry, I encountered an unexpected error while processing your request. Please try again in a moment or ask something else! 🛠️")],
+        "messages": [AIMessage(content=msg)],
         "next_node": END
     }
 
