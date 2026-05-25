@@ -548,10 +548,10 @@ class AIService:
         current_goal = g_val or "General Fitness"
         target_cal = cal_maintenance
         if current_goal:
-            g_lower = current_goal.lower()
-            if "loss" in g_lower or "lose" in g_lower or "decrease" in g_lower:
+            goal_cat = await _resolve_goal_category(current_goal)
+            if goal_cat == "loss":
                 target_cal = cal_loss
-            elif "gain" in g_lower or "bulk" in g_lower or "increase" in g_lower:
+            elif goal_cat == "gain":
                 target_cal = cal_gain
 
         merged_context = {
