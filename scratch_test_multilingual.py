@@ -72,5 +72,29 @@ async def main():
         query="kya main gau maans ya beef kha sakta hu protein intake badhane ke liye?"
     )
 
+    # ── Test 6: Direct API Workout Plan Generation in Hinglish ──────────────────
+    print("\n" + "="*80)
+    print("TEST CASE 6: Direct API generate_workout_plan in Hinglish")
+    print("Input Payload: {'message': 'Mere liye workout do'}")
+    print("="*80)
+    try:
+        direct_result = await AIService.generate_workout_plan({
+            "user_id": "test_direct_user",
+            "message": "Mere liye workout do",
+            "goal": "muscle gain",
+            "level": "beginner"
+        })
+        print("\nDIRECT API RESPONSE (Summary):")
+        print(direct_result["summary"])
+        print(f"Generated {len(direct_result.get('workout', []))} exercises in Hinglish Roman script.")
+        if direct_result.get("workout"):
+            # Print first exercise details to verify translation
+            ex = direct_result["workout"][0]
+            print(f"First exercise name: '{ex.get('name')}'")
+            print(f"   Description: '{ex.get('description')}'")
+            print(f"   Benefit: '{ex.get('benefit')}'")
+    except Exception as e:
+        print(f"Direct API Test Failed: {e}")
+
 if __name__ == "__main__":
     asyncio.run(main())

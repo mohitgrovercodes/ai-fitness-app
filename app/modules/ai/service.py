@@ -534,6 +534,17 @@ class AIService:
             from app.utils.logger import logger as _log
             _log.info(f"📩 [generate_diet] No message in body — auto-built: '{user_input}'")
         
+        # ── Multilingual Input Resolution ──
+        payload_language = data.get("language") or data.get("preferred_language")
+        detected_lang, translated_input = await _detect_and_translate_query(user_input)
+        target_lang = (payload_language or detected_lang).strip().lower()
+        
+        original_diet_query = user_input
+        if target_lang != "english" and translated_input:
+            from app.utils.logger import logger as _log
+            _log.info(f"🌐 [generate_diet] Translating Hinglish/Hindi query '{user_input}' to English: '{translated_input}'")
+            user_input = translated_input
+
         state = {
             "messages": [HumanMessage(content=user_input)],
             "user_context": merged_context,
@@ -542,12 +553,19 @@ class AIService:
         }
         result = await NutritionAgent().run(state)
         output = result.get("specialist_results", {}).get("nutrition", {})
+        
+        # ── Multilingual Output Rendering ──
+        if target_lang != "english":
+            from app.utils.logger import logger as _log
+            _log.info(f"🌐 [generate_diet] Rendering structured plan output in target language: {target_lang}")
+            output = await _translate_structured_output(output, target_lang)
+
         import json
         from app.core.redis_client import redis_manager
         try:
             if redis_manager.is_available():
                 redis_key = f"chat_history:{user_id}"
-                human_msg = {"type": "human", "content": user_input}
+                human_msg = {"type": "human", "content": original_diet_query}
                 ai_msg = {
                     "type": "ai",
                     "structured_data": {"Nutrition": output},
