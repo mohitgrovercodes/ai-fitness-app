@@ -77,11 +77,6 @@ def _resolve_list(payload_val, db_val, default_val=None):
 async def _detect_and_translate_query(user_input: str) -> tuple[str, str]:
     if not user_input:
         return "english", ""
-        
-    # Check for simple English common queries to avoid unnecessary LLM calls
-    lower_input = user_input.strip().lower()
-    if lower_input.isascii() and any(word in lower_input for word in ("workout", "diet", "plan", "lose", "gain", "legs", "hypertrophy", "cardio")):
-        return "english", user_input
 
     from langchain_openai import ChatOpenAI
     from app.core.config import settings
@@ -128,7 +123,7 @@ STRICT RULES:
 1. Maintain the EXACT same JSON keys, array sizes, and structure. Do NOT add or remove any keys.
 2. Maintain all numeric values, sets, reps, and URLs exactly as-is (e.g. keep gif_path and image_path URLs unmodified).
 3. If the target language is 'HINDI', translate into high-quality Devanagari script (e.g., "नमस्ते", "वर्कआउट").
-4. If the target language is 'HINGLISH', translate into natural, social-media-style transliterated Hindi/English blend written in the Roman/Latin alphabet (e.g., "Aapka chest workout ready hai").
+4. If the target language is 'HINGLISH', translate into natural, social-media-style transliterated Hindi/English blend written in the Roman/Latin alphabet (e.g., "Aapka plan ready hai").
 5. Only translate natural language fields (such as 'summary', 'tip', 'description', 'benefit', 'day', 'type', 'name' if applicable). Keep technical labels, IDs, or schemas identical.
 
 JSON OBJECT TO TRANSLATE:
@@ -147,6 +142,70 @@ TRANSLATED JSON:"""
         from app.utils.logger import logger
         logger.error(f"Error during structured translation of direct API output: {e}")
         return output
+
+async def _translate_plain_text(text: str, target_lang: str) -> str:
+    if not text or not target_lang or target_lang.strip().lower() == "english":
+        return text
+        
+    from langchain_openai import ChatOpenAI
+    from app.core.config import settings
+    
+    try:
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=settings.OPENAI_API_KEY)
+        
+        prompt = f"""You are a dynamic translation engine for a fitness application.
+Translate the following fitness-related explanation or text into '{target_lang.upper()}'.
+
+STRICT RULES:
+1. If the target language is 'HINDI', translate into encouraging, natural Hindi in Devanagari script. Keep basic fitness words phonetically written in Devanagari (e.g., write "वर्कआउट", "कैलरी", "मसल" rather than complex formal translation).
+2. If the target language is 'HINGLISH', translate into natural, social-media-style transliterated Hindi/English blend written in the Roman alphabet (e.g. "Aapka chest workout ready hai").
+3. Keep the translation professional, accurate, and motivating.
+4. Return ONLY the translated text, with no extra annotations, prefixes, or markdown blocks.
+
+TEXT TO TRANSLATE:
+{text}
+
+TRANSLATION:"""
+        
+        res = await llm.ainvoke(prompt)
+        return res.content.strip()
+    except Exception as e:
+        from app.utils.logger import logger
+        logger.error(f"Error during plain text translation: {e}")
+        return text
+
+async def _resolve_goal_category(goal_str: str) -> str:
+    if not goal_str:
+        return "maintenance"
+        
+    from langchain_openai import ChatOpenAI
+    from app.core.config import settings
+    from pydantic import BaseModel, Field
+    
+    class GoalCategoryResult(BaseModel):
+        category: str = Field(description="Must be 'loss', 'gain', or 'maintenance'")
+        
+    try:
+        llm = ChatOpenAI(
+            model="gpt-4o-mini", 
+            temperature=0, 
+            api_key=settings.OPENAI_API_KEY
+        ).with_structured_output(GoalCategoryResult, method="function_calling")
+        
+        prompt = f"""Classify this fitness goal string:
+"{goal_str}"
+
+Map it to one of these categories:
+- 'loss': If it represents losing weight, fat loss, cutting, body recomposition (loss focus), decreasing weight, or leaning out.
+- 'gain': If it represents building muscle, gaining weight, bulking, increasing strength/mass, or muscle hypertrophy.
+- 'maintenance': If it represents maintaining weight, general health, flexibility, recovery, or endurance.
+
+Return the result matching the required schema."""
+        
+        res = await llm.ainvoke(prompt)
+        return res.category.strip().lower()
+    except Exception:
+        return "maintenance"
 
 class AIService:
 
@@ -203,9 +262,10 @@ class AIService:
             if w_val and h_val and a_val:
                 tdee_data = _compute_tdee(w_val, h_val, a_val, gender_str, activity_str)
                 current_goal = g_val or ""
-                if "loss" in current_goal.lower() or "lose" in current_goal.lower() or "decrease" in current_goal.lower():
+                goal_cat = await _resolve_goal_category(current_goal)
+                if goal_cat == "loss":
                     target_cal = tdee_data["cal_loss"]
-                elif "gain" in current_goal.lower() or "bulk" in current_goal.lower() or "increase" in current_goal.lower():
+                elif goal_cat == "gain":
                     target_cal = tdee_data["cal_gain"]
                 else:
                     target_cal = tdee_data["cal_maintenance"]
@@ -608,6 +668,16 @@ class AIService:
         finally:
             db.close()
 
+        # ── Multilingual Input Resolution ──
+        payload_language = data.get("language") or data.get("preferred_language")
+        detected_lang, translated_input = await _detect_and_translate_query(user_input)
+        target_lang = (payload_language or detected_lang).strip().lower()
+
+        if target_lang != "english" and translated_input:
+            from app.utils.logger import logger as _log
+            _log.info(f"🌐 [ask_domain] Translating Hinglish/Hindi query '{user_input}' to English: '{translated_input}'")
+            user_input = translated_input
+
         state = {
             "messages": [HumanMessage(content=user_input)],
             "user_context": db_context,
@@ -617,7 +687,15 @@ class AIService:
         result = await DomainAgent().run(state)
         output = result.get("specialist_results", {}).get("domain", {})
         
+        response_text = output.get("answer", "Could not answer the query.")
+        
+        # ── Multilingual Output Rendering ──
+        if target_lang != "english" and response_text:
+            from app.utils.logger import logger as _log
+            _log.info(f"🌐 [ask_domain] Translating response text to target language: {target_lang}")
+            response_text = await _translate_plain_text(response_text, target_lang)
+
         return {
-            "response": output.get("answer", "Could not answer the query."),
+            "response": response_text,
             "sources": output.get("sources", "internal_knowledge")
         }
