@@ -454,7 +454,7 @@ class AIService:
         }
         result = await TrainingAgent().run(state)
         output = result.get("specialist_results", {}).get("training", {})
-        
+        ai_generated_msg=output
         # ── Multilingual Output Rendering ──
         if target_lang != "english":
             from app.utils.logger import logger as _log
@@ -472,8 +472,16 @@ class AIService:
                     "structured_data": {"training": output},
                     "intents": ["workout"]
                 }
+                human_msg_translated = {"type": "human", "content": translated_input}
+                ai_msg_orignal = {
+                    "type": "ai",
+                    "structured_data": {"training": ai_generated_msg},
+                    "intents": ["workout"]
+                }
                 redis_manager.client.rpush(redis_key, json.dumps(human_msg))
                 redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
+                redis_manager.client.rpush(redis_key, json.dumps(human_msg_translated))
+                redis_manager.client.rpush(redis_key, json.dumps(ai_msg_orignal))
         except Exception as e:
             print(f"Redis save error in generate_workout: {e}")
         return {
@@ -702,6 +710,7 @@ class AIService:
         output = result.get("specialist_results", {}).get("domain", {})
         
         response_text = output.get("answer", "Could not answer the query.")
+        ai_msg=response_text
         # ── Multilingual Output Rendering ──
         if target_lang != "english" and response_text:
             from app.utils.logger import logger as _log
@@ -713,14 +722,22 @@ class AIService:
         try:
             if redis_manager.is_available():
                 redis_key = f"chat_history:{user_id}"
-                human_msg = {"type": "human", "content": original_input}
-                ai_msg = {
+                human_msg_original = {"type": "human", "content": original_input}
+                ai_msg_translated = {
                     "type": "ai",
-                    "structured_data": {"Domain": output},
+                    "structured_data": {"Domain": response_text},
                     "intents": ["domain intent"]
                 }
-                redis_manager.client.rpush(redis_key, json.dumps(human_msg))
-                redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
+                human_msg_translated = {"type": "human", "content": user_input}
+                ai_msg_original = {
+                    "type": "ai",
+                    "structured_data": {"Domain": ai_msg},
+                    "intents": ["domain intent"]
+                }
+                redis_manager.client.rpush(redis_key, json.dumps(human_msg_original))
+                redis_manager.client.rpush(redis_key, json.dumps(ai_msg_translated))
+                redis_manager.client.rpush(redis_key, json.dumps(human_msg_translated))
+                redis_manager.client.rpush(redis_key, json.dumps(ai_msg_original))
         except Exception as e:
             print(f"Redis save error in generate_workout: {e}")
         return {
