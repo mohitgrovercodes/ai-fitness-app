@@ -52,7 +52,11 @@ def _resolve_list(payload_val, db_val, default_val=None):
         if val is None:
             return None
         if isinstance(val, str):
-            parts = [item.strip() for item in val.split(",") if item.strip()]
+            parts = []
+            for item in val.split(","):
+                s = item.strip()
+                if s and s.lower() not in ("null", "none", "undefined"):
+                    parts.append(s)
             return parts if parts else None
         if isinstance(val, list):
             parts = []
