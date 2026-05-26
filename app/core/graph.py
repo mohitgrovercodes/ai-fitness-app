@@ -131,11 +131,12 @@ async def synthesis_node(state: AgentState):
     gender = user_context.get("gender", "Unknown")
     activity_level = user_context.get("activity_level", "Unknown")
     diet_pref = user_context.get("diet_preference", "Not specified")
-    
     injuries_raw = user_context.get("injuries", [])
     injuries = ", ".join(injuries_raw) if isinstance(injuries_raw, list) and injuries_raw else "None"
     medical_raw = user_context.get("medical_conditions", [])
     medical = ", ".join(medical_raw) if isinstance(medical_raw, list) and medical_raw else "None"
+    allergy_raw=user_context.get("allergies",[])
+    allergies = ",".join(allergy_raw)if isinstance(allergy_raw,list)and allergy_raw else "None"
 
     cal_loss        = user_context.get("cal_loss", 0)
     cal_maintenance = user_context.get("cal_maintenance", 0)
@@ -193,6 +194,7 @@ Goal: {goal}
 Dietary Preference: {diet_pref}
 Injuries/Medical: {injuries}
 Medical Conditions: {medical}
+Allergies:{allergies}
 *Note: If the user directly asks about their profile (e.g., "What is my weight?"), use the profile above to answer them directly.*
 
 {lang_instruction}

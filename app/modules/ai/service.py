@@ -613,7 +613,8 @@ class AIService:
         }
         result = await NutritionAgent().run(state)
         output = result.get("specialist_results", {}).get("nutrition", {})
-        
+        ai_msg_translated=output
+
         # ── Multilingual Output Rendering ──
         if target_lang != "english":
             from app.utils.logger import logger as _log
@@ -625,14 +626,23 @@ class AIService:
         try:
             if redis_manager.is_available():
                 redis_key = f"chat_history:{user_id}"
-                human_msg = {"type": "human", "content": original_diet_query}
-                ai_msg = {
+                human_msg_original = {"type": "human", "content": original_diet_query}
+                ai_msg_original = {
                     "type": "ai",
                     "structured_data": {"Nutrition": output},
                     "intents": ["nutrition"]
                 }
-                redis_manager.client.rpush(redis_key, json.dumps(human_msg))
+                human_msg_translated = {"type": "human", "content": user_input}
+                ai_msg = {
+                    "type": "ai",
+                    "structured_data": {"Nutrition": ai_msg_translated},
+                    "intents": ["nutrition"]
+                }
+                redis_manager.client.rpush(redis_key, json.dumps(human_msg_original))
+                redis_manager.client.rpush(redis_key, json.dumps(ai_msg_original))
+                redis_manager.client.rpush(redis_key, json.dumps(human_msg_translated))
                 redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
+
         except Exception as e:
             print(f"Redis save error in generate_workout: {e}")
         
@@ -654,7 +664,7 @@ class AIService:
         
         user_id = data.get("user_id", "default")
         user_input = data.get("message", "What is muscle hypertrophy?")
-
+        original_input=user_input
         # Fetch real user profile from DB to give DomainAgent some context
         db = SessionLocal()
         db_context = {}
@@ -688,7 +698,6 @@ class AIService:
         output = result.get("specialist_results", {}).get("domain", {})
         
         response_text = output.get("answer", "Could not answer the query.")
-        
         # ── Multilingual Output Rendering ──
         if target_lang != "english" and response_text:
             from app.utils.logger import logger as _log
@@ -700,7 +709,7 @@ class AIService:
         try:
             if redis_manager.is_available():
                 redis_key = f"chat_history:{user_id}"
-                human_msg = {"type": "human", "content": user_input}
+                human_msg = {"type": "human", "content": original_input}
                 ai_msg = {
                     "type": "ai",
                     "structured_data": {"Domain": output},
