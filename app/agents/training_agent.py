@@ -8,12 +8,12 @@ from app.utils.logger import logger
 
 
 class WorkoutExercise(BaseModel):
-    day: Optional[str] = Field(default="", description="Day label for multi-day splits (e.g., 'Day 1 - Upper Body'). Leave empty for single-day plans.")
+    day: Optional[str] = Field(default="", description="Day label. CRITICAL RULE: You MUST dynamically invent and assign a proper biomechanical gym split tailored to the user's goal and total days. DO NOT repeatedly spam identical full-body days across the plan.")
     name: Optional[str] = Field(default="", description="Name of the exercise.")
     target_muscle: List[str] = Field(default_factory=list, description="List of target muscles.")
     benefit: Optional[str] = Field(default="", description="Benefit of this exercise.")
     description: Optional[str] = Field(default="", description="Step-by-step instructions on how to perform the exercise.")
-    sets: Optional[str] = Field(default="", description="DYNAMIC: Recommended number of sets based on goal (e.g., '4', '3', '5').")
+    sets: Optional[str] = Field(default="", description="Recommended number of sets. CRITICAL RULE: You MUST dynamically calculate and scale the volume (sets) along a continuous gradient directly proportional to the user's Activity Level. Higher activity levels strictly require advanced high-volume protocols and intense methods (like supersets/drop sets) matching an athlete's capacity, while lower levels require safe, foundational low-volume protocols.")
     reps: Optional[str] = Field(default="", description="DYNAMIC: Recommended reps or duration based on goal (e.g., '5-8' for strength, '15-20' for endurance, '60 seconds').")
     gif_path: Optional[str] = Field(default="", description="Exact relative path to the GIF (e.g., videos/0044-XlZ4lAC.gif)")
     image_path: Optional[str] = Field(default="", description="Exact relative path to the Image (e.g., images/0044-XlZ4lAC.jpg)")
@@ -29,7 +29,7 @@ class TrainingAnalysis(BaseModel):
     sub_queries: List[str] = Field(default=[], description="Alternative search terms for routines.")
     final_answer: str = Field(description="Full text markdown response for chat users.")
     summary: str = Field(default="", description="Brief introduction/summary of the workout.")
-    workout: List[WorkoutExercise] = Field(default=[], description="List of structured active physical exercises.")
+    workout: List[WorkoutExercise] = Field(default=[], description="List of active physical exercises. CRITICAL RULE: 1) Dynamically prepend warmups and append cooldowns strictly tailored to the daily muscles. 2) Exercise complexity MUST dynamically scale proportionally with the user's Activity Level—invent advanced, highly complex techniques for high activity levels, and basic functional movements for lower levels.")
     rest_days: List[RestDay] = Field(default=[], description="List of rest days. Must be completely separate from the workout list.")
     tip: str = Field(default="", description="Closing tip for safety or cooldown.")
     exercise_gifs: Dict[str, str] = Field(default={}, description="Mapping of exercise name to GIF relative path.")
@@ -88,19 +88,7 @@ INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC — BIOMECHANICS SAFETY PROTOCOL):
 - You MUST explicitly state in the `description` or `benefit` field how you adapted the selection to protect the injury (e.g., "Substituted with Seated Press to protect your injured joint").
 - Always include a specific injury-safe warning in the `tip` field.
 
-NEW RULE (100% DYNAMIC WARMUPS & COOLDOWNS):
-- You MUST explicitly include 1-2 Warmup/Mobility exercises at the start of the workout, and 1 Cooldown stretch at the end.
-- CRITICAL: The warmup must be DYNAMICALLY tailored to that day's target muscles (e.g., do NOT prescribe generic jogging for an Upper Body day; prescribe dynamic shoulder/chest openers).
 
-NEW RULE (DYNAMIC SAFETY & VOLUME SCALING):
-- If the user's fitness level is "Beginner" (or if no fitness level is provided), you MUST dynamically downgrade complex plyometrics (like Box Jumps) to safer functional alternatives (like Step-Ups).
-- You MUST dynamically calculate sets and reps for ALL exercises, especially HIIT, to match the user's exact conditioning level. Never prescribe elite-level volume (e.g., 5 sets of Burpees) to a beginner or unknown user.
-
-
-NEW RULE (100% DYNAMIC SPLIT SELECTION):
-- You are strictly forbidden from repeatedly spamming "Full Body" for multi-day plans unless explicitly requested.
-- DYNAMIC SPLIT GENERATION: You MUST dynamically invent and apply the most biomechanically optimal training split based purely on the user's N days and Goal (e.g., Muscle Gain might require a Push/Pull/Legs sequence, while general conditioning might require an Upper/Lower/HIIT sequence). 
-- The split you choose must ensure no single muscle group is overtrained.
 
 Example JSON mapping: exercise_gifs = {{"Push-up": "videos/0662-I4hDWkc.gif"}}, exercise_images = {{"Push-up": "images/0662-I4hDWkc.jpg"}}.
 
