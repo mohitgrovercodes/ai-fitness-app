@@ -9,7 +9,6 @@ from app.agents.router import AgentRouter, SafetyGuardrail
 from langchain_core.messages import AIMessage
 from app.utils.logger import logger
 
-from app.agents.memory_agent import MemoryManager
 
 # Node functions will initialize agents lazily
 
@@ -217,6 +216,7 @@ GENERAL RULES:
 - Format the final response using clean Markdown.
 - If both workout and nutrition advice are provided, explain how they complement each other briefly.
 - DIRECT ANSWER MANDATE (CRITICAL): The very FIRST sentence of your response MUST dynamically and directly address the user's explicit query using the exact factual data provided in the SPECIALIST ADVICE block. You are STRICTLY FORBIDDEN from dropping, ignoring, or burying the core answer provided by the specialist. Only AFTER the core factual query has been clearly answered, you may seamlessly transition into dynamic, encouraging coaching paragraphs based on the user's profile context.
+- DYNAMIC VERBOSITY (CRITICAL): If the SPECIALIST ADVICE provided to you is just a short factual answer (e.g. answering a profile query like 'You have no injuries'), you MUST keep your final response equally short and direct (1-2 sentences). DO NOT add unsolicited coaching, diet tips, or workout advice unless the user specifically asked for a plan.
 SPECIALIST ADVICE:
 {context_str}
 
@@ -332,7 +332,6 @@ def build_graph():
     async def _orch(state): return await Orchestrator().run(state)
     async def _safety_out(state): return await SafetyGuardrail().check_response(state)
     async def _router(state): return AgentRouter().route(state)
-    async def _memory(state): return await MemoryManager().run(state)
 
     workflow.add_node("safety_guardrail", _safety, retry=api_retry)
     workflow.add_node("output_safety", _safety_out, retry=api_retry)
@@ -341,7 +340,6 @@ def build_graph():
     workflow.add_node("agent_router", _router)
     workflow.add_node("specialists_node", specialists_node) # Already has internal retries/sequential logic
     workflow.add_node("synthesis_layer", synthesis_node, retry=api_retry)
-    workflow.add_node("memory_manager", _memory)
     workflow.add_node("out_of_scope_handler", out_of_scope_handler)
     
     # ── 3. EDGES (Routing) ───────────────────────────────────
@@ -370,18 +368,17 @@ def build_graph():
     workflow.add_conditional_edges(
         "synthesis_layer",
         lambda state: state.get("next_node", "output_safety"),
-        {"output_safety": "output_safety", "memory_manager": "memory_manager"}
+        {"output_safety": "output_safety", "memory_manager": "output_safety"}
     )
     
     workflow.add_conditional_edges(
         "output_safety",
         lambda s: s["next_node"],
-        {"memory_manager": "memory_manager", "safe_response_node": "safe_response_node"}
+        {"memory_manager": END, "safe_response_node": "safe_response_node"}
     )
 
-    workflow.add_edge("out_of_scope_handler", "memory_manager")
-    workflow.add_edge("safe_response_node", "memory_manager")
-    workflow.add_edge("memory_manager", END)
+    workflow.add_edge("out_of_scope_handler", END)
+    workflow.add_edge("safe_response_node", END)
 
     # ── 4. PERSISTENCE (Production Grade) ───────────────────
     # Use MemorySaver for immediate production reliability on this host.

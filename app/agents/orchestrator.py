@@ -45,7 +45,7 @@ MULTI-INTENT RULES (CRITICAL):
 - Weight loss / weight gain / body transformation goals ALWAYS require BOTH 'workout' AND 'nutrition' intents — the user needs both a workout plan AND a diet plan to achieve their goal.
 - If the user says 'diet plan' AND mentions a fitness goal (lose/gain weight, get fit), return ['workout', 'nutrition'].
 - If the user only asks a single specific question (e.g., 'how many calories in an apple?'), return just ['nutrition'].
-- If the user is asking ANY question about their own personal data stored in this app — regardless of the specific field — return [general].
+- If the user is asking ANY question about their own personal data stored in this app, return ['general']. (For context, the user's stored profile currently contains these fields: {profile_keys})
 - If the user says 'tell me more' or 'how many calories in that?', use the SUMMARY to determine the intent."""),
             ("human", "{input}")
         ])
@@ -60,11 +60,15 @@ MULTI-INTENT RULES (CRITICAL):
         if has_image:
             input_text += "\n\n[SYSTEM NOTE: The user has attached an image file to this request. You MUST include the 'image' intent in your classification!]"
             
+                # Extract dynamic profile keys
+        profile_keys_str = ", ".join(list(state.get("user_context", {}).keys()))
+        
         # Invoke with structured output
         chain = self.prompt | self.model
         res: IntentResponse = await chain.ainvoke({
             "input": input_text,
-            "summary": summary
+            "summary": summary,
+            "profile_keys": profile_keys_str
         })
         
         # Logic for domain checking

@@ -77,7 +77,16 @@ def _resolve_list(payload_val, db_val, default_val=None):
         return clean_db
         
     return default_val
-
+def _extract_specialist_text(specialist_results: dict) -> str:
+    """Dynamically extract first text value from any specialist's response."""
+    text_parts = []
+    for agent_name, data in specialist_results.items():
+        if isinstance(data, dict):
+            for key, val in data.items():
+                if isinstance(val, str) and len(val) > 10:
+                    text_parts.append(val)
+                    break
+    return " | ".join(text_parts) if text_parts else ""
 async def _detect_and_translate_query(user_input: str) -> tuple[str, str]:
     if not user_input:
         return "english", ""
@@ -244,7 +253,7 @@ class AIService:
             payload_med = raw_context.get("medical_conditions")
             payload_language = raw_context.get("language") or raw_context.get("preferred_language")
 
-            # Priority 1: Manual payload values (with fallback if null/empty). Priority 2: DB profile values. Priority 3: safe defaults.
+            # Priority 1: Manual payload values. Priority 2: DB profile values. Priority 3: safe defaults.
             w_val = _resolve_numeric(payload_weight, profile.weight if profile else None, None)
             h_val = _resolve_numeric(payload_height, profile.height if profile else None, None)
             a_val = _resolve_numeric(payload_age, profile.age if profile else None, None)
@@ -262,7 +271,6 @@ class AIService:
             activity_str = req_activity.upper()
 
             # ── Dynamic TDEE Math ──
-            # Recompute TDEE and target calories dynamically based on the final resolved biometric state
             if w_val and h_val and a_val:
                 tdee_data = _compute_tdee(w_val, h_val, a_val, gender_str, activity_str)
                 current_goal = g_val or ""
@@ -297,14 +305,27 @@ class AIService:
         finally:
             db.close()
             
+        # ── Fetch Existing Summary from Redis (Added) ──
+        from app.core.redis_client import redis_manager
+        existing_summary = ""
+        try:
+            if redis_manager.is_available():
+                summary_bytes = redis_manager.client.get(f"chat_summary:{user_id}")
+                if summary_bytes:
+                    existing_summary = summary_bytes.decode("utf-8")
+        except Exception as e:
+            from app.utils.logger import logger
+            logger.error(f"Error fetching summary: {e}")
+
         # Initial state for the graph
+        from langchain_core.messages import HumanMessage
         initial_state = {
             "messages": [HumanMessage(content=user_input)],
             "user_context": merged_context,
-            "conversation_summary": "", # This will be updated by the memory_manager
+            "conversation_summary": existing_summary, # INJECTED SUMMARY
             "user_id": user_id,
-            "specialist_results": {"__clear__": True},  # Wipe old zombie data from previous turns
-            "image_bytes": image_bytes,  # Always set explicitly — None clears old image from MemorySaver
+            "specialist_results": {"__clear__": True}, 
+            "image_bytes": image_bytes,
             "language": None,
             "original_query": None,
             "translated_query": None
@@ -317,7 +338,7 @@ class AIService:
         # Extract the last AI message
         last_msg = final_state["messages"][-1]
         
-        # Extract media and structured data from specialist results if available
+        # Extract media and structured data from specialist results
         gifs = {}
         imgs = {}
         workouts = []
@@ -348,17 +369,87 @@ class AIService:
             "intents": final_state.get("intent", [])
         }
         
-        if gifs:
-            out_data["exercise_gifs"] = gifs
-        if imgs:
-            out_data["exercise_images"] = imgs
-        if daily_totals:
-            out_data["daily_totals"] = daily_totals
-        if per_day_totals:
-            out_data["per_day_totals"] = per_day_totals
+        if gifs: out_data["exercise_gifs"] = gifs
+        if imgs: out_data["exercise_images"] = imgs
+        if daily_totals: out_data["daily_totals"] = daily_totals
+        if per_day_totals: out_data["per_day_totals"] = per_day_totals
+            
+        # ── Multi-Language Redis Saving & Summarization (Moved to service.py) ──
+        import json
+        try:
+            if redis_manager.is_available():
+                redis_key = f"chat_history:{user_id}"
+                summary_key = f"chat_summary:{user_id}"
+                index_key = f"chat_summary_index:{user_id}"
+                
+                original_query = final_state.get("original_query") or user_input
+                translated_query = final_state.get("translated_query")
+                
+                # 1. Save Original Language Turn
+                human_msg_original = {"type": "human", "content": original_query}
+                ai_msg_translated = {
+                    "type": "ai",
+                    "content": last_msg.content,  
+                    # "structured_data": final_state.get("specialist_results", {}), 
+                    # "intents": final_state.get("intent", [])
+                }
+                redis_manager.client.rpush(redis_key, json.dumps(human_msg_original))
+                redis_manager.client.rpush(redis_key, json.dumps(ai_msg_translated))
+                
+                # 2. Save Translated Language Turn (If translation happened)
+                if translated_query and translated_query != original_query:
+                    human_msg_translated = {"type": "human", "content": translated_query}
+                    ai_msg_original = {
+                        "type": "ai",
+                        "content": _extract_specialist_text(final_state.get("specialist_results", {})),
+                        "structured_data": final_state.get("specialist_results", {}),
+                        "intents": final_state.get("intent", [])
+                    }
+                    redis_manager.client.rpush(redis_key, json.dumps(human_msg_translated))
+                    redis_manager.client.rpush(redis_key, json.dumps(ai_msg_original))
+
+                # 3. Summarization Trigger (Runs every 20 messages)
+                total_messages = redis_manager.client.llen(redis_key)
+                last_index_str = redis_manager.client.get(index_key)
+                last_index = int(last_index_str) if last_index_str else 0
+
+                if total_messages - last_index >= 20:
+                    from app.utils.logger import logger
+                    logger.info(f"🧠 [Service Memory] Threshold reached. Summarizing...")
+                    
+                    raw_msgs = redis_manager.client.lrange(redis_key, last_index, total_messages - 1)
+                    parsed_msgs = []
+                    for raw in raw_msgs:
+                        try:
+                            parsed = json.loads(raw)
+                            parsed_msgs.append(f"{parsed.get('type', '')}: {parsed.get('content', '')}")
+                        except: pass
+                    
+                    msg_str = "\n".join(parsed_msgs)
+                    if msg_str.strip():
+                        from langchain_openai import ChatOpenAI
+                        from langchain_core.prompts import ChatPromptTemplate
+                        from app.core.config import settings
+
+                        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=settings.OPENAI_API_KEY)
+                        prompt = ChatPromptTemplate.from_messages([
+                            ("system", "Summarize the conversation history into EXACTLY TWO LINES. Include user goals, injuries, specific foods discussed. EXISTING SUMMARY: {existing_summary}"),
+                            ("human", "NEW MESSAGES:\n{messages_str}")
+                        ])
+                        
+                        chain = prompt | llm
+                        res = await chain.ainvoke({"existing_summary": existing_summary, "messages_str": msg_str})
+                        
+                        new_summary = res.content.strip()
+                        redis_manager.client.set(summary_key, new_summary)
+                        redis_manager.client.set(index_key, total_messages)
+                        logger.info(f"🧠 [Service Memory] New summary created!")
+                    
+        except Exception as e:
+            from app.utils.logger import logger
+            logger.error(f"Redis save/summary error in chat API: {e}")
             
         return out_data
-
 
     @staticmethod
     async def generate_workout_plan(data: dict):
