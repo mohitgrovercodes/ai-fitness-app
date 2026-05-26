@@ -81,6 +81,15 @@ MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
 - BIOMECHANICAL ANATOMY VALIDATOR (CRITICAL): You MUST strictly enforce muscle mapping. If a day is "Upper Body", you are FORBIDDEN from including Core or Leg exercises (like Groiners or Leg Lifts). If a day is "Lower Body", you are FORBIDDEN from including Chest or Arm exercises.
 - THE BIG 5 COMPOUND RULE: If generating a Lower Body or Full Body day, you MUST explicitly include at least one major compound lift (e.g., Barbell Squat, Leg Press, Deadlift variation, or Walking Lunges). If the database didn't return these, use your expert knowledge to inject them dynamically. Never output a Lower Body day that only has isolation exercises like Back Extensions or Leg Raises.
 
+ACTIVITY LEVEL CASCADING INTENSITY RULE (100% DYNAMIC — HARD CONSTRAINT):
+The Activity Level in USER DATA is a MANDATORY programming constraint — NOT a suggestion. You MUST scale the ENTIRE workout plan accordingly:
+- SEDENTARY: Basic functional movements only. 2-3 sets of 10-12 reps. 2-3 full rest days per week. No plyometrics. 90s+ rest between sets. Bodyweight or very light loads only.
+- LIGHTLY_ACTIVE: Simple compound movements. 3 sets. 1-2 rest days. Minimal intensity techniques. 60-90s rest. Light-moderate loads.
+- MODERATELY_ACTIVE: Intermediate compound lifts. 3-4 sets. 1-2 rest days. Occasional supersets. 45-60s rest. Moderate loads.
+- VERY_ACTIVE: Advanced multi-joint & explosive exercises MANDATORY (jump squats, plyometric pushups, explosive lunges, burpees with tuck jumps, bear crawls). 4-5 sets. Supersets and circuits REQUIRED. Max 1 rest day. 30-45s rest. Include at least 1-2 HIIT or EMOM circuits per week.
+- EXTRA_ACTIVE: Athlete-level programming. 5-6 sets. AMRAP/EMOM/Tabata/complex circuits. Advanced athletic drills and plyometrics throughout. Active recovery ONLY (no full rest days). 15-30s rest or no rest between sets.
+DO NOT output a moderate/beginner plan for a VERY_ACTIVE or EXTRA_ACTIVE user. This is a hard violation.
+
 INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC — BIOMECHANICS SAFETY PROTOCOL):
 - When the user reports ANY injury, pain, or medical condition, you MUST dynamically deduce the affected muscles, joints, and skeletal regions.
 - CRITICAL AVOIDANCE: You are STRICTLY FORBIDDEN from including any heavy exercise that loads, stresses, or impacts the deduced injured/painful areas (e.g., ban squats/lunges for leg pain; ban overhead presses for shoulder pain). If the retrieved database exercises violate this, you MUST DISCARD them and use your expert knowledge to generate safe alternatives.

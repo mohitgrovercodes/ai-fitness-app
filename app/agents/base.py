@@ -116,9 +116,7 @@ class BaseRAGAgent:
         # ── Build Intelligence Context (Layer 2) ─────────────────────────────
         # Inject computed biometrics so LLM can make goal-appropriate decisions
         # WITHOUT any hardcoded if-else rules in our code.
-        intelligence_context = self._build_intelligence_context(
-            weight_kg, goal, tdee, diet_pref, injuries, medical
-        )
+        intelligence_context = self._build_intelligence_context(weight_kg, goal, tdee, diet_pref, injuries, medical, activity_level)
 
         logger.info(
             f"🧬 [{self.agent_name}] Profile: name='{full_name}', goal='{goal}', "
@@ -130,7 +128,7 @@ class BaseRAGAgent:
         # ── PHASE 1: Profile-Enriched RAG Search (Layer 1) ───────────────────
         # Enrich the search query with user profile so ChromaDB embeddings
         # return goal-relevant results — no extra LLM call, zero extra cost.
-        enriched_query = self._build_enriched_query(query, goal, diet_pref, weight_kg, injuries)
+        enriched_query = self._build_enriched_query(query, goal, diet_pref, weight_kg, injuries, activity_level)
         db_results  = await self.rag_tool.search(enriched_query, diet_preference=diet_pref)
         context_str = self._format_context(db_results)
 
@@ -226,7 +224,7 @@ class BaseRAGAgent:
         raise NotImplementedError("Subclasses must implement _format_context")
 
     @staticmethod
-    def _build_enriched_query(query: str, goal: str, diet: str, weight_kg, injuries: str) -> str:
+    def _build_enriched_query(query: str, goal: str, diet: str, weight_kg, injuries: str, activity_level: str = "") -> str:
         """
         Layer 1: Profile-enriched RAG search query.
         Combines user message with their profile so ChromaDB embedding search
@@ -242,11 +240,13 @@ class BaseRAGAgent:
             parts.append(f"body weight: {weight_kg}kg")
         if injuries and injuries.lower() != "none":
             parts.append(f"injuries: {injuries}")
+        if activity_level and activity_level.lower() not in ("none", "unknown"):
+            parts.append(f"fitness level: {activity_level}")
         enriched = ". ".join(parts)
         return enriched
 
     @staticmethod
-    def _build_intelligence_context(weight_kg, goal: str, tdee: dict, diet: str, injuries: str, medical: str) -> str:
+    def _build_intelligence_context(weight_kg, goal: str, tdee: dict, diet: str, injuries: str, medical: str, activity_level: str = "UNKNOWN") -> str:
         """
         Layer 2: Intelligence Block.
         Computes and formats physiologically grounded targets from user biometrics.
@@ -284,6 +284,11 @@ class BaseRAGAgent:
             f"  {cal_line}\n"
             f"  Diet Constraint: {diet}\n"
             f"  Injury/Medical Constraints: {injuries} | {medical}\n"
-            f"  \u2192 Determine the most appropriate exercise type, rep ranges, macro split, "
-            f"    and food priorities based on the goal above. Do NOT use generic defaults."
+            f"  Activity Level: {activity_level}\n"
+            f"  → CRITICAL TRAINING MANDATE: Scale ALL of the following proportionally to '{activity_level}':\n"
+            f"    - Exercise complexity (basic ↔ explosive/plyometric)\n"
+            f"    - Session volume (sets per exercise)\n"
+            f"    - Weekly training density (rest days frequency)\n"
+            f"    - Training methods (circuits/EMOM/AMRAP for high levels)\n"
+            f"    - Rest periods between sets (longer for beginners, shorter/none for advanced)\n"
         )
