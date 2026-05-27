@@ -90,15 +90,6 @@ The Activity Level in USER DATA is a MANDATORY programming constraint — NOT a 
 - EXTRA_ACTIVE: Athlete-level programming. 5-6 sets. AMRAP/EMOM/Tabata/complex circuits. Advanced athletic drills and plyometrics throughout. Active recovery ONLY (no full rest days). 15-30s rest or no rest between sets.
 DO NOT output a moderate/beginner plan for a VERY_ACTIVE or EXTRA_ACTIVE user. This is a hard violation.
 
-INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC — BIOMECHANICS SAFETY PROTOCOL):
-- When the user reports ANY injury, pain, or medical condition, you MUST dynamically deduce the affected muscles, joints, and skeletal regions.
-- CRITICAL AVOIDANCE: You are STRICTLY FORBIDDEN from including any heavy exercise that loads, stresses, or impacts the deduced injured/painful areas (e.g., ban squats/lunges for leg pain; ban overhead presses for shoulder pain). If the retrieved database exercises violate this, you MUST DISCARD them and use your expert knowledge to generate safe alternatives.
-- REAL RECOVERY PROTOCOL: Instead of just ignoring the injured area, you MUST dynamically include specific Rehab, Mobility, or Stretching exercises targeted at safely recovering the injured joint (e.g., gentle seated stretches for knee pain, wrist flexor stretches for wrist pain). Also dynamically include warm-ups and cooldowns in your routine.
-- You MUST explicitly state in the `description` or `benefit` field how you adapted the selection to protect the injury (e.g., "Substituted with Seated Press to protect your injured joint").
-- Always include a specific injury-safe warning in the `tip` field.
-
-
-
 Example JSON mapping: exercise_gifs = {{"Push-up": "videos/0662-I4hDWkc.gif"}}, exercise_images = {{"Push-up": "images/0662-I4hDWkc.jpg"}}.
 
 GOAL-SPECIFIC WORKOUT RULES (MANDATORY):
@@ -114,6 +105,21 @@ GOAL-SPECIFIC WORKOUT RULES (MANDATORY):
 - Focus entirely on Progressive Overload on heavy compound lifts.
 - Keep cardio minimal to avoid burning excess calories.
 - Use traditional hypertrophy rep ranges (8-12 reps) and longer rest periods (90-120 seconds).
+
+UNIVERSAL INJURY OVERRIDE (HIGHEST PRIORITY — OVERRIDES ALL OTHER RULES):
+If the user reports ANY injury, pain, or medical condition (e.g., shoulder, knee, lower back, wrist), INJURY SAFETY WINS over ALL other rules. 
+- Overrides "THE BIG 5" & "MUSCLE GAIN": You MUST skip heavy lifts (squats, bench press, deadlifts, overhead presses) if they load the injured area, regardless of the day's focus or hypertrophy goals.
+- INJURY VOLUME CAP: Injured users need recovery capacity. You MUST cap volume to a maximum of 3-4 sets per exercise. NEVER prescribe 5-6 sets for an injured user.
+
+INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC — BIOMECHANICS SAFETY PROTOCOL):
+1. DEDUCE affected regions from the reported injury (e.g., "lower back pain" → lumbar spine, hips; "shoulder pain" → deltoids, rotator cuff; "wrist pain" → forearms, wrists).
+2. ZERO STABILIZATION RULE: You are STRICTLY FORBIDDEN from including any exercise that requires the injured area to stabilize the body or bear load. 
+   - Example (Lower Body Injury): NO standing presses, NO bent-over rows, NO burpees. Use chest-supported, seated, or lying variations ONLY.
+   - Example (Upper Body/Wrist Injury): NO planks, NO push-ups, NO front squats. Use leg press, belt squats, or hands-free core exercises.
+3. NO SNEAKY LEAKS: Do NOT include machine variations of forbidden movements (e.g., no Smith Machine Squats for knee pain, no Smith Bench for shoulder pain). Do NOT add "Full Body HIIT" finishers that use the injured joints.
+4. MANDATORY DAILY REHAB WARMUP: You MUST start EVERY single active workout day with 1-2 specific Rehab or Mobility exercises targeted at recovering the injured joint (e.g., external rotations for shoulder pain, cat-cow for back pain) BEFORE the main lifts.
+5. SAFE CARDIO: Use purely unloaded cardio for the injured joint (e.g., swimming or stationary bike for leg pain; walking or stationary bike for shoulder pain).
+6. You MUST explicitly state in EVERY substituted/rehab exercise's `description`: "Adapted to protect/recover your [injured area]."
 
 USER DATA:
 Name: {full_name}
@@ -244,8 +250,8 @@ Current Context: {summary}
 
     async def run(self, state: AgentState) -> Dict[str, Any]:
         # Inject max_training_days into state so run_logic passes it to the prompt.
-        safe_output_tokens = 3680   # gpt-4o-mini with 10% safety margin
-        tokens_per_exercise = 150   # sets + reps + description + benefit (safer buffer)
+        safe_output_tokens = 2500   # Strongly clamped to prevent NoneType JSON truncation errors
+        tokens_per_exercise = 200   # Sets + reps + long descriptions (conservative buffer)
         exercises_per_day   = 6     # typical session volume max
         max_days = max(1, safe_output_tokens // (tokens_per_exercise * exercises_per_day))
         # Store so run_logic picks it up via prompt_vars injection below

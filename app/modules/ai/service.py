@@ -15,6 +15,9 @@ def get_graph():
     return _fitness_graph
 
 def _is_null_or_empty(val):
+    if isinstance(val, (int, float)) and val == 0:
+        return True
+
     if val is None:
         return True
     if isinstance(val, str):
