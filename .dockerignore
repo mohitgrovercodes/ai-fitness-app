@@ -1,0 +1,54 @@
+# --- Secrets ---
+.env
+.env.*
+*.pem
+*.key
+
+# --- Version control ---
+.git
+.gitignore
+.gitattributes
+
+# --- Local virtualenvs (must NEVER ship in image — host ABI mismatch) ---
+venv/
+.venv/
+env/
+ENV/
+gymvenv/
+
+# --- Python build / cache artifacts ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+build/
+dist/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# --- Local-only data and stores (mount as volume instead) ---
+chromadb_store/
+Data/
+data/
+
+# --- Tests / docs not needed inside the runtime image ---
+test/
+tests/
+docs/
+README.md
+
+# --- Docker meta (avoid recursion) ---
+Dockerfile
+docker-compose.yml
+.dockerignore
