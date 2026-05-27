@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.modules.auth.controller import register_user, login_user, delete_account
+from app.modules.auth.controller import register_user, login_user, logout_user, delete_account
 from app.modules.auth.schema import RegisterSchema, LoginSchema, DeleteAccountSchema
 from app.core.sql_db import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, oauth2_scheme
 
 router = APIRouter(tags=["Auth"])
 
@@ -17,6 +17,11 @@ def register(payload: RegisterSchema, db: Session = Depends(get_db)):
 @router.post("/login")
 def login(payload: LoginSchema, db: Session = Depends(get_db)):
     return login_user(db, payload)
+
+
+@router.post("/logout")
+def logout(token: str = Depends(oauth2_scheme)):
+    return logout_user(token)
 
 
 @router.delete(

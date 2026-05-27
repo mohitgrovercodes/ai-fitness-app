@@ -119,3 +119,28 @@ class AuthService:
             )
 
         return {"user_id": user_id, "deleted": True}
+
+    @staticmethod
+    def logout(token: str):
+        from jose import jwt, JWTError
+        from app.core.config import settings
+        import time
+        
+        if not token:
+            return {"message": "No token provided"}
+            
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            exp = payload.get("exp")
+            if not exp:
+                return {"message": "Logged out successfully"}
+            
+            ttl = exp - int(time.time())
+            if ttl > 0:
+                if redis_manager.is_available():
+                    redis_manager.client.setex(f"blacklist_{token}", ttl, "blacklisted")
+                    logger.info(f"🔒 [Auth] Token blacklisted for {ttl} seconds.")
+                    
+            return {"message": "Logged out successfully"}
+        except JWTError:
+            return {"message": "Logged out successfully"}

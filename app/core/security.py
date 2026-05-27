@@ -47,6 +47,16 @@ def get_current_user(
 
     if not token:
         raise credentials_exception
+        
+    # Check Redis Blacklist
+    from app.core.redis_client import redis_manager
+    if redis_manager.is_available() and redis_manager.client.exists(f"blacklist_{token}"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been logged out",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id: str = payload.get("sub")

@@ -47,6 +47,21 @@ def login_user(db: Session, payload):
         )
 
 
+def logout_user(token: str):
+    """
+    Logout a user by blacklisting their JWT token in Redis.
+    """
+    try:
+        result = AuthService.logout(token)
+        return success(result, "Logout success")
+    except Exception:
+        logger.exception("Unexpected error during logout")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Logout failed. Please try again later.",
+        )
+
+
 def delete_account(db: Session, user_id: str, payload):
     """
     Permanently delete the currently authenticated user's account and all
