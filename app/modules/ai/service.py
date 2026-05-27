@@ -376,8 +376,6 @@ class AIService:
             "image_bytes":      image_bytes
         }
 
-
-
     @staticmethod
     async def chat(user_input: str, user_id: str, context: dict = None, image_bytes: bytes = None):
         """
@@ -386,65 +384,13 @@ class AIService:
         """
         config = {"configurable": {"thread_id": user_id}}
         
-        # 1. Fetch Profile from Database if available
-        from app.core.sql_db import SessionLocal
-        from app.modules.profile.service import ProfileService
-        
-        db = SessionLocal()
-        try:
-            profile = ProfileService.get_profile(db, user_id)
-            
-            # ── Normalization: Extract and align keys from incoming payload context ──
-            raw_context = context or {}
-            payload_weight = raw_context.get("weight") if raw_context.get("weight") is not None else raw_context.get("weight_kg")
-            payload_height = raw_context.get("height") if raw_context.get("height") is not None else raw_context.get("height_cm")
-            payload_age    = raw_context.get("age")
-            payload_gender = raw_context.get("gender")
-            payload_activity = raw_context.get("activity_level")
-            payload_goal = raw_context.get("goal")
-            payload_diet = raw_context.get("diet_preference")
-            payload_injuries = raw_context.get("injuries")
-            payload_med = raw_context.get("medical_conditions")
-            payload_language = raw_context.get("language") or raw_context.get("preferred_language")
-
-            # Priority 1: Manual payload values. Priority 2: DB profile values. Priority 3: safe defaults.
-            w_val = _resolve_numeric(payload_weight, profile.weight if profile else None, None)
-            h_val = _resolve_numeric(payload_height, profile.height if profile else None, None)
-            a_val = _resolve_numeric(payload_age, profile.age if profile else None, None)
-            
-            inj = _resolve_list(payload_injuries, profile.injuries if profile else None, [])
-            med = _resolve_list(payload_med, profile.medical_conditions if profile else None, [])
-            g_val = _resolve_string(payload_goal, profile.goal if profile else None, None)
-            d_val = _resolve_string(payload_diet, profile.diet_preference if profile else None, None)
-
-            # Resolve gender and activity level
-            req_gender = _resolve_string(payload_gender, profile.gender.value if profile and profile.gender else None, "male")
-            req_activity = _resolve_string(payload_activity, profile.activity_level.value if profile and profile.activity_level else None, "SEDENTARY")
-            
-            gender_str = req_gender.lower()
-            activity_str = req_activity.upper()
-
-            # ── Unified TDEE / Calorie Targets (single source of truth) ──
-            cal_ctx = await _build_calorie_targets(
-                w_val, h_val, a_val, gender_str, activity_str, g_val or ""
-            )
-
-            merged_context = {
-                "full_name":          profile.full_name if profile else "User",
-                "age":                a_val,
-                "gender":             gender_str.upper(),
-                "weight_kg":          w_val,
-                "height_cm":          h_val,
-                "goal":               g_val,
-                "activity_level":     activity_str,
-                "diet_preference":    d_val,
-                "injuries":           inj if isinstance(inj, list) else [],
-                "medical_conditions": med if isinstance(med, list) else [],
-                **cal_ctx,
-                "language":           _resolve_string(payload_language, None, None)
-            }
-        finally:
-            db.close()
+        # 1. Centralized Request Intake (Single language detection & biometric resolution)
+        resolved = await AIService.initialize_request(
+            user_id=user_id,
+            user_input=user_input,
+            payload_context=context,
+            image_bytes=image_bytes
+        )
             
         # ── Fetch Existing Summary from Redis (Added) ──
         from app.core.redis_client import redis_manager
@@ -458,18 +404,21 @@ class AIService:
             from app.utils.logger import logger
             logger.error(f"Error fetching summary: {e}")
 
+        # The query we pass downstream to the core reasoning engine should be translated_query or original_query
+        query_for_agents = resolved["translated_query"] or resolved["original_query"]
+
         # Initial state for the graph
         from langchain_core.messages import HumanMessage
         initial_state = {
-            "messages": [HumanMessage(content=user_input)],
-            "user_context": merged_context,
+            "messages": [HumanMessage(content=query_for_agents)],
+            "user_context": resolved["user_context"],
             "conversation_summary": existing_summary, # INJECTED SUMMARY
             "user_id": user_id,
             "specialist_results": {"__clear__": True}, 
-            "image_bytes": image_bytes,
-            "language": None,
-            "original_query": None,
-            "translated_query": None
+            "image_bytes": resolved["image_bytes"],
+            "language": resolved["language"],
+            "original_query": resolved["original_query"],
+            "translated_query": resolved["translated_query"]
         }
             
         # Run the graph
@@ -596,69 +545,13 @@ class AIService:
     async def generate_workout_plan(data: dict):
         """Directly calls the TrainingAgent with structured data from a button/form."""
         from app.agents.training_agent import TrainingAgent
-        from app.core.sql_db import SessionLocal
-        from app.modules.profile.service import ProfileService
+        from langchain_core.messages import HumanMessage
         
         user_id = data.get("user_id", "default")
         goal = data.get("goal", "")
         level = data.get("level", "")
         duration = data.get("duration", "")
-        injuries = data.get("injuries", [])
         
-        # Fetch real user profile from DB
-        db = SessionLocal()
-        try:
-            profile = ProfileService.get_profile(db, user_id)
-            
-            # ── Normalization: Extract and align keys from incoming payload data ──
-            payload_weight = data.get("weight") if data.get("weight") is not None else data.get("weight_kg")
-            payload_height = data.get("height") if data.get("height") is not None else data.get("height_cm")
-            payload_age    = data.get("age")
-            payload_gender = data.get("gender")
-            payload_activity = data.get("activity_level") or level
-            payload_goal = data.get("goal") or goal
-            payload_diet = data.get("diet_preference")
-            payload_injuries = data.get("injuries") or injuries
-            payload_med = data.get("medical_conditions")
-
-            # Priority 1: Manual payload values (with fallback if null/empty). Priority 2: DB profile values. Priority 3: safe defaults.
-            w_val = _resolve_numeric(payload_weight, profile.weight if profile else None, None)
-            h_val = _resolve_numeric(payload_height, profile.height if profile else None, None)
-            a_val = _resolve_numeric(payload_age, profile.age if profile else None, None)
-            
-            inj = _resolve_list(payload_injuries, profile.injuries if profile else None, [])
-            med = _resolve_list(payload_med, profile.medical_conditions if profile else None, [])
-            g_val = _resolve_string(payload_goal, profile.goal if profile else None, None)
-            d_val = _resolve_string(payload_diet, profile.diet_preference if profile else None, None)
-
-            # Resolve gender and activity level
-            req_gender = _resolve_string(payload_gender, profile.gender.value if profile and profile.gender else None, "male")
-            req_activity = _resolve_string(payload_activity, profile.activity_level.value if profile and profile.activity_level else None, "SEDENTARY")
-            
-            gender_str = req_gender.lower()
-            activity_str = req_activity.upper()
-
-            # ── Unified TDEE / Calorie Targets (single source of truth) ──
-            cal_ctx = await _build_calorie_targets(
-                w_val, h_val, a_val, gender_str, activity_str, g_val or ""
-            )
-
-            merged_context = {
-                "full_name":          profile.full_name if profile else "User",
-                "age":                a_val,
-                "gender":             gender_str.upper(),
-                "weight_kg":          w_val,
-                "height_cm":          h_val,
-                "goal":               g_val,
-                "activity_level":     activity_str,
-                "diet_preference":    d_val,
-                "injuries":           inj if isinstance(inj, list) else [],
-                "medical_conditions": med if isinstance(med, list) else [],
-                **cal_ctx,
-            }
-        finally:
-            db.close()
-
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message", "").strip() if data.get("message") else ""
         if user_input:
@@ -673,26 +566,29 @@ class AIService:
             from app.utils.logger import logger as _log
             _log.info(f"📩 [generate_workout] No message in body — auto-built: '{user_input}'")
         
-        # ── Multilingual Input Resolution ──
-        payload_language = data.get("language") or data.get("preferred_language")
-        detected_lang, translated_input = await _detect_and_translate_query(user_input)
-        target_lang = (payload_language or detected_lang).strip().lower()
+        # ── Centralized Request Intake (Single language detection & biometric resolution) ──
+        resolved = await AIService.initialize_request(
+            user_id=user_id,
+            user_input=user_input,
+            payload_context=data
+        )
         
-        original_workout_query = user_input
-        if target_lang != "english" and translated_input:
-            from app.utils.logger import logger as _log
-            _log.info(f"🌐 [generate_workout] Translating Hinglish/Hindi query '{user_input}' to English: '{translated_input}'")
-            user_input = translated_input
+        merged_context = resolved["user_context"]
+        target_lang = resolved["language"]
+        original_workout_query = resolved["original_query"]
+        translated_workout_query = resolved["translated_query"]
+        query_for_agent = translated_workout_query or original_workout_query
 
         state = {
-            "messages": [HumanMessage(content=user_input)],
+            "messages": [HumanMessage(content=query_for_agent)],
             "user_context": merged_context,
             "conversation_summary": "Direct API Generation Request",
             "user_id": user_id
         }
         result = await TrainingAgent().run(state)
         output = result.get("specialist_results", {}).get("training", {})
-        ai_generated_msg=output
+        ai_generated_msg = output
+
         # ── Multilingual Output Rendering ──
         if target_lang != "english":
             from app.utils.logger import logger as _log
@@ -710,18 +606,22 @@ class AIService:
                     "structured_data": {"training": output},
                     "intents": ["workout"]
                 }
-                human_msg_translated = {"type": "human", "content": translated_input}
-                ai_msg_orignal = {
-                    "type": "ai",
-                    "structured_data": {"training": ai_generated_msg},
-                    "intents": ["workout"]
-                }
                 redis_manager.client.rpush(redis_key, json.dumps(human_msg))
                 redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
-                redis_manager.client.rpush(redis_key, json.dumps(human_msg_translated))
-                redis_manager.client.rpush(redis_key, json.dumps(ai_msg_orignal))
+                
+                if translated_workout_query and translated_workout_query != original_workout_query:
+                    human_msg_translated = {"type": "human", "content": translated_workout_query}
+                    ai_msg_orignal = {
+                        "type": "ai",
+                        "structured_data": {"training": ai_generated_msg},
+                        "intents": ["workout"]
+                    }
+                    redis_manager.client.rpush(redis_key, json.dumps(human_msg_translated))
+                    redis_manager.client.rpush(redis_key, json.dumps(ai_msg_orignal))
         except Exception as e:
-            print(f"Redis save error in generate_workout: {e}")
+            from app.utils.logger import logger as _log
+            _log.error(f"Redis save error in generate_workout: {e}")
+            
         return {
             "summary": output.get("summary", ""),
             "workout": output.get("workout", []),
@@ -733,71 +633,12 @@ class AIService:
     async def generate_diet_plan(data: dict):
         """Directly calls the NutritionAgent with structured data from a button/form."""
         from app.agents.nutrition_agent import NutritionAgent
-        from app.core.sql_db import SessionLocal
-        from app.modules.profile.service import ProfileService
+        from langchain_core.messages import HumanMessage
         
         user_id = data.get("user_id", "default")
         goal = data.get("goal", "")
         diet_type = data.get("diet_type", "")
         allergies = data.get("allergies", [])
-
-        # ── Step 1: Load DB profile (for supplemental info) ───────────────────
-        db = SessionLocal()
-        try:
-            profile = ProfileService.get_profile(db, user_id)
-            
-            # ── Normalization: Extract and align keys from incoming payload data ──
-            payload_weight = data.get("weight") if data.get("weight") is not None else data.get("weight_kg")
-            payload_height = data.get("height") if data.get("height") is not None else data.get("height_cm")
-            payload_age    = data.get("age")
-            payload_gender = data.get("gender")
-            payload_activity = data.get("activity_level")
-            payload_goal = data.get("goal")
-            payload_diet = data.get("diet_preference") or diet_type
-            payload_injuries = data.get("injuries")
-            payload_med = data.get("medical_conditions")
-
-            # Priority 1: Manual payload values (with fallback if null/empty). Priority 2: DB profile values. Priority 3: safe defaults.
-            w_val = _resolve_numeric(payload_weight, profile.weight if profile else None, 0.0)
-            h_val = _resolve_numeric(payload_height, profile.height if profile else None, 0.0)
-            a_val = _resolve_numeric(payload_age, profile.age if profile else None, 0.0)
-            
-            inj = _resolve_list(payload_injuries, profile.injuries if profile else None, [])
-            med = _resolve_list(payload_med, profile.medical_conditions if profile else None, [])
-            g_val = _resolve_string(payload_goal, profile.goal if profile else None, None)
-            d_val = _resolve_string(payload_diet, profile.diet_preference if profile else None, None)
-
-            # Resolve gender and activity level
-            req_gender = _resolve_string(payload_gender, profile.gender.value if profile and profile.gender else None, "male")
-            req_activity = _resolve_string(payload_activity, profile.activity_level.value if profile and profile.activity_level else None, "SEDENTARY")
-            
-            gender_str = req_gender.lower()
-            activity_str = req_activity.upper()
-        finally:
-            db.close()
-
-        # ── Unified TDEE / Calorie Targets (single source of truth) ──
-        # Delegates to _compute_tdee (Mifflin-St Jeor) — identical math to /chat
-        # and /generate-workout. No duplicated inline arithmetic here.
-        current_goal = g_val or "General Fitness"
-        cal_ctx = await _build_calorie_targets(
-            w_val, h_val, a_val, gender_str, activity_str, current_goal
-        )
-
-        merged_context = {
-            "full_name":          profile.full_name if profile else "User",
-            "age":                a_val if a_val and a_val > 0 else None,
-            "gender":             gender_str.upper(),
-            "weight_kg":          w_val if w_val and w_val > 0 else None,
-            "height_cm":          h_val if h_val and h_val > 0 else None,
-            "goal":               current_goal,
-            "activity_level":     activity_str,
-            "diet_preference":    d_val,
-            "injuries":           inj if isinstance(inj, list) else [],
-            "medical_conditions": med if isinstance(med, list) else [],
-            "allergies":          allergies,
-            **cal_ctx,
-        }
         
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
         user_input = data.get("message", "").strip() if data.get("message") else ""
@@ -821,26 +662,28 @@ class AIService:
             from app.utils.logger import logger as _log
             _log.info(f"📩 [generate_diet] No message in body — auto-built: '{user_input}'")
         
-        # ── Multilingual Input Resolution ──
-        payload_language = data.get("language") or data.get("preferred_language")
-        detected_lang, translated_input = await _detect_and_translate_query(user_input)
-        target_lang = (payload_language or detected_lang).strip().lower()
+        # ── Centralized Request Intake (Single language detection & biometric resolution) ──
+        resolved = await AIService.initialize_request(
+            user_id=user_id,
+            user_input=user_input,
+            payload_context=data
+        )
         
-        original_diet_query = user_input
-        if target_lang != "english" and translated_input:
-            from app.utils.logger import logger as _log
-            _log.info(f"🌐 [generate_diet] Translating Hinglish/Hindi query '{user_input}' to English: '{translated_input}'")
-            user_input = translated_input
+        merged_context = resolved["user_context"]
+        target_lang = resolved["language"]
+        original_diet_query = resolved["original_query"]
+        translated_diet_query = resolved["translated_query"]
+        query_for_agent = translated_diet_query or original_diet_query
 
         state = {
-            "messages": [HumanMessage(content=user_input)],
+            "messages": [HumanMessage(content=query_for_agent)],
             "user_context": merged_context,
             "conversation_summary": "Direct API Diet Request",
             "user_id": user_id
         }
         result = await NutritionAgent().run(state)
         output = result.get("specialist_results", {}).get("nutrition", {})
-        ai_msg_translated=output
+        ai_msg_translated = output
 
         # ── Multilingual Output Rendering ──
         if target_lang != "english":
@@ -859,19 +702,21 @@ class AIService:
                     "structured_data": {"Nutrition": output},
                     "intents": ["nutrition"]
                 }
-                human_msg_translated = {"type": "human", "content": user_input}
-                ai_msg = {
-                    "type": "ai",
-                    "structured_data": {"Nutrition": ai_msg_translated},
-                    "intents": ["nutrition"]
-                }
                 redis_manager.client.rpush(redis_key, json.dumps(human_msg_original))
                 redis_manager.client.rpush(redis_key, json.dumps(ai_msg_original))
-                redis_manager.client.rpush(redis_key, json.dumps(human_msg_translated))
-                redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
-
+                
+                if translated_diet_query and translated_diet_query != original_diet_query:
+                    human_msg_translated = {"type": "human", "content": translated_diet_query}
+                    ai_msg = {
+                        "type": "ai",
+                        "structured_data": {"Nutrition": ai_msg_translated},
+                        "intents": ["nutrition"]
+                    }
+                    redis_manager.client.rpush(redis_key, json.dumps(human_msg_translated))
+                    redis_manager.client.rpush(redis_key, json.dumps(ai_msg))
         except Exception as e:
-            print(f"Redis save error in generate_workout: {e}")
+            from app.utils.logger import logger as _log
+            _log.error(f"Redis save error in generate_diet: {e}")
         
         return {
             "summary": output.get("summary", ""),
@@ -886,38 +731,27 @@ class AIService:
     async def ask_domain_agent(data: dict):
         """Directly calls the DomainAgent with structured data from a button/form."""
         from app.agents.domain_agent import DomainAgent
-        from app.core.sql_db import SessionLocal
-        from app.modules.profile.service import ProfileService
+        from langchain_core.messages import HumanMessage
         
         user_id = data.get("user_id", "default")
         user_input = data.get("message", "What is muscle hypertrophy?")
-        original_input=user_input
-        # Fetch real user profile from DB to give DomainAgent some context
-        db = SessionLocal()
-        db_context = {}
-        try:
-            profile = ProfileService.get_profile(db, user_id)
-            if profile:
-                db_context = {
-                    "goal": profile.goal,
-                    "diet_preference": profile.diet_preference
-                }
-        finally:
-            db.close()
-
-        # ── Multilingual Input Resolution ──
-        payload_language = data.get("language") or data.get("preferred_language")
-        detected_lang, translated_input = await _detect_and_translate_query(user_input)
-        target_lang = (payload_language or detected_lang).strip().lower()
-
-        if target_lang != "english" and translated_input:
-            from app.utils.logger import logger as _log
-            _log.info(f"🌐 [ask_domain] Translating Hinglish/Hindi query '{user_input}' to English: '{translated_input}'")
-            user_input = translated_input
+        
+        # ── Centralized Request Intake (Single language detection & biometric resolution) ──
+        resolved = await AIService.initialize_request(
+            user_id=user_id,
+            user_input=user_input,
+            payload_context=data
+        )
+        
+        merged_context = resolved["user_context"]
+        target_lang = resolved["language"]
+        original_query = resolved["original_query"]
+        translated_query = resolved["translated_query"]
+        query_for_agent = translated_query or original_query
 
         state = {
-            "messages": [HumanMessage(content=user_input)],
-            "user_context": db_context,
+            "messages": [HumanMessage(content=query_for_agent)],
+            "user_context": merged_context,
             "conversation_summary": "Direct API Domain Query"
         }
         
@@ -925,7 +759,8 @@ class AIService:
         output = result.get("specialist_results", {}).get("domain", {})
         
         response_text = output.get("answer", "Could not answer the query.")
-        ai_msg=response_text
+        ai_msg = response_text
+        
         # ── Multilingual Output Rendering ──
         if target_lang != "english" and response_text:
             from app.utils.logger import logger as _log
@@ -937,24 +772,28 @@ class AIService:
         try:
             if redis_manager.is_available():
                 redis_key = f"chat_history:{user_id}"
-                human_msg_original = {"type": "human", "content": original_input}
+                human_msg_original = {"type": "human", "content": original_query}
                 ai_msg_translated = {
                     "type": "ai",
                     "structured_data": {"Domain": response_text},
                     "intents": ["domain intent"]
                 }
-                human_msg_translated = {"type": "human", "content": user_input}
-                ai_msg_original = {
-                    "type": "ai",
-                    "structured_data": {"Domain": ai_msg},
-                    "intents": ["domain intent"]
-                }
                 redis_manager.client.rpush(redis_key, json.dumps(human_msg_original))
                 redis_manager.client.rpush(redis_key, json.dumps(ai_msg_translated))
-                redis_manager.client.rpush(redis_key, json.dumps(human_msg_translated))
-                redis_manager.client.rpush(redis_key, json.dumps(ai_msg_original))
+                
+                if translated_query and translated_query != original_query:
+                    human_msg_translated = {"type": "human", "content": translated_query}
+                    ai_msg_original = {
+                        "type": "ai",
+                        "structured_data": {"Domain": ai_msg},
+                        "intents": ["domain intent"]
+                    }
+                    redis_manager.client.rpush(redis_key, json.dumps(human_msg_translated))
+                    redis_manager.client.rpush(redis_key, json.dumps(ai_msg_original))
         except Exception as e:
-            print(f"Redis save error in generate_workout: {e}")
+            from app.utils.logger import logger as _log
+            _log.error(f"Redis save error in ask_domain: {e}")
+            
         return {
             "response": response_text,
             "sources": output.get("sources", "internal_knowledge")
