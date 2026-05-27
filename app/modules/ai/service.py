@@ -284,6 +284,98 @@ async def _build_calorie_targets(
 
 class AIService:
 
+    @staticmethod
+    async def initialize_request(
+        user_id: str,
+        user_input: str,
+        payload_context: dict = None,
+        image_bytes: bytes = None
+    ) -> dict:
+        """
+        Unified Centralized Request Intake Layer.
+        Consolidates profile loading, manual payload merges, dynamic TDEE calculations,
+        and runs language detection EXACTLY ONCE at the application entry boundary.
+        """
+        from app.core.sql_db import SessionLocal
+        from app.modules.profile.service import ProfileService
+
+        db = SessionLocal()
+        try:
+            profile = ProfileService.get_profile(db, user_id)
+            raw_context = payload_context or {}
+            
+            # Extract biometric and context details safely
+            payload_weight = raw_context.get("weight") if raw_context.get("weight") is not None else raw_context.get("weight_kg")
+            payload_height = raw_context.get("height") if raw_context.get("height") is not None else raw_context.get("height_cm")
+            payload_age    = raw_context.get("age")
+            payload_gender = raw_context.get("gender")
+            payload_activity = raw_context.get("activity_level") or raw_context.get("level")
+            payload_goal = raw_context.get("goal")
+            payload_diet = raw_context.get("diet_preference") or raw_context.get("diet_type")
+            payload_injuries = raw_context.get("injuries")
+            payload_med = raw_context.get("medical_conditions")
+            payload_allergies = raw_context.get("allergies")
+            payload_language = raw_context.get("language") or raw_context.get("preferred_language")
+
+            w_val = _resolve_numeric(payload_weight, profile.weight if profile else None, None)
+            h_val = _resolve_numeric(payload_height, profile.height if profile else None, None)
+            a_val = _resolve_numeric(payload_age, profile.age if profile else None, None)
+            
+            inj = _resolve_list(payload_injuries, profile.injuries if profile else None, [])
+            med = _resolve_list(payload_med, profile.medical_conditions if profile else None, [])
+            allg = _resolve_list(payload_allergies, None, [])
+            g_val = _resolve_string(payload_goal, profile.goal if profile else None, None)
+            d_val = _resolve_string(payload_diet, profile.diet_preference if profile else None, None)
+
+            req_gender = _resolve_string(payload_gender, profile.gender.value if profile and profile.gender else None, "male")
+            req_activity = _resolve_string(payload_activity, profile.activity_level.value if profile and profile.activity_level else None, "SEDENTARY")
+            
+            gender_str = req_gender.lower()
+            activity_str = req_activity.upper()
+
+            # ── Unified TDEE / Calorie Targets (single source of truth) ──
+            cal_ctx = await _build_calorie_targets(
+                w_val, h_val, a_val, gender_str, activity_str, g_val or ""
+            )
+
+            merged_context = {
+                "full_name":          profile.full_name if profile else "User",
+                "age":                a_val,
+                "gender":             gender_str.upper(),
+                "weight_kg":          w_val,
+                "height_cm":          h_val,
+                "goal":               g_val,
+                "activity_level":     activity_str,
+                "diet_preference":    d_val,
+                "injuries":           inj if isinstance(inj, list) else [],
+                "medical_conditions": med if isinstance(med, list) else [],
+                "allergies":          allg if isinstance(allg, list) else [],
+                **cal_ctx,
+                "language":           _resolve_string(payload_language, None, None)
+            }
+        finally:
+            db.close()
+
+        # ── Multilingual Input Resolution (Exactly Once) ──
+        detected_lang, translated_input = await _detect_and_translate_query(user_input)
+        target_lang = (merged_context.get("language") or detected_lang).strip().lower()
+        
+        # Override language in context with the resolved language
+        merged_context["language"] = target_lang
+        
+        original_query = user_input
+        translated_query = None
+        if target_lang != "english" and translated_input:
+            translated_query = translated_input
+
+        return {
+            "user_context":     merged_context,
+            "language":         target_lang,
+            "original_query":   original_query,
+            "translated_query": translated_query,
+            "image_bytes":      image_bytes
+        }
+
 
 
     @staticmethod
