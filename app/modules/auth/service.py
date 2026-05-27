@@ -44,7 +44,7 @@ class AuthService:
         return {"access_token": token, "token_type": "bearer", "user_id": user.user_id}
 
     @staticmethod
-    def delete_account(db: Session, user_id: str) -> dict:
+    def delete_account(db: Session, user_id: str, password: str) -> dict:
         """
         Permanently delete the user and ALL related data:
           - Profile         (user_profiles row)
@@ -52,18 +52,39 @@ class AuthService:
           - User            (users row)
           - Redis           (chat_history, chat_summary, chat_summary_index)
 
+        Re-authentication: the caller MUST provide their current password.
+        This protects against accidental deletion if the user's JWT is
+        leaked, borrowed, or left active on a shared device — the attacker
+        would still need the password to wipe the account.
+
         SQL deletes are atomic — committed in one transaction. Redis cleanup
         is best-effort: a Redis failure after the SQL commit is logged but
         does not raise, because the user account no longer exists either way.
 
-        Raises HTTP 404 if the user_id has no matching row (e.g. token from
-        a user that was already deleted).
+        Raises:
+          HTTP 404 — user_id has no matching row (token from already-deleted user).
+          HTTP 401 — password does not match.
         """
         user = db.query(User).filter(User.user_id == user_id).first()
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Account not found",
+            )
+
+        # ── Re-authentication: verify the supplied password ──────────────
+        # Identical error semantics to login() to avoid leaking whether the
+        # account exists vs. password is wrong (we passed the existence
+        # check above only because the JWT was already valid — without the
+        # JWT this branch is unreachable).
+        if not verify_password(password, user.password_hash):
+            logger.warning(
+                f"🛑 [Auth] Account deletion blocked — wrong password for user_id='{user_id}'"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect password",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         # 1. Delete profile row (if present).

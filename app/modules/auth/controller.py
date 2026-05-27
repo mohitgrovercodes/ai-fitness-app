@@ -47,14 +47,15 @@ def login_user(db: Session, payload):
         )
 
 
-def delete_account(db: Session, user_id: str):
+def delete_account(db: Session, user_id: str, payload):
     """
     Permanently delete the currently authenticated user's account and all
-    related data. HTTPExceptions (e.g. 404) propagate untouched. Unexpected
-    errors are logged and surfaced as a generic 500.
+    related data. Requires the user's current password (in `payload`) as a
+    re-authentication step. HTTPExceptions (404, 401) propagate untouched.
+    Unexpected errors are logged and surfaced as a generic 500.
     """
     try:
-        result = AuthService.delete_account(db, user_id)
+        result = AuthService.delete_account(db, user_id, payload.password)
         return success(result, "Account deleted")
     except HTTPException:
         raise
