@@ -154,24 +154,7 @@ async def synthesis_node(state: AgentState):
     target_lang = state.get("language") or "english"
     target_lang = target_lang.strip().lower()
 
-    # Dynamic language synthesis instructions
-    if target_lang == "hindi":
-        lang_instruction = """
-OUTPUT LANGUAGE & SCRIPT DIRECTIVE: HINDI (DEVANAGARI SCRIPT)
-- You MUST synthesize and write the entire final response in natural, encouraging Hindi using the Devanagari script (e.g. "नमस्ते, आज हम आपका लेग्स वर्कआउट शुरू करेंगे।").
-- Use standard phonetic Hindi for fitness words (e.g., write "कैलरी", "वर्कआउट", "डाइट", "प्रोटीन" instead of complex formal terms like "ऊष्मा", "शारीरिक व्यायाम", "आहार", "नत्रजन").
-- Format all instructions, summaries, and descriptions in Devanagari script.
-- Ensure the tone is highly motivating, polite, and professional.
-"""
-    elif target_lang == "hinglish":
-        lang_instruction = """
-OUTPUT LANGUAGE & SCRIPT DIRECTIVE: HINGLISH (ROMAN SCRIPT)
-- You MUST synthesize and write the entire final response in Hinglish using strictly the Roman/Latin alphabet (e.g., "Namaste, aapka chest workout ready hai. Aaj hum focus karenge focus aur form par...").
-- Hinglish is the natural, conversational blend of Hindi grammar with English vocabulary, popular in social media/texting.
-- Avoid Devanagari characters completely. Keep the layout clean, engaging, and professional.
-"""
-    else:
-        lang_instruction = """
+    lang_instruction = """
 OUTPUT LANGUAGE & SCRIPT DIRECTIVE: ENGLISH
 - Synthesize and write the entire final response in high-quality, professional, and encouraging English.
 """
@@ -226,6 +209,13 @@ FINAL RESPONSE:"""
     res = await llm.ainvoke(prompt)
     
     final_content = res.content
+    
+    # ── Outbound Translation (Decoupled translation loop) ──
+    if target_lang != "english":
+        from app.modules.ai.service import _translate_plain_text
+        logger.info(f"🌐 [Synthesis] Outbound translating final plain-text plan to target language: {target_lang}")
+        final_content = await _translate_plain_text(final_content, target_lang)
+
     if media_attachments:
         final_content += "\n\n### Exercise Demonstrations:\n" + "\n\n".join(media_attachments)
     
