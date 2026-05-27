@@ -368,13 +368,13 @@ def build_graph():
     workflow.add_conditional_edges(
         "synthesis_layer",
         lambda state: state.get("next_node", "output_safety"),
-        {"output_safety": "output_safety", "memory_manager": "output_safety"}
+        {"output_safety": "output_safety"}
     )
     
     workflow.add_conditional_edges(
         "output_safety",
         lambda s: s["next_node"],
-        {"memory_manager": END, "safe_response_node": "safe_response_node"}
+        {"END": END, "safe_response_node": "safe_response_node"}
     )
 
     workflow.add_edge("out_of_scope_handler", END)

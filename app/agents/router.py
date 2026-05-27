@@ -49,7 +49,7 @@ STRICT POLICIES:
         """Checks the AGENT response for safety before sending to user."""
         last_message = state['messages'][-1].content
         # If unsafe, we redirect to safe_response_node which will provide the suggested_response
-        return await self._run_check(last_message, "memory_manager", "safe_response_node")
+        return await self._run_check(last_message, "END", "safe_response_node")
 
     async def _run_check(self, text: str, safe_node: str, unsafe_node: str) -> Dict[str, Any]:
         chain = self.prompt | self.model
