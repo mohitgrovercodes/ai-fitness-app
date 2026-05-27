@@ -190,21 +190,21 @@ TRANSLATION:"""
 async def _resolve_goal_category(goal_str: str) -> str:
     if not goal_str:
         return "maintenance"
-        
+
     from langchain_openai import ChatOpenAI
     from app.core.config import settings
     from pydantic import BaseModel, Field
-    
+
     class GoalCategoryResult(BaseModel):
         category: str = Field(description="Must be 'loss', 'gain', or 'maintenance'")
-        
+
     try:
         llm = ChatOpenAI(
-            model="gpt-4o-mini", 
-            temperature=0, 
+            model="gpt-4o-mini",
+            temperature=0,
             api_key=settings.OPENAI_API_KEY
         ).with_structured_output(GoalCategoryResult, method="function_calling")
-        
+
         prompt = f"""Classify this fitness goal string:
 "{goal_str}"
 
@@ -214,11 +214,70 @@ Map it to one of these categories:
 - 'maintenance': If it represents maintaining weight, general health, flexibility, recovery, or endurance.
 
 Return the result matching the required schema."""
-        
+
         res = await llm.ainvoke(prompt)
         return res.category.strip().lower()
     except Exception:
         return "maintenance"
+
+
+async def _build_calorie_targets(
+    w_val,
+    h_val,
+    a_val,
+    gender_str: str,
+    activity_str: str,
+    goal_str: str,
+) -> dict:
+    """
+    Single source of truth for TDEE-based calorie targets used by every
+    AI endpoint (/chat, /generate-workout, /generate-diet).
+
+    Always delegates the arithmetic to `_compute_tdee` (Mifflin-St Jeor)
+    in app/agents/base.py — no duplicated inline math. Goal classification
+    is handled by `_resolve_goal_category` so that "weight loss", "fat loss",
+    "cutting", etc. all map consistently across endpoints.
+
+    Returns a dict with exactly the four keys downstream agents expect:
+      - target_calories   (loss / maintenance / gain — selected by goal)
+      - cal_loss          (−20 % deficit, never below BMR)
+      - cal_maintenance   (TDEE)
+      - cal_gain          (+15 % surplus)
+
+    If biometrics are missing/invalid, _compute_tdee returns all zeros and
+    target_calories defaults to 0 — same behavior across all endpoints.
+    """
+    tdee_data = _compute_tdee(w_val, h_val, a_val, gender_str, activity_str)
+
+    # If TDEE is zero (incomplete profile), all targets are zero — no LLM call needed.
+    if not tdee_data.get("tdee"):
+        return {
+            "target_calories": 0,
+            "cal_loss":        tdee_data.get("cal_loss", 0),
+            "cal_maintenance": tdee_data.get("cal_maintenance", 0),
+            "cal_gain":        tdee_data.get("cal_gain", 0),
+        }
+
+    # Goal-based selection. Defaults to maintenance for empty / unknown goals.
+    if goal_str:
+        goal_cat = await _resolve_goal_category(goal_str)
+    else:
+        goal_cat = "maintenance"
+
+    if goal_cat == "loss":
+        target_cal = tdee_data["cal_loss"]
+    elif goal_cat == "gain":
+        target_cal = tdee_data["cal_gain"]
+    else:
+        target_cal = tdee_data["cal_maintenance"]
+
+    return {
+        "target_calories": target_cal,
+        "cal_loss":        tdee_data["cal_loss"],
+        "cal_maintenance": tdee_data["cal_maintenance"],
+        "cal_gain":        tdee_data["cal_gain"],
+    }
+
 
 class AIService:
 
@@ -270,20 +329,10 @@ class AIService:
             gender_str = req_gender.lower()
             activity_str = req_activity.upper()
 
-            # ── Dynamic TDEE Math ──
-            if w_val and h_val and a_val:
-                tdee_data = _compute_tdee(w_val, h_val, a_val, gender_str, activity_str)
-                current_goal = g_val or ""
-                goal_cat = await _resolve_goal_category(current_goal)
-                if goal_cat == "loss":
-                    target_cal = tdee_data["cal_loss"]
-                elif goal_cat == "gain":
-                    target_cal = tdee_data["cal_gain"]
-                else:
-                    target_cal = tdee_data["cal_maintenance"]
-            else:
-                tdee_data = {"bmr": 0, "tdee": 0, "cal_loss": 0, "cal_maintenance": 0, "cal_gain": 0}
-                target_cal = 0
+            # ── Unified TDEE / Calorie Targets (single source of truth) ──
+            cal_ctx = await _build_calorie_targets(
+                w_val, h_val, a_val, gender_str, activity_str, g_val or ""
+            )
 
             merged_context = {
                 "full_name":          profile.full_name if profile else "User",
@@ -296,10 +345,7 @@ class AIService:
                 "diet_preference":    d_val,
                 "injuries":           inj if isinstance(inj, list) else [],
                 "medical_conditions": med if isinstance(med, list) else [],
-                "target_calories":    target_cal,
-                "cal_loss":           tdee_data.get("cal_loss", 0),
-                "cal_maintenance":    tdee_data.get("cal_maintenance", 0),
-                "cal_gain":           tdee_data.get("cal_gain", 0),
+                **cal_ctx,
                 "language":           _resolve_string(payload_language, None, None)
             }
         finally:
@@ -497,6 +543,11 @@ class AIService:
             gender_str = req_gender.lower()
             activity_str = req_activity.upper()
 
+            # ── Unified TDEE / Calorie Targets (single source of truth) ──
+            cal_ctx = await _build_calorie_targets(
+                w_val, h_val, a_val, gender_str, activity_str, g_val or ""
+            )
+
             merged_context = {
                 "full_name":          profile.full_name if profile else "User",
                 "age":                a_val,
@@ -508,6 +559,7 @@ class AIService:
                 "diet_preference":    d_val,
                 "injuries":           inj if isinstance(inj, list) else [],
                 "medical_conditions": med if isinstance(med, list) else [],
+                **cal_ctx,
             }
         finally:
             db.close()
@@ -629,50 +681,27 @@ class AIService:
         finally:
             db.close()
 
-        # ── Step 3: Compute TDEE unconditionally ──────────────────────────────
-        # Always runs — even if there is no DB profile — as long as payload has the numbers.
-        _multipliers = {
-            "SEDENTARY": 1.2, "LIGHTLY_ACTIVE": 1.375,
-            "MODERATELY_ACTIVE": 1.55, "VERY_ACTIVE": 1.725, "EXTRA_ACTIVE": 1.9,
-        }
-        try:
-            if w_val > 0 and h_val > 0 and a_val > 0:
-                bmr  = (10*w_val + 6.25*h_val - 5*a_val + 5) if gender_str in ("male", "m") else (10*w_val + 6.25*h_val - 5*a_val - 161)
-                tdee = bmr * _multipliers.get(activity_str, 1.2)
-                cal_loss        = round(max(bmr, tdee * 0.80))   # −20 % deficit, never below BMR
-                cal_maintenance = round(tdee)
-                cal_gain        = round(tdee * 1.15)             # +15 % surplus
-            else:
-                bmr = tdee = cal_loss = cal_maintenance = cal_gain = 0
-        except (ValueError, TypeError):
-            bmr = tdee = cal_loss = cal_maintenance = cal_gain = 0
-
-        # Goal-based calorie selection
+        # ── Unified TDEE / Calorie Targets (single source of truth) ──
+        # Delegates to _compute_tdee (Mifflin-St Jeor) — identical math to /chat
+        # and /generate-workout. No duplicated inline arithmetic here.
         current_goal = g_val or "General Fitness"
-        target_cal = cal_maintenance
-        if current_goal:
-            goal_cat = await _resolve_goal_category(current_goal)
-            if goal_cat == "loss":
-                target_cal = cal_loss
-            elif goal_cat == "gain":
-                target_cal = cal_gain
+        cal_ctx = await _build_calorie_targets(
+            w_val, h_val, a_val, gender_str, activity_str, current_goal
+        )
 
         merged_context = {
             "full_name":          profile.full_name if profile else "User",
-            "age":                a_val if a_val > 0 else None,
+            "age":                a_val if a_val and a_val > 0 else None,
             "gender":             gender_str.upper(),
-            "weight_kg":          w_val if w_val > 0 else None,
-            "height_cm":          h_val if h_val > 0 else None,
+            "weight_kg":          w_val if w_val and w_val > 0 else None,
+            "height_cm":          h_val if h_val and h_val > 0 else None,
             "goal":               current_goal,
             "activity_level":     activity_str,
             "diet_preference":    d_val,
             "injuries":           inj if isinstance(inj, list) else [],
             "medical_conditions": med if isinstance(med, list) else [],
             "allergies":          allergies,
-            "cal_loss":           cal_loss,
-            "cal_maintenance":    cal_maintenance,
-            "cal_gain":           cal_gain,
-            "target_calories":    target_cal,
+            **cal_ctx,
         }
         
         # Flexibility: if the frontend sends a specific message, use it. Otherwise, build one.
