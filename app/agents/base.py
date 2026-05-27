@@ -157,6 +157,9 @@ class BaseRAGAgent:
             prompt_vars.update(extra_vars)
 
         analysis = await chain.ainvoke(prompt_vars)
+        if not analysis:
+            logger.error(f"[{self.agent_name}] LLM returned None. Token limit exceeded or malformed JSON.")
+            raise ValueError(f"{self.agent_name} Generation Error: LLM returned empty response or token limit exceeded.")
 
         logger.info(f"[{self.agent_name}] Accurate: {analysis.is_accurate} | Web needed: {analysis.needs_web_search}")
 
@@ -278,12 +281,16 @@ class BaseRAGAgent:
         else:
             cal_line = "Calorie Targets: unavailable (incomplete profile)"
 
+        injury_alert = ""
+        if injuries and injuries.lower() != "none" and injuries.strip() != "":
+            injury_alert = f"\n  🚨 LOUD INJURY ALERT: User has '{injuries}'. You MUST completely drop any heavy or stabilizing movements for the affected joints and substitute with 100% safe, supported rehab variations. IGNORING THIS WILL HARM THE USER."
+
         return (
             f"INTELLIGENCE CONTEXT (Use your expertise to apply this to the user's goal: '{goal}'):\n"
             f"  {protein_line}\n"
             f"  {cal_line}\n"
             f"  Diet Constraint: {diet}\n"
-            f"  Injury/Medical Constraints: {injuries} | {medical}\n"
+            f"  Injury/Medical Constraints: {injuries} | {medical}{injury_alert}\n"
             f"  Activity Level: {activity_level}\n"
             f"  → CRITICAL TRAINING MANDATE: Scale ALL of the following proportionally to '{activity_level}':\n"
             f"    - Exercise complexity (basic ↔ explosive/plyometric)\n"
