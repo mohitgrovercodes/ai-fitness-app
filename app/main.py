@@ -59,3 +59,61 @@ app.include_router(feedback_router, prefix="/api/feedback", tags=["Feedback"])
 @app.get("/")
 def root():
     return {"message": "AI Fitness API Running"}
+
+
+@app.get("/health", tags=["Health"])
+def health():
+    """
+    Liveness + readiness probe.
+
+    Returns HTTP 200 with status="ok" when every critical dependency is
+    reachable, or HTTP 503 with status="degraded" when one or more critical
+    dependencies (MySQL, ChromaDB) are unreachable. Redis is reported but
+    does not flip the overall status because the app can serve requests
+    without it (history/summary become best-effort).
+
+    Useful for Kubernetes / load balancer health checks, uptime monitors,
+    and quick local debugging.
+    """
+    from fastapi.responses import JSONResponse
+    from sqlalchemy import text
+
+    components = {}
+    overall_ok = True
+
+    # ── MySQL (critical) ──────────────────────────────────────────────
+    try:
+        from app.core.sql_db import engine
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        components["mysql"] = "ok"
+    except Exception as e:
+        components["mysql"] = f"error: {type(e).__name__}"
+        overall_ok = False
+
+    # ── ChromaDB (critical for AI features) ───────────────────────────
+    try:
+        from app.core.database import db_manager
+        client = db_manager.initialize()  # lazily creates client on first call
+        components["chromadb"] = "ok" if client is not None else "not initialized"
+        if client is None:
+            overall_ok = False
+    except Exception as e:
+        components["chromadb"] = f"error: {type(e).__name__}"
+        overall_ok = False
+
+    # ── Redis (degraded, not fatal) ───────────────────────────────────
+    try:
+        from app.core.redis_client import redis_manager
+        if redis_manager.is_available() and redis_manager.client.ping():
+            components["redis"] = "ok"
+        else:
+            components["redis"] = "unavailable"
+    except Exception as e:
+        components["redis"] = f"error: {type(e).__name__}"
+
+    payload = {
+        "status": "ok" if overall_ok else "degraded",
+        "components": components,
+    }
+    return JSONResponse(content=payload, status_code=200 if overall_ok else 503)

@@ -45,3 +45,22 @@ def login_user(db: Session, payload):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Login failed. Please try again later.",
         )
+
+
+def delete_account(db: Session, user_id: str):
+    """
+    Permanently delete the currently authenticated user's account and all
+    related data. HTTPExceptions (e.g. 404) propagate untouched. Unexpected
+    errors are logged and surfaced as a generic 500.
+    """
+    try:
+        result = AuthService.delete_account(db, user_id)
+        return success(result, "Account deleted")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception(f"Unexpected error deleting account for user '{user_id}'")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete account. Please try again later.",
+        )

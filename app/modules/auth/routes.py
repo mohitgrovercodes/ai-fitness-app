@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-from app.modules.auth.controller import register_user, login_user
+
+from app.modules.auth.controller import register_user, login_user, delete_account
 from app.modules.auth.schema import RegisterSchema, LoginSchema
-from fastapi.security import OAuth2PasswordRequestForm
 from app.core.sql_db import get_db
+from app.core.security import get_current_user
 
 router = APIRouter(tags=["Auth"])
 
@@ -12,11 +13,24 @@ router = APIRouter(tags=["Auth"])
 def register(payload: RegisterSchema, db: Session = Depends(get_db)):
     return register_user(db, payload)
 
+
 @router.post("/login")
-# def login(
-#     form_data: OAuth2PasswordRequestForm = Depends(),
-#     db: Session = Depends(get_db)
-# ):
-#     return login_user(db, form_data)
 def login(payload: LoginSchema, db: Session = Depends(get_db)):
     return login_user(db, payload)
+
+
+@router.delete(
+    "/account",
+    status_code=status.HTTP_200_OK,
+    summary="Permanently delete the authenticated user's account and data",
+)
+def delete_my_account(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user),
+):
+    """
+    Deletes the caller's User row, Profile row, all Feedback entries,
+    and their Redis chat history. Requires a valid bearer token whose
+    user still exists and is active (enforced by `get_current_user`).
+    """
+    return delete_account(db, user_id)
