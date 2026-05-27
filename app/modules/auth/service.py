@@ -27,37 +27,6 @@ class AuthService:
         return new_user
 
     @staticmethod
-    # def login(db: Session, payload):
-
-    #     user = db.query(User).filter(
-    #         User.username == payload.username
-    #     ).first()
-    #     if not user:
-    #         raise HTTPException(
-    #             status_code=status.HTTP_401_UNAUTHORIZED,
-    #             detail="User not found"
-    #         )
-    #     if  not verify_password(
-    #         payload.password,
-    #         user.password_hash
-    #     ):
-    #         raise HTTPException(
-    #             status_code=status.HTTP_401_UNAUTHORIZED,
-    #             detail="Invalid  password",
-    #             headers={"WWW-Authenticate": "Bearer"},
-    #         )
-
-    #     token = create_access_token({
-    #         "sub": str(user.user_id),
-    #         "email": user.username
-    #     })
-
-    #     return {
-    #         "access_token": token,
-    #         "token_type": "bearer",
-    #         "user_id": user.user_id
-    #     }
-    
     def login(db: Session, payload):
         # Find user
         user = db.query(User).filter(User.username == payload.username).first()
