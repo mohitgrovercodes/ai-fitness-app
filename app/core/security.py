@@ -20,16 +20,31 @@ def get_password_hash(password):
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
+from sqlalchemy.orm import Session
+
+from app.core.sql_db import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
-def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> str:
+    """
+    Validates the JWT *and* verifies the user still exists and is active in the
+    database. Returns the user_id (str) so existing call sites that do
+    `user_id: str = Depends(get_current_user)` keep working unchanged.
+    """
+    # Local import to avoid circular import at module load time.
+    from app.modules.auth.model import User
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Not authorized",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    
+
     if not token:
         raise credentials_exception
     try:
@@ -37,22 +52,32 @@ def get_current_user(token: str = Depends(oauth2_scheme)) -> str:
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
-        return user_id
     except JWTError:
         raise credentials_exception
 
-def get_current_admin(user_id: str = Depends(get_current_user)) -> str:
-    from app.core.sql_db import SessionLocal
+    # Verify the user actually exists and is active in the DB.
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if user is None or not user.is_active:
+        raise credentials_exception
+
+    return user_id
+
+
+def get_current_admin(
+    user_id: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> str:
+    """
+    Reuses get_current_user (which already verified existence + active status)
+    and additionally enforces is_admin. Uses the request-scoped DB session
+    instead of opening a new one.
+    """
     from app.modules.auth.model import User
-    
-    db = SessionLocal()
-    try:
-        user = db.query(User).filter(User.user_id == user_id).first()
-        if not user or not user.is_admin:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough privileges"
-            )
-        return user_id
-    finally:
-        db.close()
+
+    user = db.query(User).filter(User.user_id == user_id).first()
+    if not user or not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough privileges",
+        )
+    return user_id
