@@ -22,7 +22,7 @@ def _is_null_or_empty(val):
         return True
     if isinstance(val, str):
         v_stripped = val.strip().lower()
-        return v_stripped in ("", "null", "none", "undefined")
+        return v_stripped in ("", "null", "none", "undefined", "string")
     if isinstance(val, (list, set, tuple)):
         return len(val) == 0 or all(_is_null_or_empty(item) for item in val)
     return False
@@ -58,7 +58,7 @@ def _resolve_list(payload_val, db_val, default_val=None):
             parts = []
             for item in val.split(","):
                 s = item.strip()
-                if s and s.lower() not in ("null", "none", "undefined"):
+                if s and s.lower() not in ("null", "none", "undefined", "string"):
                     parts.append(s)
             return parts if parts else None
         if isinstance(val, list):
@@ -66,7 +66,7 @@ def _resolve_list(payload_val, db_val, default_val=None):
             for item in val:
                 if item is not None:
                     s = str(item).strip()
-                    if s and s.lower() not in ("null", "none", "undefined"):
+                    if s and s.lower() not in ("null", "none", "undefined", "string"):
                         parts.append(s)
             return parts if parts else None
         return None
