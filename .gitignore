@@ -14,8 +14,14 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
+
+# ── Negations: our frontend has a source-code `lib/` folder ──
+# The `lib/` rule above is the Python packaging template default, but our
+# Streamlit frontend ships its own `lib/` module (api_client.py, auth.py,
+# renderers.py, debug.py). Whitelist it explicitly so it gets tracked.
+!frontend/lib/
+!frontend/lib/**
 parts/
 sdist/
 var/
