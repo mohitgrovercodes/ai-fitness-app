@@ -50,6 +50,30 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AI Fitness App", lifespan=lifespan)
 
+# ── Middlewares ──────────────────────────────────────────────────────────
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Request
+import time
+
+# 1. CORS Middleware (Allows frontend to talk to backend)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For production, replace "*" with your frontend domains
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 2. Timing & Logging Middleware (Tracks API performance)
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    process_time = time.time() - start_time
+    response.headers["X-Process-Time"] = str(process_time)
+    logger.info(f"⏱️ [Timing] {request.method} {request.url.path} took {process_time:.3f}s")
+    return response
+
 # Register routes
 app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
 app.include_router(ai_router, prefix="/api/ai", tags=["AI"])
@@ -59,6 +83,15 @@ app.include_router(feedback_router, prefix="/api/feedback", tags=["Feedback"])
 @app.get("/")
 def root():
     return {"message": "AI Fitness API Running"}
+
+
+@app.get("/health", tags=["Health"])
+def ping():
+    """
+    Ultra-simple health check.
+    Returns 200 OK if the FastAPI server is running.
+    """
+    return {"status": "ok", "message": "FastAPI Server is running successfully"}
 
 
 @app.get("/health", tags=["Health"])
