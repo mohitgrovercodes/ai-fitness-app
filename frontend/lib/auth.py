@@ -8,15 +8,18 @@ Two responsibilities:
    again. This is deliberate for a developer tool - no localStorage /
    cookie persistence yet.
 
-2. Profile gate - the AI agents in this app are useless without a populated
-   profile (TDEE returns zeros, goal-aware logic falls through to generic
-   defaults). So any page that calls an AI endpoint should use
+2. Profile gate + cache - the AI agents in this app are useless without
+   a populated profile (TDEE returns zeros, goal-aware logic falls through
+   to generic defaults). Any page that calls an AI endpoint should use
    `require_profile()` instead of `require_auth()`. First-time users get
    bounced to the onboarding page automatically.
 
-   To avoid hitting /api/profile/me on every page navigation, the result
-   is cached in st.session_state.profile_exists. It's invalidated on
-   logout and re-set to True by the Profile page after a successful save.
+   Both the existence boolean AND the full profile dict are cached in
+   st.session_state so:
+     - has_profile() doesn't hit /api/profile/me on every nav
+     - the dashboard can read profile_data directly with no API call
+   Cache is invalidated on logout and replaced by the Profile page after
+   a successful save.
 """
 from typing import Optional
 
@@ -35,8 +38,9 @@ def login(username: str, password: str) -> None:
     st.session_state["token"] = data["access_token"]
     st.session_state["user_id"] = data["user_id"]
     st.session_state["username"] = username
-    # Invalidate any stale profile cache from a previous user on this tab.
+    # Invalidate any stale caches from a previous user on this tab.
     st.session_state.pop("profile_exists", None)
+    st.session_state.pop("profile_data", None)
 
 
 def register(email: str, password: str, username: Optional[str] = None) -> dict:
@@ -48,8 +52,8 @@ def register(email: str, password: str, username: Optional[str] = None) -> dict:
 
 
 def logout() -> None:
-    """Clear all auth-related session state, including profile cache."""
-    for key in ("token", "user_id", "username", "profile_exists"):
+    """Clear all auth-related session state, including profile caches."""
+    for key in ("token", "user_id", "username", "profile_exists", "profile_data"):
         st.session_state.pop(key, None)
 
 
@@ -64,20 +68,19 @@ def require_auth() -> None:
         st.stop()
 
 
-# Profile gate
+# Profile gate + cache
 def has_profile() -> bool:
     """
     Return True if the authenticated user already has a profile in the DB.
 
-    Caches the answer in session state so subsequent page navigations are
-    free. The cache is invalidated on logout and re-set by the Profile page
-    after a successful create/update.
+    On first call, fetches /api/profile/me and caches BOTH the existence
+    flag AND the full profile dict for the dashboard to read for free.
 
     Behavior under failures:
-      - 404 from /api/profile/me -> returns False (no profile yet).
-      - Any other error (500, network, 401) -> returns True. Safer default:
-        show welcome screen rather than trap the user in a redirect loop
-        pointing at a page that also can't reach the backend.
+      - 404 -> returns False (no profile yet).
+      - Any other error -> returns True. Safer default: show welcome and
+        let real errors surface elsewhere, rather than trap the user in a
+        redirect loop pointing at a page that also can't reach the backend.
     """
     if not is_authenticated():
         return False
@@ -87,24 +90,42 @@ def has_profile() -> bool:
         return cached
 
     try:
-        get("/api/profile/me")
+        data = get("/api/profile/me")
         st.session_state["profile_exists"] = True
+        st.session_state["profile_data"] = data
         return True
     except ApiError as e:
         if e.status_code == 404:
             st.session_state["profile_exists"] = False
             return False
-        # Backend down / 5xx / auth glitch - don't lock the user out.
         return True
 
 
-def mark_profile_exists() -> None:
+def get_profile_data() -> Optional[dict]:
     """
-    Called by the Profile page after a successful onboarding/edit save.
-    Updates the cache so the welcome redirect doesn't re-fire on the next
-    rerun, and any other gated pages stop bouncing.
+    Return the cached profile dict, fetching it on first call.
+    Returns None if not authenticated or the profile doesn't exist.
+    Safe to call from any page after require_auth() / require_profile().
+    """
+    if not is_authenticated():
+        return None
+    if "profile_data" in st.session_state:
+        return st.session_state["profile_data"]
+    # Trigger a fetch+cache via has_profile().
+    if has_profile():
+        return st.session_state.get("profile_data")
+    return None
+
+
+def mark_profile_exists(data: Optional[dict] = None) -> None:
+    """
+    Called by the Profile page after a successful save. Updates the cache
+    so the welcome redirect doesn't re-fire and so the dashboard sees the
+    fresh values immediately on the next rerun.
     """
     st.session_state["profile_exists"] = True
+    if data is not None:
+        st.session_state["profile_data"] = data
 
 
 def require_profile() -> None:
