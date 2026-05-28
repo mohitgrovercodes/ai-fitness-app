@@ -35,8 +35,9 @@ streamlit run streamlit_app.py
 
 App opens at `http://localhost:8501`.
 
-## Phase 0 — what's here today
+## What's here today (Phases 0 + 1)
 
+**Phase 0 — Foundation**
 - **Login / Register** wired to `/api/auth/login` and `/api/auth/register`
 - **Session-state auth** — JWT stored in `st.session_state.token` and
   injected as `Authorization: Bearer ...` on every backend call by
@@ -48,11 +49,20 @@ App opens at `http://localhost:8501`.
   through a single `ApiError` exception with a clean user-facing message;
   the SQLAlchemy / stack details never reach the UI.
 
+**Phase 1 — Profile + Account**
+- **👤 Profile page** — auto-detects onboarding vs. edit mode (GETs
+  `/api/profile/me`; 404 → onboarding form, 200 → edit form pre-filled).
+  Submits via `POST /onboarding` or `PATCH /me`. Curated dropdowns for
+  goal / diet / activity / gender + "Other (type your own)" escape hatches.
+- **⚙️ Account page** — feedback summary metrics + recent history table
+  (`/api/feedback/summary` + `/history`), plus a danger-zone delete-account
+  flow that requires password re-authentication (matches the
+  `DELETE /api/auth/account` body we built in the backend).
+
 ## Coming next
 
 | Phase | Adds |
 |---|---|
-| 1 | Profile onboarding + edit; Account page (feedback history, delete account) |
 | 2 | Chat with multi-turn + image upload (Vision Agent); workout/meal/GIF renderers |
 | 3 | Direct API pages: Generate Workout, Generate Diet, Domain Q&A |
 | 4 | Progress Agent visualizer; thumbs-up/down feedback after every AI response |

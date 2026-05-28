@@ -93,8 +93,8 @@ def render_welcome() -> None:
         - **🥗 Diet Plan** — direct hit on the Nutrition Agent *(Phase 3)*
         - **📚 Domain Q&A** — direct hit on the Domain Agent *(Phase 3)*
         - **📈 Progress** — Progress Agent visualizer *(Phase 4)*
-        - **👤 Profile** — onboarding + edit *(Phase 1)*
-        - **⚙️ Account** — feedback history + delete account *(Phase 1)*
+        - **👤 Profile** — onboarding + edit ✅
+        - **⚙️ Account** — feedback history + delete account ✅
 
         Toggle **🐛 Developer mode** in the sidebar to surface agent traces,
         RAG hits, and raw JSON for any AI response.
