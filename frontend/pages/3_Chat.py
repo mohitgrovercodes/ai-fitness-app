@@ -60,6 +60,20 @@ with st.sidebar:
         st.rerun()
     st.caption(f"Messages in thread: **{len(st.session_state.chat_messages)}**")
 
+    st.divider()
+    st.markdown("### 📷 Vision Agent (Food Only)")
+    st.caption(
+        "Upload an image of your food/meals to identify it, check safety, "
+        "and calculate nutritional information automatically."
+    )
+    uploaded_file = st.file_uploader(
+        "Upload food image",
+        type=["png", "jpg", "jpeg", "webp"],
+        key="chat_food_image",
+    )
+    if uploaded_file:
+        st.image(uploaded_file, caption="Preview", use_container_width=True)
+
 
 # Helpers
 def _render_assistant_message(msg: dict) -> None:
@@ -85,6 +99,8 @@ for msg in st.session_state.chat_messages:
     with st.chat_message(msg["role"]):
         if msg["role"] == "user":
             st.markdown(msg["content"])
+            if msg.get("image_bytes"):
+                st.image(msg["image_bytes"], caption="Uploaded Image", width=300)
         else:
             _render_assistant_message(msg)
 
@@ -96,19 +112,36 @@ prompt = st.chat_input(
 
 if prompt:
     # 2a. Persist + render the user turn
-    st.session_state.chat_messages.append({"role": "user", "content": prompt})
+    user_turn = {"role": "user", "content": prompt}
+    image_bytes = None
+    if uploaded_file:
+        image_bytes = uploaded_file.getvalue()
+        user_turn["image_bytes"] = image_bytes
+        
+    st.session_state.chat_messages.append(user_turn)
+    
     with st.chat_message("user"):
         st.markdown(prompt)
+        if image_bytes:
+            st.image(image_bytes, caption="Uploaded Image", width=300)
 
     # 2b. Call backend, render assistant turn live
     with st.chat_message("assistant"):
         with st.spinner("Coach is thinking..."):
             try:
-                data = post(
-                    "/api/ai/chat",
-                    json={"message": prompt, "context": {}},
-                    timeout=180,
-                )
+                if image_bytes:
+                    data = post(
+                        "/api/ai/chat-vision",
+                        data={"message": prompt},
+                        files={"file": (uploaded_file.name, image_bytes, uploaded_file.type)},
+                        timeout=180,
+                    )
+                else:
+                    data = post(
+                        "/api/ai/chat",
+                        json={"message": prompt, "context": {}},
+                        timeout=180,
+                    )
                 st.session_state.chat_messages.append(
                     {"role": "assistant", "data": data}
                 )
