@@ -121,6 +121,13 @@ def render_sidebar() -> None:
 # ── Main ─────────────────────────────────────────────────────────────
 render_sidebar()
 if auth.is_authenticated():
+    # First-time login: if the user has no profile yet, route them straight
+    # to the onboarding form. The Profile page itself uses require_auth()
+    # (not require_profile()) so this redirect can't loop. After the user
+    # saves their profile, the cache is set to True and they land here on
+    # subsequent visits.
+    if not auth.has_profile():
+        st.switch_page("pages/6_Profile.py")
     render_welcome()
 else:
     render_login_form()

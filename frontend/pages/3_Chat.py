@@ -1,14 +1,14 @@
 """
-Phase 2.2 — Chat page (text-only).
+Phase 2.2 - Chat page (text-only).
 
 Multi-turn conversation with the full LangGraph agent system at /api/ai/chat.
 History lives in st.session_state.chat_messages and survives reruns within
 the same browser session (lost on tab close or logout).
 
 Each user turn hits the full pipeline:
-  safety_guardrail → orchestrator → agent_router → specialists_node
+  safety_guardrail -> orchestrator -> agent_router -> specialists_node
   (Training / Nutrition / Vision / Progress / Domain in parallel)
-  → synthesis_layer → output_safety
+  -> synthesis_layer -> output_safety
 
 So an assistant response may contain any combination of:
   - synthesized text answer
@@ -16,7 +16,7 @@ So an assistant response may contain any combination of:
   - structured meal plan (cards + macro metrics)
   - intent badges showing which agents fired
 
-Image uploads → /api/ai/chat-vision will be added in Step 2.3.
+Image uploads -> /api/ai/chat-vision will be added in Step 2.3.
 """
 import streamlit as st
 
@@ -26,7 +26,7 @@ from lib.debug import is_debug
 from lib.renderers import render_agent_response
 
 st.set_page_config(
-    page_title="Chat · AI Fitness Gym",
+    page_title="Chat - AI Fitness Gym",
     page_icon="💬",
     layout="wide",
 )
@@ -38,14 +38,12 @@ auth.require_profile()
 st.title("💬 Chat with your AI Coach")
 st.caption(
     "Multi-turn conversation routed through the full LangGraph agent system: "
-    "safety → orchestrator → parallel specialists (Training / Nutrition / Vision / "
-    "Progress / Domain) → synthesis."
+    "safety -> orchestrator -> parallel specialists (Training / Nutrition / Vision / "
+    "Progress / Domain) -> synthesis."
 )
 
 
-# ─────────────────────────────────────────────────────────────────────
 # Session state initialization
-# ─────────────────────────────────────────────────────────────────────
 # chat_messages is a list of:
 #   - {"role": "user", "content": str}
 #   - {"role": "assistant", "data": dict}          # unwrapped API response
@@ -54,9 +52,7 @@ if "chat_messages" not in st.session_state:
     st.session_state.chat_messages = []
 
 
-# ─────────────────────────────────────────────────────────────────────
-# Sidebar — chat controls
-# ─────────────────────────────────────────────────────────────────────
+# Sidebar - chat controls
 with st.sidebar:
     st.markdown("### 💬 Chat controls")
     if st.button("🗑️ Clear chat history", use_container_width=True):
@@ -65,9 +61,7 @@ with st.sidebar:
     st.caption(f"Messages in thread: **{len(st.session_state.chat_messages)}**")
 
 
-# ─────────────────────────────────────────────────────────────────────
 # Helpers
-# ─────────────────────────────────────────────────────────────────────
 def _render_assistant_message(msg: dict) -> None:
     """Render one assistant message (response data or error fallback)."""
     if "error" in msg:
@@ -80,9 +74,7 @@ def _render_assistant_message(msg: dict) -> None:
             st.json(data)
 
 
-# ─────────────────────────────────────────────────────────────────────
 # 1. Render existing history (everything sent before this rerun)
-# ─────────────────────────────────────────────────────────────────────
 if not st.session_state.chat_messages:
     st.info(
         "👋 Start a conversation. Try **\"Build me a 5-day weight-loss plan\"** "
@@ -97,9 +89,7 @@ for msg in st.session_state.chat_messages:
             _render_assistant_message(msg)
 
 
-# ─────────────────────────────────────────────────────────────────────
 # 2. Handle new input
-# ─────────────────────────────────────────────────────────────────────
 prompt = st.chat_input(
     "Ask about workouts, nutrition, your goals, or anything fitness-related..."
 )
@@ -117,7 +107,7 @@ if prompt:
                 data = post(
                     "/api/ai/chat",
                     json={"message": prompt, "context": {}},
-                    timeout=180,  # full graph (parallel specialists) can be slow
+                    timeout=180,
                 )
                 st.session_state.chat_messages.append(
                     {"role": "assistant", "data": data}

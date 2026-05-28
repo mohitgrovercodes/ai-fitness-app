@@ -237,6 +237,10 @@ def render_profile_form(existing: dict | None) -> None:
             updated = post("/api/profile/onboarding", json=payload)
             st.success("✅ Profile created. You're all set!")
 
+        # Update the cache so the welcome-page redirect (or any other
+        # require_profile() gate) no longer fires on the next rerun.
+        auth.mark_profile_exists()
+
         render_response_panel(updated, "🔬 Profile response")
 
         # Refresh the form values with the just-returned profile on the next run.
