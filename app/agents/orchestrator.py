@@ -90,24 +90,25 @@ MULTI-INTENT RULES (CRITICAL):
             logger.info("🧠 [Orchestrator] Stripping 'nutrition' intent because an image is present. Vision Agent will handle the nutritional breakdown.")
             final_intents.remove("nutrition")
 
-        # ── Multilingual Translation & Substitution ─────────────────────────
-        detected_lang = res.detected_language.strip().lower() if res.detected_language else "english"
-        if detected_lang not in ("english", "hindi", "hinglish"):
-            detected_lang = "english"  # Fallback safety
+        # ── Language: Trust the centralized initialize_request() ─────────────
+        # Language detection & translation already happened ONCE in AIService.initialize_request().
+        # state["language"], state["original_query"], and state["translated_query"] are already set.
+        # We only fall back to the Orchestrator's LLM detection if state has no language (shouldn't happen).
+        resolved_lang = state.get("language") or (
+            res.detected_language.strip().lower() if res.detected_language else "english"
+        )
+        if resolved_lang not in ("english", "hindi", "hinglish"):
+            resolved_lang = "english"
 
-        # Read optional override language from payload context
-        payload_context = state.get("user_context", {}) or {}
-        resolved_lang = payload_context.get("language") or state.get("language") or detected_lang
-        resolved_lang = resolved_lang.strip().lower()
+        logger.info(f"🌐 [Orchestrator] Using centralized target language: {resolved_lang}")
 
-        logger.info(f"🌐 [Orchestrator] Detected query language: {detected_lang} | Resolved target language: {resolved_lang}")
-
-        # Substitute the last message in LangGraph active memory with the translated English text
-        # this ensures downstream specialized agents query their RAG in English with high precision.
+        # Ensure downstream agents always receive the English translation in message history.
+        # (initialize_request already feeds translated_query into the HumanMessage,
+        #  but this is a safety net for edge cases like English queries.)
         current_messages = list(state.get("messages", []))
-        if current_messages and resolved_lang != "english":
+        if current_messages and resolved_lang != "english" and res.english_translation:
             from langchain_core.messages import HumanMessage
-            logger.info(f"📝 [Orchestrator] Substituting query with English translation: '{res.english_translation}'")
+            logger.info(f"📝 [Orchestrator] Ensuring English message for agents: '{res.english_translation}'")
             current_messages[-1] = HumanMessage(content=res.english_translation)
 
         return {
@@ -115,7 +116,8 @@ MULTI-INTENT RULES (CRITICAL):
             "is_fitness_domain": res.is_fitness_domain,
             "next_node": route,
             "language": resolved_lang,
-            "original_query": last_message,
-            "translated_query": res.english_translation,
+            # Preserve the REAL original query set by initialize_request, don't overwrite with English.
+            "original_query": state.get("original_query") or last_message,
+            "translated_query": state.get("translated_query") or res.english_translation,
             "messages": {"type": "replace", "messages": current_messages}
         }

@@ -151,13 +151,28 @@ async def synthesis_node(state: AgentState):
             f"  → Choose the target that matches the user's goal above."
         )
     
-    target_lang = state.get("language") or "english"
+    # ── Robust Language Resolution ──────────────────────────────────────────
+    # Primary: state["language"] (set by initialize_request → Orchestrator)
+    # Fallback: user_context["language"] (fresh dict per-request, immune to checkpoint staleness)
+    target_lang = (
+        state.get("language")
+        or state.get("user_context", {}).get("language")
+        or "english"
+    )
     target_lang = target_lang.strip().lower()
+
+    logger.info(
+        f"🎯 [Synthesis] Language resolution: "
+        f"state.language={state.get('language')!r}, "
+        f"user_context.language={state.get('user_context', {}).get('language')!r} "
+        f"→ target_lang={target_lang!r}"
+    )
 
     lang_instruction = """
 OUTPUT LANGUAGE & SCRIPT DIRECTIVE: ENGLISH
 - Synthesize and write the entire final response in high-quality, professional, and encouraging English.
 """
+
 
     # Master Coach LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=settings.OPENAI_API_KEY)
@@ -215,6 +230,9 @@ FINAL RESPONSE:"""
         from app.modules.ai.service import _translate_plain_text
         logger.info(f"🌐 [Synthesis] Outbound translating final plain-text plan to target language: {target_lang}")
         final_content = await _translate_plain_text(final_content, target_lang)
+        logger.info(f"✅ [Synthesis] Translation complete. Preview: {final_content[:100]!r}...")
+    else:
+        logger.info("⏭️ [Synthesis] Skipping translation — target language is English.")
 
     if media_attachments:
         final_content += "\n\n### Exercise Demonstrations:\n" + "\n\n".join(media_attachments)
