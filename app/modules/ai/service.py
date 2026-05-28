@@ -368,6 +368,15 @@ class AIService:
         if target_lang != "english" and translated_input:
             translated_query = translated_input
 
+        from app.utils.logger import logger
+        logger.info(
+            f"🔑 [initialize_request] Language audit: "
+            f"payload_lang={payload_language!r}, detected={detected_lang!r}, "
+            f"resolved={target_lang!r} | "
+            f"original_query={original_query!r}, "
+            f"translated_query={translated_query!r}"
+        )
+
         return {
             "user_context":     merged_context,
             "language":         target_lang,
@@ -375,6 +384,7 @@ class AIService:
             "translated_query": translated_query,
             "image_bytes":      image_bytes
         }
+
 
     @staticmethod
     async def chat(user_input: str, user_id: str, context: dict = None, image_bytes: bytes = None):
