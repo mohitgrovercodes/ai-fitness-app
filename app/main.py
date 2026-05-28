@@ -62,6 +62,15 @@ def root():
 
 
 @app.get("/health", tags=["Health"])
+def ping():
+    """
+    Ultra-simple health check.
+    Returns 200 OK if the FastAPI server is running.
+    """
+    return {"status": "ok", "message": "FastAPI Server is running successfully"}
+
+
+@app.get("/health", tags=["Health"])
 def health():
     """
     Liveness + readiness probe.
