@@ -99,16 +99,6 @@ async def synthesis_node(state: AgentState):
     for agent_name, data in results.items():
         if isinstance(data, dict):
             ans = data.get("answer")
-            
-            # Extract media if present
-            gifs = data.get("exercise_gifs", {})
-            for name, url in gifs.items():
-                if url: media_attachments.append(f"![{name}]({url})")
-                
-            imgs = data.get("exercise_images", {})
-            for name, url in imgs.items():
-                if url and name not in gifs: # Avoid duplicate image if GIF exists
-                    media_attachments.append(f"![{name}]({url})")
         else:
             ans = data
             
@@ -233,9 +223,6 @@ FINAL RESPONSE:"""
         logger.info(f"✅ [Synthesis] Translation complete. Preview: {final_content[:100]!r}...")
     else:
         logger.info("⏭️ [Synthesis] Skipping translation — target language is English.")
-
-    if media_attachments:
-        final_content += "\n\n### Exercise Demonstrations:\n" + "\n\n".join(media_attachments)
     
     # ── Restore User's Original Query in State Memory ───────────────────────
     # We substitute back the original Hindi/Hinglish message so that Redis history

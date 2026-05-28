@@ -615,7 +615,7 @@ class VisionAgent:
         """Standard output format for the LangGraph state with optional metadata block."""
         full_response = response_text
         if meta:
-            full_response = response_text + "\n\n" + self._format_metadata(meta)
+            print(f"[Vision Agent] Analytics Metadata (Developer Only):\n{self._format_metadata(meta)}")
 
         out = {
             "answer": full_response,
