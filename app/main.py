@@ -85,7 +85,7 @@ def root():
     return {"message": "AI Fitness API Running"}
 
 
-@app.get("/health", tags=["Health"])
+@app.get("/ping", tags=["Health"])
 def ping():
     """
     Ultra-simple health check.
