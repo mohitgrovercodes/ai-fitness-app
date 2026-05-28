@@ -156,16 +156,18 @@ def render_welcome() -> None:
     with r1_col2:
         with st.container(border=True):
             st.subheader("🏋️ Workout Plan")
-            st.caption(":orange[Phase 3 · Locked]")
+            st.caption("Phase 3 · Active")
             st.write("Direct access to the Training Agent to generate targeted workouts.")
-            st.button("Locked", disabled=True, use_container_width=True, key="btn_workout")
+            if st.button("Generate Workout", type="primary", use_container_width=True, key="btn_workout"):
+                st.switch_page("pages/4_Workout.py")
             
     with r1_col3:
         with st.container(border=True):
             st.subheader("🥗 Diet Plan")
-            st.caption(":orange[Phase 3 · Locked]")
+            st.caption("Phase 3 · Active")
             st.write("Direct access to the Nutrition Agent to generate customized diets.")
-            st.button("Locked", disabled=True, use_container_width=True, key="btn_diet")
+            if st.button("Generate Diet", type="primary", use_container_width=True, key="btn_diet"):
+                st.switch_page("pages/5_Diet.py")
 
     # Row 2
     r2_col1, r2_col2, r2_col3 = st.columns(3)
@@ -173,9 +175,10 @@ def render_welcome() -> None:
     with r2_col1:
         with st.container(border=True):
             st.subheader("📚 Domain Q&A")
-            st.caption(":orange[Phase 3 · Locked]")
+            st.caption("Phase 3 · Active")
             st.write("Direct Q&A with our Fitness & Nutrition research book database.")
-            st.button("Locked", disabled=True, use_container_width=True, key="btn_domain")
+            if st.button("Query Database", type="primary", use_container_width=True, key="btn_domain"):
+                st.switch_page("pages/8_Domain.py")
             
     with r2_col2:
         with st.container(border=True):
