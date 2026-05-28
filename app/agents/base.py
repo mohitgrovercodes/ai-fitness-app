@@ -149,6 +149,7 @@ class BaseRAGAgent:
             "activity_level":       str(activity_level),
             "tdee":                 tdee_str,
             "intelligence_context": intelligence_context,
+            "target_language":      state.get("language", "english"),
         }
 
         # Merge any extra variables injected by subclasses (e.g. max_training_days)

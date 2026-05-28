@@ -33,7 +33,7 @@ class NutritionAnalysis(BaseModel):
     )
     summary: str = Field(default="", description="Brief introduction/summary of the meal plan.")
     meals: List[MealPlanItem] = Field(default=[], description="List of structured meals.")
-    daily_totals: DailyTotals = Field(default=None, description="Total macros and calories for the day.")
+    daily_totals: Optional[DailyTotals] = Field(default=None, description="Total macros and calories for the day.")
     tip: str = Field(default="", description="Closing tip for hydration or nutrition.")
     final_answer: str = Field(
         default="",
@@ -66,6 +66,7 @@ STRICT POLICIES:
   🥗 VEGETARIAN / VEG / PURE VEG:
     - NO meat, NO fish, NO seafood, NO eggs
     - Dairy (milk, curd, paneer, cheese, ghee, butter) IS allowed
+    - FATAL SANITY RULE (ANTI-MEAT): You are STRICTLY FORBIDDEN from generating any meal names containing 'Meat', 'Chicken', 'Beef', 'Pork', 'Fish', 'Meatballs', 'Meatless', or 'Substitute'. If the database gives you 'Busy Day Chicken' or any fake-meat, REJECT IT immediately. Outputting 'Chicken' or 'Meat' in a vegetarian plan is a FATAL ERROR. Invent high-protein Paneer, Soya, Lentil, or Chickpea alternatives instead.
 
   🌱 VEGAN:
     - NO meat, NO fish, NO seafood, NO eggs
@@ -110,7 +111,7 @@ STRICT POLICIES:
 - DYNAMIC KNOWLEDGE FALLBACK: If the DB is missing calories/macros (shows as Unknown), you MUST generate a realistic numerical estimate (e.g., "45g") using your expert knowledge. It is strictly FORBIDDEN to output "N/A", "null", or "Unknown" for any macro or calorie field. Every meal MUST have numeric values for protein, carbs, fat, and calories.
 - PORTION SIZING & MACRO MATH: The database provides values per 100g. Scale portions appropriately so that the `daily_totals` actually sum up to the target calories required for their goal!
 - STRUCTURED JSON FIELDS: You MUST populate the `summary`, `meals`, `daily_totals`, and `tip` fields with structured data for interactive UI display.
-- CLEAN TEXT RESPONSE: The `final_answer` string MUST be a warm, motivating paragraph (3-4 sentences) explaining how this meal plan strategically helps the user's goal. However, DO NOT list the individual meals, bullet points, or raw macros inside `final_answer`.
+- CLEAN TEXT RESPONSE & TRANSLATION (MANDATORY): The `final_answer` string MUST be a warm, motivating paragraph (3-4 sentences) explaining how this meal plan strategically helps the user's goal. You MUST write the string values for `benefit` and `final_answer` in the {target_language} language. DO NOT list the individual meals, bullet points, or raw macros inside `final_answer`.
 - CONTEXT-AWARE MEAL TIMING (CRITICAL): If a day is labeled as a "Rest Day" or "Active Recovery Day", you MUST NOT include 'Pre-Workout' or 'Post-Workout' meal types. Substitute them dynamically with standard snack types like 'Morning Snack' or 'Evening Snack'. 'Pre-Workout' and 'Post-Workout' meal types are ONLY allowed on active 'Training Days'.
 - MEAL NAMING: DO NOT artificially append " (+ Xg Protein Powder)" to meal names. Rely on whole foods or add a dedicated separate shake meal if needed.
 - CRITICAL: If the user is referring to an uploaded image (e.g. "what is this?", "these calories"), DO NOT guess the food. The Vision Agent will handle it. ONLY provide nutrition info for foods the user EXPLICITLY names in their text. If they didn't name a food, just give general advice and do not mention any specific food from the database.
@@ -124,9 +125,10 @@ DATA SANITY CHECK (MANDATORY — apply to EVERY retrieved food before using it):
   • For Standard Weight/Muscle Gain diets, moderate fat is acceptable, but scale it dynamically to fit their goal without forcing an arbitrary ceiling.
 - SANITY RULE 4 (CEILING): No single meal may exceed its allocated % of the daily target.
 - SANITY RULE 5 (SUM VERIFICATION): After generating all meals, SUM their calories. If sum < daily target, SCALE UP portions of healthy foods already chosen.
-- SANITY RULE 6 (ANTI-REPETITION & UNIQUE MEAL ENGINE): Banish all repeating meal loops. You are STRICTLY FORBIDDEN from using an A/B alternating day pattern (where Day 3 repeats Day 1, or Day 4 repeats Day 2). Every single day in the cycle MUST feature completely unique main meals. DO NOT REPEAT ANY MEAL NAMES FROM THE PREVIOUSLY GENERATED CHUNK MEMORY. Give meals practical, descriptive names (e.g., "Grilled Salmon with Quinoa") and STRICTLY AVOID vague, unrealistic, or dessert-heavy titles.
+- SANITY RULE 6 (ANTI-REPETITION & UNIQUE MEAL ENGINE - FATAL PENALTY): Banish all repeating meal loops. You are STRICTLY FORBIDDEN from using an A/B alternating day pattern (where Day 3 repeats Day 1, or Day 4 repeats Day 2). If you repeat ANY meal name across different days, you FAIL THE TASK. Every single day in the cycle MUST feature completely unique main meals. DO NOT REPEAT ANY MEAL NAMES FROM THE `previous_meals_memory` chunk. Give meals practical, descriptive names (e.g., "Grilled Salmon with Quinoa").
 - SANITY RULE 7 (PRACTICAL & CHEWABLE FOOD): You MUST prioritize whole, chewable, and culturally relevant practical meals. LIMIT smoothies or protein shakes to an absolute maximum of 1 per day.
-- SANITY RULE 8 (CALORIE PACING): Enforce realistic digestion pacing across the day. Do not clump 1000 calories into one meal. Distribute approximately: Breakfast 25%, Lunch 30%, Snack 15%, Dinner 30%.
+- SANITY RULE 8 (CALORIE PACING & CAP - CRITICAL): Enforce realistic digestion pacing across the day. NO SINGLE MEAL can exceed 40% of the daily calorie target, and no snack can exceed 20%. If the user's daily calorie target is massive (e.g. >3000 kcal), you MUST dynamically add more snack items (e.g., 'Mid-Morning Snack', 'Pre-Bed Snack') to spread the calories across 5 or 6 meals. DO NOT clump 1500+ calories into a single meal like Breakfast or Dinner.
+- UNIVERSAL SCHEDULE SYNC: To ensure perfect alignment with the Training agent, you MUST ALWAYS schedule Day 3 and Day 7 as Rest Days. Adjust your meal timing (e.g., removing Pre/Post-Workout meals on these days) around this shared pattern.
 
 MULTI-DAY PLAN RULES (CRITICAL):
 - Detect exactly what duration (N days) the user is asking for from their message:
@@ -483,6 +485,7 @@ Current Context: {summary}
                     "medical":              medical,
                     "intelligence_context": intelligence_context,
                     "rotation_size":        rotation_size,
+                    "target_language":      state.get("language", "english"),
                 })
                 chunk_meals = analysis.meals if hasattr(analysis, 'meals') else []
                 all_meals.extend([m.model_dump() if hasattr(m, 'model_dump') else m for m in chunk_meals])

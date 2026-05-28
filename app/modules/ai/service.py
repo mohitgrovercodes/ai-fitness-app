@@ -399,7 +399,7 @@ class AIService:
             if redis_manager.is_available():
                 summary_bytes = redis_manager.client.get(f"chat_summary:{user_id}")
                 if summary_bytes:
-                    existing_summary = summary_bytes.decode("utf-8")
+                    existing_summary = summary_bytes.decode("utf-8") if isinstance(summary_bytes, bytes) else summary_bytes
         except Exception as e:
             from app.utils.logger import logger
             logger.error(f"Error fetching summary: {e}")
