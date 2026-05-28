@@ -79,29 +79,131 @@ def render_login_form() -> None:
 
 
 def render_welcome() -> None:
-    user = st.session_state.get("username") or st.session_state.get("user_id", "User")
-    st.title(f"👋 Welcome, {user}")
-    st.caption(f"User ID: `{st.session_state.get('user_id')}`")
+    profile = auth.get_profile_data() or {}
+    
+    # ── Map Goal choices to clean reader-friendly text ─────────────────
+    goal = profile.get("goal")
+    goal_map = {
+        "fat_loss": "Fat Loss",
+        "muscle_gain": "Muscle Gain",
+        "maintenance": "Maintenance",
+        "athletic_performance": "Athletic Performance"
+    }
+    goal_str = goal_map.get(str(goal).lower(), str(goal).title() if goal else "Not Set")
 
-    st.markdown(
-        """
-        ### What you can do here
+    # ── Map Activity choices to clean reader-friendly text ─────────────
+    activity_level = profile.get("activity_level")
+    activity_map = {
+        "sedentary": "Sedentary",
+        "lightly_active": "Lightly Active",
+        "moderately_active": "Moderately Active",
+        "very_active": "Very Active",
+        "extra_active": "Extra Active"
+    }
+    activity_str = activity_map.get(str(activity_level).lower(), str(activity_level).title() if activity_level else "—")
 
-        This is the developer visualization for the **Agentic AI Gym** multi-agent system.
-        Use the sidebar to navigate between pages (more pages will appear as Phases 1–5 ship):
+    # ── Dynamic BMI Calculation and Health Classification ──────────────
+    weight = profile.get("weight")
+    height = profile.get("height")
+    bmi_str = "—"
+    if weight and height:
+        try:
+            h_m = float(height) / 100.0
+            bmi_val = float(weight) / (h_m * h_m)
+            
+            if bmi_val < 18.5:
+                bmi_class = " (Underweight)"
+            elif bmi_val < 25.0:
+                bmi_class = " (Normal)"
+            elif bmi_val < 30.0:
+                bmi_class = " (Overweight)"
+            else:
+                bmi_class = " (Obese)"
+            bmi_str = f"{bmi_val:.1f}{bmi_class}"
+        except Exception:
+            pass
 
-        - **💬 Chat** — multi-turn conversation with the full agent graph *(Phase 2)*
-        - **🏋️ Workout Plan** — direct hit on the Training Agent *(Phase 3)*
-        - **🥗 Diet Plan** — direct hit on the Nutrition Agent *(Phase 3)*
-        - **📚 Domain Q&A** — direct hit on the Domain Agent *(Phase 3)*
-        - **📈 Progress** — Progress Agent visualizer *(Phase 4)*
-        - **👤 Profile** — onboarding + edit ✅
-        - **⚙️ Account** — feedback history + delete account ✅
+    # ── 1. HERO SECTION ──────────────────────────────────────────────
+    display_name = profile.get("full_name") or st.session_state.get("username") or "User"
+    st.title(f"👋 Welcome back, {display_name}!")
+    st.subheader(f"🎯 Goal: :green[{goal_str}]")
+    st.write("")
 
-        Toggle **🐛 Developer mode** in the sidebar to surface agent traces,
-        RAG hits, and raw JSON for any AI response.
-        """
-    )
+    # ── 2. BIOMETRIC METRICS STRIP ──────────────────────────────────
+    st.markdown("### 📊 My Biometrics")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("🏋️ Weight", f"{weight} kg" if weight else "—")
+    c2.metric("📏 Height", f"{height} cm" if height else "—")
+    c3.metric("🧠 BMI", bmi_str)
+    c4.metric("🏃 Activity", activity_str)
+    
+    st.divider()
+
+    # ── 3. 2x3 FEATURE GRID ──────────────────────────────────────────
+    st.markdown("### 🚀 Platform Features")
+    
+    # Row 1
+    r1_col1, r1_col2, r1_col3 = st.columns(3)
+    
+    with r1_col1:
+        with st.container(border=True):
+            st.subheader("💬 Chat")
+            st.caption("Phase 2 · Active")
+            st.write("Multi-turn conversation with the full AI coach agent graph.")
+            if st.button("Launch Chat", type="primary", use_container_width=True, key="btn_chat"):
+                st.switch_page("pages/3_Chat.py")
+                
+    with r1_col2:
+        with st.container(border=True):
+            st.subheader("🏋️ Workout Plan")
+            st.caption(":orange[Phase 3 · Locked]")
+            st.write("Direct access to the Training Agent to generate targeted workouts.")
+            st.button("Locked", disabled=True, use_container_width=True, key="btn_workout")
+            
+    with r1_col3:
+        with st.container(border=True):
+            st.subheader("🥗 Diet Plan")
+            st.caption(":orange[Phase 3 · Locked]")
+            st.write("Direct access to the Nutrition Agent to generate customized diets.")
+            st.button("Locked", disabled=True, use_container_width=True, key="btn_diet")
+
+    # Row 2
+    r2_col1, r2_col2, r2_col3 = st.columns(3)
+    
+    with r2_col1:
+        with st.container(border=True):
+            st.subheader("📚 Domain Q&A")
+            st.caption(":orange[Phase 3 · Locked]")
+            st.write("Direct Q&A with our Fitness & Nutrition research book database.")
+            st.button("Locked", disabled=True, use_container_width=True, key="btn_domain")
+            
+    with r2_col2:
+        with st.container(border=True):
+            st.subheader("📈 Progress")
+            st.caption(":orange[Phase 4 · Locked]")
+            st.write("Visual analytics and progress summaries of your fitness journey.")
+            st.button("Locked", disabled=True, use_container_width=True, key="btn_progress")
+            
+    with r2_col3:
+        with st.container(border=True):
+            st.subheader("👤 Profile")
+            st.caption("Phase 1 · Active")
+            st.write("View or update your age, weight, goals, activity level, and medical context.")
+            if st.button("Edit Profile", use_container_width=True, key="btn_profile"):
+                st.switch_page("pages/6_Profile.py")
+                
+    st.divider()
+
+    # ── 4. BOTTOM UTILITY ROW ──────────────────────────────────────
+    st.markdown("### ⚙️ Utilities")
+    u_col1, u_col2 = st.columns(2)
+    with u_col1:
+        if st.button("⚙️ Manage Account", use_container_width=True, key="btn_account"):
+            st.switch_page("pages/7_Account.py")
+    with u_col2:
+        if st.button("🛑 Logout", type="secondary", use_container_width=True, key="btn_logout"):
+            auth.logout()
+            st.rerun()
 
 
 def render_sidebar() -> None:
