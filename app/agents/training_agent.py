@@ -52,7 +52,7 @@ STRICT POLICIES:
 3. COMPREHENSIVE WORKOUT PLAN: A proper workout plan MUST cover a full routine based on the user's goal. It should dynamically include a mix of necessary components (e.g., warm-up/cardio, main strength/core exercises, and cool-down). Do NOT just provide 1 or 2 isolated exercises. If the database only gives you 1 exercise, you MUST use your expert knowledge to dynamically build out the rest of a complete, balanced routine that realistically addresses the user's goal.
 4. ADAPTABILITY & DYNAMIC PROGRAMMING: Adapt advice based on injuries and dietary preferences (e.g., if a user is Vegan or Keto, suggest appropriate intensity or recovery based on their likely macro intake if relevant). Critically, you MUST dynamically calculate sets and reps for EACH exercise based on the user's goal (e.g., Hypertrophy = 8-12 reps, Strength = 3-5 reps, Endurance = 15+ reps, Planks = 30-60s). DO NOT give a static 3 sets of 10-12 reps for everything.
 5. STRUCTURED JSON FIELDS: You MUST populate the `summary`, `workout` (list of exercises), `rest_days` (list of rest days), and `tip` fields with structured data. `workout` MUST ONLY contain actual physical exercises.
-6. MEDIA PATHS: You MUST include the correct `gif_path` and `image_path` directly inside each exercise object in the `workout` list.
+6. DATABASE OVERWRITE (MEDIA): You are strictly forbidden from leaving `gif_path` and `image_path` empty if the database context provides them. You MUST dynamically extract the nested `media.gif` and `media.image` paths from the database context and inject them exactly into your JSON output. If you skip this, you fail the task.
 7. CLEAN TEXT RESPONSE: The `final_answer` string MUST ONLY contain a polite greeting and a brief 1-2 sentence intro. DO NOT list the exercises, sets, reps, or media paths inside `final_answer`. Put the data ONLY in the structured JSON fields.
 8. NO SYSTEM TALK: NEVER use phrases like "based on the retrieved data", "the database doesn't have", or "the retrieved exercises". Speak directly as an expert coach.
 9. ANTI-LAZINESS RULE (CRITICAL): The `workout` list MUST NEVER BE EMPTY. You MUST generate the complete workout routine with actual exercises using your expert knowledge, even if the retrieved data is empty or generic web results.
@@ -62,7 +62,7 @@ MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
 - Detect exactly what duration (N days) the user is asking for from their message (e.g., "today" = 1, "4 days" = 4, "a week" = 7, "a month" = 30).
 - DYNAMIC SPLIT SELECTION: You MUST dynamically assign an optimal, professional workout split based on the requested days:
   • N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty.
-  • N = 2 to {max_training_days} (Short Plans): Generate exactly N unique days. Apply a logical split (e.g., N=3 is Push/Pull/Legs; N=4 is Upper/Lower; N=5 is Bro Split). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push", "Day 3 - Rest").
+  • N = 2 to {max_training_days} (Short Plans): Generate exactly N unique days. Apply a logical split (e.g., N=3 is Push/Pull/Legs; N=4 is Upper/Lower; N=5 is Bro Split). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push", "Day 3 - Rest"). DATABASE OVERWRITE (UNIVERSAL CONTINUITY): You MUST dynamically generate a continuous timeline without any gaps. For ANY requested duration of N days, you MUST explicitly output every sequential day exactly from Day 1 up to Day N (i.e., Day 1, Day 2, Day 3 ... Day N). You are STRICTLY FORBIDDEN from skipping any intermediate days or stopping early. Even if a specific day falls on a mandatory rest day, you MUST still generate the rest details for that exact day number. Missing any day between 1 and N is a fatal error.
   • N > {max_training_days} (Long-term Plans): This is real gym programming. DO NOT generate N different workout days.
     STEP 1 — DETERMINE CYCLE LENGTH: Use your fitness expertise to select the optimal split cycle for the user's goal.
       Examples: Muscle Gain → PPL (6-day cycle) or Upper/Lower (4-day cycle)
@@ -318,15 +318,47 @@ Current Context: {summary}
         workout_list = output.get("workout", [])
         if isinstance(workout_list, list):
             for item in workout_list:
-                if isinstance(item, dict):
-                    name = item.get("name")
-                    g_path = item.get("gif_path")
-                    i_path = item.get("image_path")
-                    if name and g_path and g_path in all_valid_gifs:
-                        gifs_dict[name] = g_path
-                    if name and i_path and i_path in all_valid_images:
-                        imgs_dict[name] = i_path
+                # Handle both dict and Pydantic object
+                if hasattr(item, "model_dump"):
+                    item_dict = item.model_dump()
+                elif hasattr(item, "dict"):
+                    item_dict = item.dict()
+                elif isinstance(item, dict):
+                    item_dict = item
+                else:
+                    item_dict = getattr(item, "__dict__", {})
 
+                name = item_dict.get("name")
+                g_path = item_dict.get("gif_path")
+                i_path = item_dict.get("image_path")
+                
+                if name and g_path and g_path in all_valid_gifs:
+                    gifs_dict[name] = g_path
+                if name and i_path and i_path in all_valid_images:
+                    imgs_dict[name] = i_path
+
+        # ── STEP 1.5: Auto-fill missing media using fuzzy MediaMatcher ──
+        if isinstance(workout_list, list):
+            for item in workout_list:
+                if hasattr(item, "model_dump"):
+                    item_dict = item.model_dump()
+                elif hasattr(item, "dict"):
+                    item_dict = item.dict()
+                elif isinstance(item, dict):
+                    item_dict = item
+                else:
+                    item_dict = getattr(item, "__dict__", {})
+
+                name = item_dict.get("name")
+                if not name:
+                    continue
+                # Only fill if AI left it empty
+                if name not in gifs_dict or name not in imgs_dict:
+                    matched = media_matcher.get_media(name)
+                    if name not in gifs_dict and matched.get("gif"):
+                        gifs_dict[name] = matched["gif"]
+                    if name not in imgs_dict and matched.get("image"):
+                        imgs_dict[name] = matched["image"]
         if not gifs_dict and final_answer:
             # Extract all gif/image paths from final_answer text
             gif_matches = re.findall(r'videos/[\w\-]+\.gif', final_answer)
@@ -359,8 +391,8 @@ Current Context: {summary}
                     if path in all_valid_images:
                         imgs_dict[f"Exercise {i+1}"] = path
 
-            output["exercise_gifs"] = gifs_dict
-            output["exercise_images"] = imgs_dict
+        output["exercise_gifs"] = gifs_dict
+        output["exercise_images"] = imgs_dict
 
         # ── STEP 2: Validate whatever is now in the dicts ──
         for field, valid_set in [("exercise_gifs", all_valid_gifs), ("exercise_images", all_valid_images)]:
@@ -372,4 +404,19 @@ Current Context: {summary}
                     else:
                         logger.warning(f"[Training Agent] Hallucination Blocked: '{path}' not in media files.")
                 output[field] = validated
+
+        # ── STEP 3: Inject back into workout list ──
+        if isinstance(workout_list, list):
+            for item in workout_list:
+                if hasattr(item, "name"):
+                    name = getattr(item, "name")
+                    if name:
+                        setattr(item, "gif_path", output["exercise_gifs"].get(name, ""))
+                        setattr(item, "image_path", output["exercise_images"].get(name, ""))
+                elif isinstance(item, dict):
+                    name = item.get("name")
+                    if name:
+                        item["gif_path"] = output["exercise_gifs"].get(name, "")
+                        item["image_path"] = output["exercise_images"].get(name, "")
+
         return output
