@@ -295,18 +295,96 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
             has_injuries = injuries and injuries.lower() != "none" and injuries.strip() != ""
             
             if has_injuries and "workout" in training_data and training_data["workout"]:
+                # 1. Run LLM Biomechanical Safety Gate
                 audited_workout = await self._run_injury_safety_gate(training_data["workout"], injuries)
-                training_data["workout"] = audited_workout
                 
-                # Sync media maps to remove discarded exercises
-                valid_names = set()
+                # 2. Run Deterministic Python Backstop Filter to catch any remaining leaks (e.g. Seated Leg Extension)
+                backstop_workout = []
+                exclusions = {
+                    "knee": ["squat", "lunge", "leg press", "leg extension", "quadriceps", "leg lift", "jump", "burpee", "groiner", "thruster", "box jump"],
+                    "back": ["deadlift", "barbell row", "squat", "overhead press", "bent-over row", "good morning", "kettlebell swing", "thruster"],
+                    "shoulder": ["overhead press", "military press", "bench press", "dip", "handstand", "pushup", "push-up", "shoulder press", "upright row"],
+                    "wrist": ["push-up", "pushup", "plank", "handstand", "clean", "snatch", "bench press", "barbell wrist curl", "barbell curl"]
+                }
+                
+                active_exclusions = set()
+                for injury in injuries_list:
+                    injury_lower = str(injury).lower()
+                    for key, words in exclusions.items():
+                        if key in injury_lower:
+                            active_exclusions.update(words)
+                
                 for ex in audited_workout:
                     name = ex.get("name") if isinstance(ex, dict) else getattr(ex, "name", "")
-                    if name:
-                        valid_names.add(name)
+                    name_lower = name.lower()
+                    
+                    is_unsafe = False
+                    for word in active_exclusions:
+                        if word in name_lower:
+                            is_unsafe = True
+                            break
+                            
+                    if is_unsafe:
+                        logger.warning(f"🛡️ [Tier 3 Backstop] Caught unsafe exercise leak: '{name}'. Replacing with joint-safe rehab fallback.")
+                        
+                        # Select an appropriate fallback based on injury
+                        if "knee" in injuries.lower():
+                            fallback_name = "Glute Bridge"
+                            fallback_target = ["Glutes", "Hamstrings"]
+                            fallback_desc = f"Adapted to protect/recover your {injuries}. Lie on your back with knees bent and feet flat. Press through your heels to lift your hips."
+                            fallback_benefit = "Unloads the knee completely while strengthening the posterior chain."
+                        elif "back" in injuries.lower():
+                            fallback_name = "Bird-Dog"
+                            fallback_target = ["Core", "Lower Back"]
+                            fallback_desc = f"Adapted to protect/recover your {injuries}. Keep a neutral spine, extend opposite arm and leg."
+                            fallback_benefit = "Builds core stability without compressing the spine."
+                        elif "shoulder" in injuries.lower():
+                            fallback_name = "Rotator Cuff External Rotation"
+                            fallback_target = ["Rotator Cuff", "Shoulders"]
+                            fallback_desc = f"Adapted to protect/recover your {injuries}. Keep elbow at 90 degrees against your side, rotate forearm outward."
+                            fallback_benefit = "Strengthens shoulder stabilizers safely."
+                        else:
+                            fallback_name = "Wall Sit (Light)"
+                            fallback_target = ["Quadriceps"]
+                            fallback_desc = f"Adapted to protect/recover your {injuries}. Perform a light-depth supported wall sit."
+                            fallback_benefit = "Supported isometric holding."
+                            
+                        # Build safe replacement item
+                        if isinstance(ex, dict):
+                            new_ex = {
+                                "day": ex.get("day", ""),
+                                "name": fallback_name,
+                                "target_muscle": fallback_target,
+                                "benefit": fallback_benefit,
+                                "description": fallback_desc,
+                                "sets": ex.get("sets", "3"),
+                                "reps": ex.get("reps", "12"),
+                                "gif_path": "",
+                                "image_path": ""
+                            }
+                        else:
+                            new_ex = WorkoutExercise(
+                                day=getattr(ex, "day", ""),
+                                name=fallback_name,
+                                target_muscle=fallback_target,
+                                benefit=fallback_benefit,
+                                description=fallback_desc,
+                                sets=getattr(ex, "sets", "3"),
+                                reps=getattr(ex, "reps", "12"),
+                                gif_path="",
+                                image_path=""
+                            )
+                        backstop_workout.append(new_ex)
+                    else:
+                        backstop_workout.append(ex)
+                        
+                training_data["workout"] = backstop_workout
                 
-                training_data["exercise_gifs"] = {k: v for k, v in training_data.get("exercise_gifs", {}).items() if k in valid_names}
-                training_data["exercise_images"] = {k: v for k, v in training_data.get("exercise_images", {}).items() if k in valid_names}
+                # ── Tier 3.5 Media Resolution Sync ──
+                # Re-run your _validate_output function on the final, safety-audited workout list!
+                # This will cleanly fuzzy-match the newly substituted exercises (e.g. Glute Bridge, Lying Leg Raises)
+                # against the local media library and inject their correct GIF/image paths.
+                training_data = self._validate_output(training_data, context="", state=state)
 
             workout_list = training_data.get("workout", [])
             rest_list = training_data.get("rest_days", [])
