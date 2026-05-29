@@ -125,20 +125,27 @@ class BaseRAGAgent:
 
         chain = self.prompt | self.llm
 
+        # Check if we should get dynamic exclusions (Layer 1 Dynamic Safety)
+        dynamic_exclusions = []
+        has_injuries = injuries and injuries.lower() != "none" and injuries.strip() != ""
+        if has_injuries:
+            dynamic_exclusions = await self._get_dynamic_injury_exclusions(injuries)
+            logger.info(f"🧬 [Dynamic Injury Safety] Generated exclusions for '{injuries}': {dynamic_exclusions}")
+            state.setdefault("_extra_prompt_vars", {})["dynamic_exclusions"] = dynamic_exclusions
+
         # ── PHASE 1: Profile-Enriched RAG Search (Layer 1) ───────────────────
         # Enrich the search query with user profile so ChromaDB embeddings
         # return goal-relevant results — no extra LLM call, zero extra cost.
         enriched_query = self._build_enriched_query(query, goal, diet_pref, weight_kg, injuries, activity_level)
         
         # Increase candidate pool size if injuries are reported (Tier 1 safety)
-        has_injuries = injuries and injuries.lower() != "none" and injuries.strip() != ""
         n_results = 15 if (has_injuries and self.agent_name == "Training Agent") else 5
         
         db_results  = await self.rag_tool.search(enriched_query, n_results=n_results, diet_preference=diet_pref)
         
-        # Run deterministic injury safety pre-filtering if injuries are present
+        # Run deterministic injury safety pre-filtering using dynamic exclusions
         if has_injuries and self.agent_name == "Training Agent":
-            db_results = self._filter_unsafe_exercises(db_results, injuries_list)
+            db_results = self._filter_unsafe_exercises(db_results, dynamic_exclusions)
             # Keep only the top 5 safe exercises to present to the LLM context
             db_results = db_results[:5]
 
@@ -235,31 +242,12 @@ class BaseRAGAgent:
         """Optional hook for subclasses to validate or format output."""
         return output
 
-    def _filter_unsafe_exercises(self, db_results: List[Dict], injuries_list: List[str]) -> List[Dict]:
+    def _filter_unsafe_exercises(self, db_results: List[Dict], active_exclusions: List[str]) -> List[Dict]:
         """
         Tier 1 Safety: Deterministically filter out any candidate exercises from database results
         that violate biomechanical constraints based on reported user injuries.
         """
-        if not db_results or not injuries_list:
-            return db_results
-
-        # Define basic biomechanical exclusions mapped to common injury keywords
-        exclusions = {
-            "knee": ["squat", "lunge", "leg press", "leg extension", "quadriceps", "leg lift", "jump", "burpee", "groiner", "thruster", "box jump"],
-            "back": ["deadlift", "barbell row", "squat", "overhead press", "bent-over row", "good morning", "kettlebell swing", "thruster"],
-            "shoulder": ["overhead press", "military press", "bench press", "dip", "handstand", "pushup", "push-up", "shoulder press", "upright row"],
-            "wrist": ["push-up", "pushup", "plank", "handstand", "clean", "snatch", "bench press", "barbell wrist curl", "barbell curl"]
-        }
-
-        # Identify which exclusion lists apply
-        active_exclusions = set()
-        for injury in injuries_list:
-            injury_lower = str(injury).lower()
-            for key, words in exclusions.items():
-                if key in injury_lower:
-                    active_exclusions.update(words)
-
-        if not active_exclusions:
+        if not db_results or not active_exclusions:
             return db_results
 
         safe_results = []
@@ -275,11 +263,58 @@ class BaseRAGAgent:
                     break
             
             if is_unsafe:
-                logger.info(f"🛡️ [Tier 1 Safety] Filtered out unsafe exercise '{r.get('name')}' for injuries: {injuries_list}")
+                logger.info(f"🛡️ [Tier 1 Safety] Filtered out unsafe exercise '{r.get('name')}' matching dynamic exclusion keyword: '{word}'")
             else:
                 safe_results.append(r)
                 
         return safe_results
+
+    async def _get_dynamic_injury_exclusions(self, injuries: str) -> List[str]:
+        """
+        Dynamically generate a list of biomechanical exclusion keywords for any arbitrary injury
+        using a fast, cheap gpt-4o-mini pass. This makes the safety system 100% scalable to infinite injuries.
+        """
+        if not injuries or injuries.lower() == "none":
+            return []
+
+        from langchain_openai import ChatOpenAI
+        from app.core.config import settings
+        from pydantic import BaseModel, Field
+
+        class InjuryExclusionResult(BaseModel):
+            exclusion_keywords: List[str] = Field(
+                description="List of 5-15 lowercase keywords representing exercise names, equipment, or movements to avoid."
+            )
+
+        try:
+            llm = ChatOpenAI(
+                model="gpt-4o-mini",
+                temperature=0,
+                api_key=settings.OPENAI_API_KEY
+            ).with_structured_output(InjuryExclusionResult, method="function_calling")
+
+            prompt = f"""You are the Principal Biomechanical Safety Officer at 'Agentic AI Gym'.
+The user has reported the following physical injury, pain, or medical condition:
+"{injuries}"
+
+Your task is to analyze this injury and generate a comprehensive list of specific exercise names, equipment keywords, or movements that must be completely avoided to prevent reinjury.
+
+Examples:
+- "severe knee pain" -> ["squat", "lunge", "leg press", "leg extension", "quadriceps", "leg lift", "jump", "burpee", "groiner", "thruster", "box jump"]
+- "both hands fractured" -> ["dumbbell", "barbell", "kettlebell", "cable", "rope", "handle", "grip", "row", "press", "curl", "raise", "pullup", "pushup", "pushdown", "extension", "deadlift", "dip", "clean", "snatch", "bench", "fly"]
+- "herniated disc L4-L5" -> ["deadlift", "squat", "barbell row", "overhead press", "bent-over row", "good morning", "kettlebell swing", "thruster", "spine loading"]
+- "shoulder impingement" -> ["overhead press", "military press", "bench press", "dip", "handstand", "pushup", "push-up", "shoulder press", "upright row"]
+- "elbow tendinitis" -> ["tricep", "bicep", "curl", "grip", "extension", "chin-up", "pullup", "dumbbell curl", "skull crusher"]
+- "asthma" -> ["cardio", "run", "sprint", "hiit", "burpee", "metcon", "treadmill", "aerobic"]
+
+Return the list matching the required structured schema. Keep keywords lowercase, short, and highly accurate."""
+
+            res = await llm.ainvoke(prompt)
+            return [str(k).lower().strip() for k in res.exclusion_keywords if k]
+        except Exception as e:
+            logger.error(f"❌ [Dynamic Injury Safety] Error generating dynamic exclusions: {e}")
+            # Fallback to general list if it fails
+            return ["squat", "deadlift", "lunge", "pushup", "press"]
 
     def _format_context(self, results: List[Dict]) -> str:
         """To be implemented by subclasses if they need custom formatting."""

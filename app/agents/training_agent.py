@@ -310,15 +310,58 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
                     "knee": ["squat", "lunge", "leg press", "leg extension", "quadriceps", "leg lift", "jump", "burpee", "groiner", "thruster", "box jump"],
                     "back": ["deadlift", "barbell row", "squat", "overhead press", "bent-over row", "good morning", "kettlebell swing", "thruster"],
                     "shoulder": ["overhead press", "military press", "bench press", "dip", "handstand", "pushup", "push-up", "shoulder press", "upright row"],
-                    "wrist": ["push-up", "pushup", "plank", "handstand", "clean", "snatch", "bench press", "barbell wrist curl", "barbell curl"]
+                    "wrist": ["push-up", "pushup", "plank", "handstand", "clean", "snatch", "bench press", "barbell wrist curl", "barbell curl"],
+                    "hand": ["dumbbell", "barbell", "kettlebell", "handle", "grip", "row", "press", "curl", "raise", "pullup", "pull-up", "pushup", "push-up", "deadlift", "dip", "clean", "snatch", "bench", "fly"],
+                    "finger": ["dumbbell", "barbell", "kettlebell", "handle", "grip", "row", "press", "curl", "raise", "pullup", "pull-up", "pushup", "push-up", "deadlift", "dip", "clean", "snatch", "bench", "fly"]
                 }
                 
-                active_exclusions = set()
+                # Fetch dynamic exclusions computed at intake, or query them dynamically
+                dynamic_exclusions = state.get("_extra_prompt_vars", {}).get("dynamic_exclusions", [])
+                if not dynamic_exclusions:
+                    dynamic_exclusions = await self._get_dynamic_injury_exclusions(injuries)
+                
+                active_exclusions = set(dynamic_exclusions)
+                
+                # Merge our standard hardcoded lists as absolute guarantees for common joints
                 for injury in injuries_list:
                     injury_lower = str(injury).lower()
                     for key, words in exclusions.items():
                         if key in injury_lower:
                             active_exclusions.update(words)
+                
+                # Curated list of ultra-safe, biomechanically isolated fallback exercises
+                fallback_options = [
+                    {
+                        "name": "Crunches",
+                        "target_muscle": ["Core", "Abs"],
+                        "desc": "Lie on your back with knees bent and feet flat on the floor. Cross your arms over your chest (do not use hands for support or weight). Slowly curl your head and shoulders up off the floor, contracting your abs.",
+                        "benefit": "100% hands-free, spine-safe, and joint-friendly core exercise requiring no equipment or joint load."
+                    },
+                    {
+                        "name": "Glute Bridge",
+                        "target_muscle": ["Glutes", "Hamstrings"],
+                        "desc": "Lie flat on your back with knees bent and feet flat on the floor, hip-width apart. Keep your arms relaxed at your sides. Press through your heels to lift your hips until your thighs and torso align.",
+                        "benefit": "Builds glute and hamstring strength while placing zero load on the knees, wrists, shoulders, or upper body."
+                    },
+                    {
+                        "name": "Seated Calf Raise",
+                        "target_muscle": ["Calves"],
+                        "desc": "Sit comfortably on a chair or bench with your feet flat on the floor. Press down through the balls of your feet to raise your heels as high as possible, then lower them slowly under control.",
+                        "benefit": "Strengthens the calf muscles isometrics/mobility without loading any upper-body joints or placing stress on the spine."
+                    },
+                    {
+                        "name": "Rotator Cuff External Rotation",
+                        "target_muscle": ["Rotator Cuff", "Shoulders"],
+                        "desc": "Stand or sit upright. Keep your elbow bent at 90 degrees and tucked close to your side. Slowly rotate your forearm outward away from your stomach, then return to the start.",
+                        "benefit": "Directly strengthens rotator cuff stabilizers without loading the wrists, hands, or lower body."
+                    },
+                    {
+                        "name": "Bird-Dog",
+                        "target_muscle": ["Core", "Lower Back"],
+                        "desc": "Start on your hands and knees in a tabletop position. Slowly extend your right arm straight forward and left leg straight backward. Return to the starting position and repeat on the other side.",
+                        "benefit": "Improves spinal alignment and core stabilization without compressive spinal load."
+                    }
+                ]
                 
                 for ex in audited_workout:
                     name = ex.get("name") if isinstance(ex, dict) else getattr(ex, "name", "")
@@ -333,27 +376,60 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
                     if is_unsafe:
                         logger.warning(f"🛡️ [Tier 3 Backstop] Caught unsafe exercise leak: '{name}'. Replacing with joint-safe rehab fallback.")
                         
-                        # Select an appropriate fallback based on injury
-                        if "knee" in injuries.lower():
-                            fallback_name = "Glute Bridge"
-                            fallback_target = ["Glutes", "Hamstrings"]
-                            fallback_desc = f"Adapted to protect/recover your {injuries}. Lie on your back with knees bent and feet flat. Press through your heels to lift your hips."
-                            fallback_benefit = "Unloads the knee completely while strengthening the posterior chain."
-                        elif "back" in injuries.lower():
-                            fallback_name = "Bird-Dog"
-                            fallback_target = ["Core", "Lower Back"]
-                            fallback_desc = f"Adapted to protect/recover your {injuries}. Keep a neutral spine, extend opposite arm and leg."
-                            fallback_benefit = "Builds core stability without compressing the spine."
-                        elif "shoulder" in injuries.lower():
-                            fallback_name = "Rotator Cuff External Rotation"
-                            fallback_target = ["Rotator Cuff", "Shoulders"]
-                            fallback_desc = f"Adapted to protect/recover your {injuries}. Keep elbow at 90 degrees against your side, rotate forearm outward."
-                            fallback_benefit = "Strengthens shoulder stabilizers safely."
+                        # Filter fallback options that do not violate any active exclusions
+                        safe_fallbacks = []
+                        for opt in fallback_options:
+                            opt_name_lower = opt["name"].lower()
+                            opt_desc_lower = opt["desc"].lower()
+                            opt_benefit_lower = opt["benefit"].lower()
+                            opt_muscles = [m.lower() for m in opt["target_muscle"]]
+                            
+                            is_opt_unsafe = False
+                            for word in active_exclusions:
+                                if (word in opt_name_lower or 
+                                    word in opt_desc_lower or 
+                                    word in opt_benefit_lower or 
+                                    any(word in m for m in opt_muscles)):
+                                    is_opt_unsafe = True
+                                    break
+                            if not is_opt_unsafe:
+                                safe_fallbacks.append(opt)
+                        
+                        # Classify the original exercise body segment
+                        orig_muscles = [m.lower() for m in (ex.get("target_muscle", []) if isinstance(ex, dict) else getattr(ex, "target_muscle", []))]
+                        is_lower_body = any(m in ["quadriceps", "hamstrings", "glutes", "calves", "legs", "thighs", "hips"] for m in orig_muscles)
+                        
+                        chosen_fallback = None
+                        if safe_fallbacks:
+                            if is_lower_body:
+                                # Prioritize lower body fallbacks
+                                for opt in safe_fallbacks:
+                                    opt_muscles = [m.lower() for m in opt["target_muscle"]]
+                                    if any(m in ["glutes", "hamstrings", "calves", "legs"] for m in opt_muscles):
+                                        chosen_fallback = opt
+                                        break
+                            else:
+                                # Prioritize upper body or core fallbacks
+                                for opt in safe_fallbacks:
+                                    opt_muscles = [m.lower() for m in opt["target_muscle"]]
+                                    if any(m in ["rotator cuff", "shoulders", "core", "abs", "lower back"] for m in opt_muscles):
+                                        chosen_fallback = opt
+                                        break
+                            
+                            # Fall back to the first safe option if no muscle split match was found
+                            if not chosen_fallback:
+                                chosen_fallback = safe_fallbacks[0]
+                                
+                        if not chosen_fallback:
+                            fallback_name = "Crunches"
+                            fallback_target = ["Core", "Abs"]
+                            fallback_desc = f"Adapted to protect/recover your {injuries}. Lie on your back with knees bent and feet flat on the floor. Cross your arms over your chest (do not use hands for support or weight). Slowly curl head and shoulders up."
+                            fallback_benefit = "100% hands-free, equipment-free, and spine-safe core recovery movement."
                         else:
-                            fallback_name = "Wall Sit (Light)"
-                            fallback_target = ["Quadriceps"]
-                            fallback_desc = f"Adapted to protect/recover your {injuries}. Perform a light-depth supported wall sit."
-                            fallback_benefit = "Supported isometric holding."
+                            fallback_name = chosen_fallback["name"]
+                            fallback_target = chosen_fallback["target_muscle"]
+                            fallback_desc = f"Adapted to protect/recover your {injuries}. " + chosen_fallback["desc"]
+                            fallback_benefit = chosen_fallback["benefit"]
                             
                         # Build safe replacement item
                         if isinstance(ex, dict):
@@ -456,6 +532,7 @@ BIOMECHANICAL RISK ASSESSMENT RULES:
    - Lower Back Injury (e.g., back pain, spinal strain): AVOID deadlifts, squats, standing rows, standing overhead press, bent-over rows. REPLACE WITH: Seated chest-supported cable/machine rows, bird-dog, glute bridges, lying leg curls, planks (if pain-free).
    - Shoulder Injury (e.g., shoulder pain, rotator cuff): AVOID overhead press, military press, flat bench press, dips. REPLACE WITH: Pec deck flys, internal/external rotator cuff rotations, face pulls, light chest-supported rows.
    - Wrist Injury (e.g., wrist pain, sprained wrist): AVOID planks/pushups on palms, straight-bar curls/presses. REPLACE WITH: Forearm planks, fist pushups, neutral-grip dumbbell work (with wrist braces/wraps), or pure legs/core machine exercises.
+   - Hand/Finger Injury (e.g. fractures, broken bones, sprains): AVOID all gripping, holding, or weight-bearing on the hands. You are strictly forbidden from prescribing dumbbells, barbells, kettlebells, handles, or pushups. REPLACE WITH: 100% hands-free exercises (such as seated machines using elbow pads, leg press, leg curls, bodyweight squats, wall sits, crunches, lying leg raises). If a routine is for Upper Body, you must completely pivot it to safe lower-body or core active recovery.
 
 For each exercise in the provided workout list:
 - Determine if it is unsafe/aggravating.
