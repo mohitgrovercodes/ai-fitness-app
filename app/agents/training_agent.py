@@ -148,6 +148,25 @@ Current Context: {summary}
             output_schema=TrainingAnalysis,
             system_prompt=system_prompt
         )
+        # Override the base prompt to include the high-visibility recency safety mandate (Tier 2 Safety)
+        from langchain_core.prompts import ChatPromptTemplate
+        self.prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("human", """CONVERSATION SUMMARY (for context):
+{summary}
+
+QUESTION: {query}
+
+RETRIEVED DATA (Safe, filtered database items):
+{context}
+
+⚠️ CRITICAL SAFETY MANDATE:
+The user has reported the following injuries/conditions: '{injuries}'.
+You MUST absolutely drop and avoid any movement that loads or stabilizes the injured joint/area.
+If the RETRIEVED DATA contains any unsafe exercises for this injury, you MUST DISCARD them and substitute them with 100% safe rehab/mobility variations.
+Explain in every exercise's description: "Adapted to protect/recover your {injuries}."
+""")
+        ])
 
     async def _detect_n_days(self, query: str) -> int:
         from langchain_openai import ChatOpenAI
@@ -266,17 +285,119 @@ Current Context: {summary}
         
         result = await self.run_logic(state, specialist_key="training", topic="fitness workout exercise")
         
-        if n_days > 1 and "specialist_results" in result and "training" in result["specialist_results"]:
+        if "specialist_results" in result and "training" in result["specialist_results"]:
             training_data = result["specialist_results"]["training"]
+            
+            # ── Tier 3 Safety: Run post-generation safety gate if injuries are present ──
+            user_context = state.get("user_context", {}) or {}
+            injuries_list = user_context.get("injuries", []) or []
+            injuries = ", ".join(str(i) for i in injuries_list) if injuries_list else "None"
+            has_injuries = injuries and injuries.lower() != "none" and injuries.strip() != ""
+            
+            if has_injuries and "workout" in training_data and training_data["workout"]:
+                audited_workout = await self._run_injury_safety_gate(training_data["workout"], injuries)
+                training_data["workout"] = audited_workout
+                
+                # Sync media maps to remove discarded exercises
+                valid_names = set()
+                for ex in audited_workout:
+                    name = ex.get("name") if isinstance(ex, dict) else getattr(ex, "name", "")
+                    if name:
+                        valid_names.add(name)
+                
+                training_data["exercise_gifs"] = {k: v for k, v in training_data.get("exercise_gifs", {}).items() if k in valid_names}
+                training_data["exercise_images"] = {k: v for k, v in training_data.get("exercise_images", {}).items() if k in valid_names}
+
             workout_list = training_data.get("workout", [])
             rest_list = training_data.get("rest_days", [])
             
-            if workout_list or rest_list:
+            if n_days > 1 and (workout_list or rest_list):
                 e_workout, e_rest = self._expand_cycle(workout_list, rest_list, n_days)
                 training_data["workout"] = e_workout
                 training_data["rest_days"] = e_rest
                 
         return result
+
+    async def _run_injury_safety_gate(self, workout_list: List[Any], injuries: str) -> List[Dict]:
+        """
+        Tier 3 Safety: Run a gpt-4o-mini structured validation sweep over the generated workout list.
+        Uses advanced anatomical, biomechanical, kinetic-chain and joint-stabilization reasoning.
+        """
+        if not workout_list or not injuries or injuries.lower() == "none":
+            return workout_list
+
+        from langchain_openai import ChatOpenAI
+        from langchain_core.prompts import ChatPromptTemplate
+        from pydantic import BaseModel, Field
+        from app.core.config import settings
+        import json
+
+        # Prepare a custom safety schema container for structured output
+        class WorkoutSafetyContainer(BaseModel):
+            workout: List[WorkoutExercise]
+
+        # Convert the existing workout list to a plain dictionary list
+        workout_data = []
+        for item in workout_list:
+            if hasattr(item, "model_dump"):
+                workout_data.append(item.model_dump())
+            elif hasattr(item, "dict"):
+                workout_data.append(item.dict())
+            elif isinstance(item, dict):
+                workout_data.append(item)
+            else:
+                workout_data.append(getattr(item, "__dict__", {}))
+
+        logger.info(f"🛡️ [Tier 3 Safety Gate] Reviewing workout plan for injury: '{injuries}'")
+
+        try:
+            llm = ChatOpenAI(
+                model="gpt-4o-mini", 
+                temperature=0, 
+                api_key=settings.OPENAI_API_KEY
+            ).with_structured_output(WorkoutSafetyContainer, method="function_calling")
+
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", """You are the Chief Biomechanics & Safety Officer at 'Agentic AI Gym'.
+Your sole mission is to review the generated workout plan and replace any biomechanically unsafe exercises to protect the user's reported injuries/conditions: '{injuries}'.
+
+IMPORTANT: DO NOT USE SIMPLE KEYWORD MATCHING. You MUST perform deep anatomical, kinetic-chain, and joint-stabilization reasoning.
+
+BIOMECHANICAL RISK ASSESSMENT RULES:
+1. Joint Load & Kinetic Chain: Deduce which joints are affected by the injury (e.g., lumbar spine for back pain; patellofemoral joint for knee pain; glenohumeral joint for shoulder pain).
+2. Action Check: For each exercise, analyze its execution. Does it load the affected joint, require it to absorb high impact, or force it to stabilize heavy weight?
+   - Example: Seated Shoulder Press loads the lumbar spine compressively. Standing Barbell Row requires intense spinal stabilization. Broad Jumps place high impact on the knee.
+3. Zero-Risk Substitution Mandate: If an exercise has even a minor risk of aggravation, you MUST replace it with a 100% safe, supported, or unloaded rehab alternative targeting the same muscle group if possible, or a restorative movement.
+   - Knee Injury (e.g., knee pain, patella, meniscus, ACL): AVOID squats, lunges, leg press, extensions, jumps, thrusters. REPLACE WITH: Seated leg curls, glute bridges, clamshells, straight leg raises, seated calf raises.
+   - Lower Back Injury (e.g., back pain, spinal strain): AVOID deadlifts, squats, standing rows, standing overhead press, bent-over rows. REPLACE WITH: Seated chest-supported cable/machine rows, bird-dog, glute bridges, lying leg curls, planks (if pain-free).
+   - Shoulder Injury (e.g., shoulder pain, rotator cuff): AVOID overhead press, military press, flat bench press, dips. REPLACE WITH: Pec deck flys, internal/external rotator cuff rotations, face pulls, light chest-supported rows.
+   - Wrist Injury (e.g., wrist pain, sprained wrist): AVOID planks/pushups on palms, straight-bar curls/presses. REPLACE WITH: Forearm planks, fist pushups, neutral-grip dumbbell work (with wrist braces/wraps), or pure legs/core machine exercises.
+
+For each exercise in the provided workout list:
+- Determine if it is unsafe/aggravating.
+- If it is unsafe, replace it with a safe rehab or joint-friendly alternative.
+- If you replace an exercise:
+  a. Keep the original 'day' value.
+  b. Set 'gif_path' and 'image_path' to empty strings ("").
+  c. Append/prepend " [Adapted for {injuries} recovery]" to its 'description' and 'benefit' so the user knows it's customized.
+- If it is already safe, do NOT modify it (keep all its original fields, including media paths, exactly as-is)."""),
+                ("human", "Input Workout JSON:\n{workout_json}\n\nReturn the audited safe workout matching the structured schema.")
+            ])
+
+            chain = prompt | llm
+            safety_output = await chain.ainvoke({
+                "injuries": injuries,
+                "workout_json": json.dumps(workout_data, ensure_ascii=False)
+            })
+
+            if safety_output and safety_output.workout:
+                logger.info(f"🛡️ [Tier 3 Safety Gate] Clean sweep completed successfully. Returning validated exercises.")
+                return safety_output.workout
+            return workout_list
+
+        except Exception as e:
+            logger.error(f"❌ [Tier 3 Safety Gate] Validation Error: {e}. Failing open to avoid crashing.")
+            return workout_list
 
     def _format_context(self, results: List[Dict]) -> str:
         """Convert DB results into meaningful exercise context."""
