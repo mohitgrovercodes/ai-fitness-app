@@ -134,13 +134,13 @@ if prompt:
                         "/api/ai/chat-vision",
                         data={"message": prompt},
                         files={"file": (uploaded_file.name, image_bytes, uploaded_file.type)},
-                        timeout=180,
+                        timeout=3600,
                     )
                 else:
                     data = post(
                         "/api/ai/chat",
                         json={"message": prompt, "context": {}},
-                        timeout=180,
+                        timeout=3600,
                     )
                 st.session_state.chat_messages.append(
                     {"role": "assistant", "data": data}
