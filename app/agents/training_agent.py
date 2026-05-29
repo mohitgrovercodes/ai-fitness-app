@@ -63,7 +63,7 @@ MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
 - Detect exactly what duration (N days) the user is asking for from their message (e.g., "today" = 1, "4 days" = 4, "a week" = 7, "a month" = 30).
 - DYNAMIC SPLIT SELECTION: {dynamic_split_rules}
 - DYNAMIC REST DAYS (CRITICAL): If a day is meant for rest or active recovery, you MUST put it entirely inside the `rest_days` array. DO NOT create a fake 'Rest' exercise inside the `workout` array. The `workout` array must remain 100% clean, containing only active physical exercises.
-- DYNAMIC DAILY VOLUME & VARIETY: DO NOT just divide the retrieved exercises across the days, and DO NOT repeat the exact same exercises on different days of a cycle. Generate a massive pool of 20-30 DIVERSE exercises across the cycle (e.g. Incline Press on Day 1, Flat Press on Day 4). An intense day should have 5-8 exercises.
+- DYNAMIC DAILY VOLUME & VARIETY: DO NOT just divide the retrieved exercises across the days, and DO NOT repeat the exact same exercises on different days. An intense day should have 5-8 exercises.
 - UNIVERSAL SCHEDULE SYNC: To ensure perfect alignment with the Nutrition agent, you MUST ALWAYS schedule Day 3 and Day 7 as Rest/Recovery days across all multi-day cycles, overriding any conflicting activity level rules. Structure your workout split logically around this shared pattern.
 - BIOMECHANICAL ANATOMY VALIDATOR (CRITICAL): You MUST strictly enforce muscle mapping. If a day is "Upper Body", you are FORBIDDEN from including Core or Leg exercises (like Groiners or Leg Lifts). If a day is "Lower Body", you are FORBIDDEN from including Chest or Arm exercises.
 - THE BIG 5 COMPOUND RULE: If generating a Lower Body or Full Body day, you MUST explicitly include at least one major compound lift (e.g., Barbell Squat, Leg Press, Deadlift variation, or Walking Lunges). If the database didn't return these, use your expert knowledge to inject them dynamically. Never output a Lower Body day that only has isolation exercises like Back Extensions or Leg Raises.
@@ -90,8 +90,6 @@ GOAL-SPECIFIC WORKOUT RULES (MANDATORY):
 
 🟢 MUSCLE GAIN / BULKING (when user mentions: gain weight, muscle gain, hypertrophy):
 - Focus entirely on Progressive Overload on heavy compound lifts.
-- You MUST use a 5-day or 6-day cycle for Muscle Gain. You are strictly forbidden from shrinking it to 3 or 4 days.
-- You MUST generate AT LEAST 20-30 physical exercises in the `workout` array across the cycle.
 - Keep cardio minimal to avoid burning excess calories.
 - Use traditional hypertrophy rep ranges (8-12 reps) and longer rest periods (90-120 seconds).
 
@@ -174,24 +172,27 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
         except Exception:
             return 1
 
-    def _expand_cycle(self, workout_list: list, rest_list: list, n_days: int) -> tuple:
+    def _expand_cycle(self, workout_list: list, rest_list: list, n_days: int, max_days: int = 12) -> tuple:
         import math
         import re
-
+        
         # Filter out LLM static repeats
         workout_list = [ex for ex in workout_list if "repeat" not in str(ex.get("day", "") if isinstance(ex, dict) else getattr(ex, "day", "")).lower()]
         rest_list = [r for r in rest_list if "repeat" not in str(r.get("day", "") if isinstance(r, dict) else getattr(r, "day", "")).lower()]
 
-        # Combine all days to find cycle sequence
+        expanded_workouts = []
+        expanded_rests = []
+        
         all_days = set()
         for ex in workout_list:
-            all_days.add(ex.get("day", "") if isinstance(ex, dict) else getattr(ex, "day", ""))
+            d = ex.get("day", "") if isinstance(ex, dict) else getattr(ex, "day", "")
+            if d: all_days.add(d)
         for r in rest_list:
-            all_days.add(r.get("day", "") if isinstance(r, dict) else getattr(r, "day", ""))
-        
-        # Sort by day number
-        def extract_day_num(d_str):
-            match = re.search(r'Day\s*(\d+)', d_str, re.IGNORECASE)
+            d = r.get("day", "") if isinstance(r, dict) else getattr(r, "day", "")
+            if d: all_days.add(d)
+
+        def extract_day_num(day_str: str):
+            match = re.search(r'Day\s*(\d+)', day_str, re.IGNORECASE)
             return int(match.group(1)) if match else 999
 
         sorted_days = sorted(list(all_days), key=extract_day_num)
@@ -200,8 +201,7 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
         if cycle_length == 0 or cycle_length >= n_days:
             return workout_list, rest_list
 
-        expanded_workouts = []
-        expanded_rests = []
+        is_short_plan = n_days <= max_days
 
         for target_day in range(1, n_days + 1):
             cycle_idx = (target_day - 1) % cycle_length
@@ -212,7 +212,11 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
             match = re.search(r'Day \d+\s*-\s*(.*)', orig_day_str, re.IGNORECASE)
             if match:
                 day_type = re.sub(r'\(Cycle.*?\)', '', match.group(1)).strip()
-            new_day_str = f"Day {target_day} - {day_type} (Cycle {cycle_num})"
+            
+            if is_short_plan:
+                new_day_str = f"Day {target_day} - {day_type}"
+            else:
+                new_day_str = f"Day {target_day} - {day_type} (Cycle {cycle_num})"
 
             # Workouts
             w_items = [ex for ex in workout_list if (ex.get("day", "") if isinstance(ex, dict) else getattr(ex, "day", "")) == orig_day_str]
@@ -220,7 +224,7 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
                 new_ex = ex.model_dump() if hasattr(ex, "model_dump") else dict(ex)
                 new_ex["day"] = new_day_str
                 
-                if cycle_num > 1 and "rest" not in str(new_ex.get("name", "")).lower() and "stretch" not in str(new_ex.get("name", "")).lower():
+                if not is_short_plan and cycle_num > 1 and "rest" not in str(new_ex.get("name", "")).lower() and "stretch" not in str(new_ex.get("name", "")).lower():
                     sets_str = str(new_ex.get("sets", "3"))
                     sets_match = re.search(r'(\d+)', sets_str)
                     if sets_match:
@@ -279,6 +283,7 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
       Examples: Muscle Gain → PPL (6-day cycle) or Bro Split (5-day cycle)
                 Fat Loss → Full Body (3-day cycle) or Circuit (4-day cycle)
       The cycle length is YOUR decision based on fitness science — it is NOT fixed.
+    ANTI-LAZINESS RULE: You MUST generate a base cycle of AT LEAST 5 or 6 unique days. You are strictly forbidden from shrinking the cycle to 3 or 4 days to save effort. You MUST generate AT LEAST 20-30 physical exercises in the workout array across this cycle.
     STEP 2 — GENERATE THE CYCLE: Generate exactly that many unique days as a REPEATING MICROCYCLE. 
     CRITICAL HARD LIMIT: YOU MUST STOP GENERATING AFTER THE BASE CYCLE. DO NOT generate Day 7, Day 8, Day 9, etc., if your cycle is only 6 days. DO NOT output exercises named "Repeat Day 1". The backend Python engine will handle the mathematical expansion and progressive overload automatically.
     STEP 3 — PROGRESSION PLAN: In `summary`, explain:
@@ -396,7 +401,7 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
             rest_list = training_data.get("rest_days", [])
             
             if n_days > 1 and (workout_list or rest_list):
-                e_workout, e_rest = self._expand_cycle(workout_list, rest_list, n_days)
+                e_workout, e_rest = self._expand_cycle(workout_list, rest_list, n_days, max_days=max_days)
                 training_data["workout"] = e_workout
                 training_data["rest_days"] = e_rest
                 
