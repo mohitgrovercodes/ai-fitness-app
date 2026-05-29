@@ -134,7 +134,7 @@ if prompt:
                         "/api/ai/chat-vision",
                         data={"message": prompt},
                         files={"file": (uploaded_file.name, image_bytes, uploaded_file.type)},
-                        timeout=3600,
+                        timeout=600,
                     )
                 else:
                     data = post(

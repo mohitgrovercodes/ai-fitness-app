@@ -61,21 +61,7 @@ STRICT POLICIES:
 MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
 - DATABASE OVERWRITE (UNIVERSAL CONTINUITY & ANTI-LAZINESS PROTOCOL): Whether you are generating a short N-day plan or a long-term repeating cycle of C days, you MUST dynamically generate a continuous timeline without any gaps. You are strictly prohibited from summarizing, skipping, or cutting short the sequence. If the plan or cycle is 5, 6, or 7 days long, you MUST output all exercises for ALL days in full detail. You MUST explicitly output every sequential day exactly from Day 1 up to the final day (e.g., Day 1, Day 2, Day 3, Day 4, Day 5). You are STRICTLY FORBIDDEN from outputting just Day 1 and stopping early. Missing any day inside your generated sequence will cause a system failure.
 - Detect exactly what duration (N days) the user is asking for from their message (e.g., "today" = 1, "4 days" = 4, "a week" = 7, "a month" = 30).
-- DYNAMIC SPLIT SELECTION: You MUST dynamically assign an optimal, professional workout split based on the requested days:
-  • N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty.
-  • N = 2 to {max_training_days} (Short Plans): Generate exactly N unique days. Apply a logical split (e.g., N=3 is Push/Pull/Legs; N=4 is Upper/Lower; N=5 is Bro Split). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push", "Day 3 - Rest").
-  • N > {max_training_days} (Long-term Plans): This is real gym programming. DO NOT generate N different workout days.
-    STEP 1 — DETERMINE CYCLE LENGTH: Use your fitness expertise to select the optimal split cycle for the user's goal.
-      Examples: Muscle Gain → PPL (6-day cycle) or Bro Split (5-day cycle)
-                Fat Loss → Full Body (3-day cycle) or Circuit (4-day cycle)
-      The cycle length is YOUR decision based on fitness science — it is NOT fixed.
-    STEP 2 — GENERATE THE CYCLE: Generate exactly that many unique days as a REPEATING MICROCYCLE. 
-    CRITICAL HARD LIMIT: YOU MUST STOP GENERATING AFTER THE BASE CYCLE. DO NOT generate Day 7, Day 8, Day 9, etc., if your cycle is only 6 days. DO NOT output exercises named "Repeat Day 1". The backend Python engine will handle the mathematical expansion and progressive overload automatically.
-    STEP 3 — PROGRESSION PLAN: In `summary`, explain:
-      - How many times to repeat this cycle to complete N days (e.g. ceil(N / cycle_length))
-      - Week-by-week progressive overload: Week 1 = baseline, Week 2 = +2 reps, Week 3 = +weight, etc.
-    STEP 4 — ROOT LEVEL `tip`: In the top-level `tip` JSON field (outside of the rest_days array), state exactly: "Repeat this X-day cycle Y times over N days. Increase [metric] each week."
-    You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push (Cycle Day 1)").
+- DYNAMIC SPLIT SELECTION: {dynamic_split_rules}
 - DYNAMIC REST DAYS (CRITICAL): If a day is meant for rest or active recovery, you MUST put it entirely inside the `rest_days` array. DO NOT create a fake 'Rest' exercise inside the `workout` array. The `workout` array must remain 100% clean, containing only active physical exercises.
 - DYNAMIC DAILY VOLUME & VARIETY: DO NOT just divide the retrieved exercises across the days, and DO NOT repeat the exact same exercises on different days of a cycle. Generate a massive pool of 20-30 DIVERSE exercises across the cycle (e.g. Incline Press on Day 1, Flat Press on Day 4). An intense day should have 5-8 exercises.
 - UNIVERSAL SCHEDULE SYNC: To ensure perfect alignment with the Nutrition agent, you MUST ALWAYS schedule Day 3 and Day 7 as Rest/Recovery days across all multi-day cycles, overriding any conflicting activity level rules. Structure your workout split logically around this shared pattern.
@@ -263,6 +249,26 @@ Current Context: {summary}
         
         query = state['messages'][-1].content
         n_days = await self._detect_n_days(query)
+        
+        if n_days == 1:
+            split_rules = "• N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty."
+        elif n_days <= max_days:
+            split_rules = f"• N = {n_days} (Short Plan): Generate exactly {n_days} unique days. Apply a logical split (e.g., Push/Pull/Legs). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., \"Day 1 - Push\", \"Day 3 - Rest\"). DO NOT generate a microcycle and do NOT generate any text about repeating the cycle."
+        else:
+            split_rules = f"""• N = {n_days} (Long-term Plan): This is real gym programming. DO NOT generate {n_days} different workout days.
+    STEP 1 — DETERMINE CYCLE LENGTH: Use your fitness expertise to select the optimal split cycle for the user's goal.
+      Examples: Muscle Gain → PPL (6-day cycle) or Bro Split (5-day cycle)
+                Fat Loss → Full Body (3-day cycle) or Circuit (4-day cycle)
+      The cycle length is YOUR decision based on fitness science — it is NOT fixed.
+    STEP 2 — GENERATE THE CYCLE: Generate exactly that many unique days as a REPEATING MICROCYCLE. 
+    CRITICAL HARD LIMIT: YOU MUST STOP GENERATING AFTER THE BASE CYCLE. DO NOT generate Day 7, Day 8, Day 9, etc., if your cycle is only 6 days. DO NOT output exercises named "Repeat Day 1". The backend Python engine will handle the mathematical expansion and progressive overload automatically.
+    STEP 3 — PROGRESSION PLAN: In `summary`, explain:
+      - How many times to repeat this cycle to complete {n_days} days (e.g. ceil({n_days} / cycle_length))
+      - Week-by-week progressive overload: Week 1 = baseline, Week 2 = +2 reps, Week 3 = +weight, etc.
+    STEP 4 — ROOT LEVEL `tip`: In the top-level `tip` JSON field (outside of the rest_days array), state exactly: "Repeat this X-day cycle Y times over {n_days} days. Increase [metric] each week."
+    You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push (Cycle Day 1)")."""
+
+        state.setdefault("_extra_prompt_vars", {})["dynamic_split_rules"] = split_rules
         
         result = await self.run_logic(state, specialist_key="training", topic="fitness workout exercise")
         
