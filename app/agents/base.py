@@ -129,7 +129,19 @@ class BaseRAGAgent:
         # Enrich the search query with user profile so ChromaDB embeddings
         # return goal-relevant results — no extra LLM call, zero extra cost.
         enriched_query = self._build_enriched_query(query, goal, diet_pref, weight_kg, injuries, activity_level)
-        db_results  = await self.rag_tool.search(enriched_query, diet_preference=diet_pref)
+        
+        # Increase candidate pool size if injuries are reported (Tier 1 safety)
+        has_injuries = injuries and injuries.lower() != "none" and injuries.strip() != ""
+        n_results = 15 if (has_injuries and self.agent_name == "Training Agent") else 5
+        
+        db_results  = await self.rag_tool.search(enriched_query, n_results=n_results, diet_preference=diet_pref)
+        
+        # Run deterministic injury safety pre-filtering if injuries are present
+        if has_injuries and self.agent_name == "Training Agent":
+            db_results = self._filter_unsafe_exercises(db_results, injuries_list)
+            # Keep only the top 5 safe exercises to present to the LLM context
+            db_results = db_results[:5]
+
         context_str = self._format_context(db_results)
 
         # Shared prompt variables — full profile + intelligence context passed to every agent
@@ -222,6 +234,52 @@ class BaseRAGAgent:
     def _validate_output(self, output: Dict[str, Any], context: str, state: AgentState = None) -> Dict[str, Any]:
         """Optional hook for subclasses to validate or format output."""
         return output
+
+    def _filter_unsafe_exercises(self, db_results: List[Dict], injuries_list: List[str]) -> List[Dict]:
+        """
+        Tier 1 Safety: Deterministically filter out any candidate exercises from database results
+        that violate biomechanical constraints based on reported user injuries.
+        """
+        if not db_results or not injuries_list:
+            return db_results
+
+        # Define basic biomechanical exclusions mapped to common injury keywords
+        exclusions = {
+            "knee": ["squat", "lunge", "leg press", "leg extension", "quadriceps", "leg lift", "jump", "burpee", "groiner", "thruster", "box jump"],
+            "back": ["deadlift", "barbell row", "squat", "overhead press", "bent-over row", "good morning", "kettlebell swing", "thruster"],
+            "shoulder": ["overhead press", "military press", "bench press", "dip", "handstand", "pushup", "push-up", "shoulder press", "upright row"],
+            "wrist": ["push-up", "pushup", "plank", "handstand", "clean", "snatch", "bench press", "barbell wrist curl", "barbell curl"]
+        }
+
+        # Identify which exclusion lists apply
+        active_exclusions = set()
+        for injury in injuries_list:
+            injury_lower = str(injury).lower()
+            for key, words in exclusions.items():
+                if key in injury_lower:
+                    active_exclusions.update(words)
+
+        if not active_exclusions:
+            return db_results
+
+        safe_results = []
+        for r in db_results:
+            name = r.get("name", "").lower()
+            muscle = r.get("main_muscle", "").lower()
+            
+            # Check if any forbidden keyword is in exercise name or muscle
+            is_unsafe = False
+            for word in active_exclusions:
+                if word in name or word in muscle:
+                    is_unsafe = True
+                    break
+            
+            if is_unsafe:
+                logger.info(f"🛡️ [Tier 1 Safety] Filtered out unsafe exercise '{r.get('name')}' for injuries: {injuries_list}")
+            else:
+                safe_results.append(r)
+                
+        return safe_results
 
     def _format_context(self, results: List[Dict]) -> str:
         """To be implemented by subclasses if they need custom formatting."""
