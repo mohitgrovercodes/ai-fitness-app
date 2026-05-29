@@ -122,7 +122,7 @@ if submitted:
             data = post(
                 "/api/ai/generate-diet",
                 json=payload,
-                timeout=180,
+                timeout=3600,
             )
             
             st.success("✅ Diet plan generated successfully!")

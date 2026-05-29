@@ -48,7 +48,7 @@ if submitted:
                 data = post(
                     "/api/ai/ask-domain",
                     json={"message": query.strip()},
-                    timeout=120,
+                    timeout=3600,
                 )
                 
                 st.success("🔬 Evidence retrieval completed!")

@@ -59,17 +59,17 @@ STRICT POLICIES:
 10. LANGUAGE TRANSLATION (MANDATORY): You MUST write the string values for `description`, `benefit`, and `tip` in the {target_language} language. Keep the JSON keys and anatomical terms in English.
 
 MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
+- DATABASE OVERWRITE (UNIVERSAL CONTINUITY & ANTI-LAZINESS PROTOCOL): Whether you are generating a short N-day plan or a long-term repeating cycle of C days, you MUST dynamically generate a continuous timeline without any gaps. You are strictly prohibited from summarizing, skipping, or cutting short the sequence. If the plan or cycle is 5, 6, or 7 days long, you MUST output all exercises for ALL days in full detail. You MUST explicitly output every sequential day exactly from Day 1 up to the final day (e.g., Day 1, Day 2, Day 3, Day 4, Day 5). You are STRICTLY FORBIDDEN from outputting just Day 1 and stopping early. Missing any day inside your generated sequence will cause a system failure.
 - Detect exactly what duration (N days) the user is asking for from their message (e.g., "today" = 1, "4 days" = 4, "a week" = 7, "a month" = 30).
 - DYNAMIC SPLIT SELECTION: You MUST dynamically assign an optimal, professional workout split based on the requested days:
   • N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty.
-  • N = 2 to {max_training_days} (Short Plans): Generate exactly N unique days. Apply a logical split (e.g., N=3 is Push/Pull/Legs; N=4 is Upper/Lower; N=5 is Bro Split). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push", "Day 3 - Rest"). DATABASE OVERWRITE (UNIVERSAL CONTINUITY): You MUST dynamically generate a continuous timeline without any gaps. For ANY requested duration of N days, you MUST explicitly output every sequential day exactly from Day 1 up to Day N (i.e., Day 1, Day 2, Day 3 ... Day N). You are STRICTLY FORBIDDEN from skipping any intermediate days or stopping early. Even if a specific day falls on a mandatory rest day, you MUST still generate the rest details for that exact day number. Missing any day between 1 and N is a fatal error.
+  • N = 2 to {max_training_days} (Short Plans): Generate exactly N unique days. Apply a logical split (e.g., N=3 is Push/Pull/Legs; N=4 is Upper/Lower; N=5 is Bro Split). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push", "Day 3 - Rest").
   • N > {max_training_days} (Long-term Plans): This is real gym programming. DO NOT generate N different workout days.
     STEP 1 — DETERMINE CYCLE LENGTH: Use your fitness expertise to select the optimal split cycle for the user's goal.
-      Examples: Muscle Gain → PPL (6-day cycle) or Upper/Lower (4-day cycle)
-               Fat Loss → Full Body (3-day cycle) or Circuit (4-day cycle)
-               General Fitness → 3 or 4-day full body split
+      Examples: Muscle Gain → PPL (6-day cycle) or Bro Split (5-day cycle)
+                Fat Loss → Full Body (3-day cycle) or Circuit (4-day cycle)
       The cycle length is YOUR decision based on fitness science — it is NOT fixed.
-    STEP 2 — GENERATE THE CYCLE: Generate exactly that many unique days as a REPEATING MICROCYCLE.
+    STEP 2 — GENERATE THE CYCLE: Generate exactly that many unique days as a REPEATING MICROCYCLE. 
     CRITICAL HARD LIMIT: YOU MUST STOP GENERATING AFTER THE BASE CYCLE. DO NOT generate Day 7, Day 8, Day 9, etc., if your cycle is only 6 days. DO NOT output exercises named "Repeat Day 1". The backend Python engine will handle the mathematical expansion and progressive overload automatically.
     STEP 3 — PROGRESSION PLAN: In `summary`, explain:
       - How many times to repeat this cycle to complete N days (e.g. ceil(N / cycle_length))
@@ -104,13 +104,15 @@ GOAL-SPECIFIC WORKOUT RULES (MANDATORY):
 
 🟢 MUSCLE GAIN / BULKING (when user mentions: gain weight, muscle gain, hypertrophy):
 - Focus entirely on Progressive Overload on heavy compound lifts.
+- You MUST use a 5-day or 6-day cycle for Muscle Gain. You are strictly forbidden from shrinking it to 3 or 4 days.
+- You MUST generate AT LEAST 20-30 physical exercises in the `workout` array across the cycle.
 - Keep cardio minimal to avoid burning excess calories.
 - Use traditional hypertrophy rep ranges (8-12 reps) and longer rest periods (90-120 seconds).
 
 UNIVERSAL INJURY OVERRIDE (HIGHEST PRIORITY — OVERRIDES ALL OTHER RULES):
 If the user reports ANY injury, pain, or medical condition (e.g., shoulder, knee, lower back, wrist), INJURY SAFETY WINS over ALL other rules. 
 - Overrides "THE BIG 5" & "MUSCLE GAIN": You MUST skip heavy lifts (squats, bench press, deadlifts, overhead presses) if they load the injured area, regardless of the day's focus or hypertrophy goals.
-- INJURY VOLUME CAP: Injured users need recovery capacity. You MUST cap volume to a maximum of 3-4 sets per exercise. NEVER prescribe 5-6 sets for an injured user.
+- INJURY VOLUME CAP: Injured users need recovery capacity. You MUST cap volume to a maximum of 3-4 sets per exercise. NEVER prescribe 5-6 sets for an injured user. DO NOT add extra Rest Days or shrink the cycle length just because of an injury. The cycle length must remain standard (e.g. 5 or 6 days).
 
 INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC — BIOMECHANICS SAFETY PROTOCOL):
 1. DEDUCE affected regions from the reported injury (e.g., "lower back pain" → lumbar spine, hips; "shoulder pain" → deltoids, rotator cuff; "wrist pain" → forearms, wrists).
@@ -251,7 +253,7 @@ Current Context: {summary}
 
     async def run(self, state: AgentState) -> Dict[str, Any]:
         # Inject max_training_days into state so run_logic passes it to the prompt.
-        safe_output_tokens = 2500   # Strongly clamped to prevent NoneType JSON truncation errors
+        safe_output_tokens = 15000  # Large token limit to allow 6-day splits without backend truncation
         tokens_per_exercise = 200   # Sets + reps + long descriptions (conservative buffer)
         exercises_per_day   = 6     # typical session volume max
         max_days = max(1, safe_output_tokens // (tokens_per_exercise * exercises_per_day))
