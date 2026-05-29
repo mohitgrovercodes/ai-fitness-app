@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
+username = st.text_input("username", autocomplete="username")            
 def render_login_form() -> None:
     st.title("🏋️ AI Fitness Gym")
     st.caption(
@@ -35,17 +35,17 @@ def render_login_form() -> None:
     # ── Login tab ────────────────────────────────────────────────────
     with tab_login:
         with st.form("login_form", clear_on_submit=False):
-            username = st.text_input("Username", autocomplete="username")
+            email = st.text_input("email", autocomplete="email")
             password = st.text_input(
                 "Password", type="password", autocomplete="current-password"
             )
             submitted = st.form_submit_button("Log in", type="primary")
             if submitted:
-                if not username or not password:
+                if not email or not password:
                     st.error("Username and password are required.")
                 else:
                     try:
-                        auth.login(username, password)
+                        auth.login(email, password)
                         st.success(f"Welcome back, {username}!")
                         st.rerun()
                     except ApiError as e:
@@ -56,7 +56,7 @@ def render_login_form() -> None:
         with st.form("register_form", clear_on_submit=True):
             r_email = st.text_input("Email", autocomplete="email")
             r_username = st.text_input(
-                "Username (optional — defaults to email prefix)"
+                "Username"
             )
             r_password = st.text_input(
                 "Password", type="password", autocomplete="new-password"

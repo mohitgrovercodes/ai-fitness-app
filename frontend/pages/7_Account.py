@@ -21,7 +21,7 @@ auth.require_auth()
 
 st.title("⚙️ Account")
 st.caption(
-    f"Logged in as **{st.session_state.get('username', '—')}** "
+    f"Logged in as **{st.session_state.get('email', '—')}** "
     f"(`{st.session_state.get('user_id')}`)"
 )
 

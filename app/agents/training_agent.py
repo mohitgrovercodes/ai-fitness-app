@@ -311,8 +311,9 @@ Current Context: {summary}
 
         # ── STEP 1: Rescue paths that LLM dumped in the text instead of JSON ──
         final_answer = output.get("answer", "")
-        gifs_dict = output.get("exercise_gifs", {})
-        imgs_dict = output.get("exercise_images", {})
+        # Filter out hallucinated paths from LLM's raw dict immediately
+        gifs_dict = {k: v for k, v in output.get("exercise_gifs", {}).items() if v in all_valid_gifs}
+        imgs_dict = {k: v for k, v in output.get("exercise_images", {}).items() if v in all_valid_images}
         
         # New approach: Extract from the structured 'workout' list directly!
         workout_list = output.get("workout", [])

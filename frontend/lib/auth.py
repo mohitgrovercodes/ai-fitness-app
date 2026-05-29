@@ -29,15 +29,15 @@ from lib.api_client import ApiError, get, post
 
 
 # Auth
-def login(username: str, password: str) -> None:
+def login(email: str, password: str) -> None:
     """POST /api/auth/login and store token + user_id in session state."""
     data = post(
         "/api/auth/login",
-        json={"username": username, "password": password},
+        json={"email": email, "password": password},
     )
     st.session_state["token"] = data["access_token"]
     st.session_state["user_id"] = data["user_id"]
-    st.session_state["username"] = username
+    st.session_state["email"] = email
     # Invalidate any stale caches from a previous user on this tab.
     st.session_state.pop("profile_exists", None)
     st.session_state.pop("profile_data", None)
