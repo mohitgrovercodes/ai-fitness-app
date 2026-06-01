@@ -1,11 +1,15 @@
 """
 Biomechanical safety schema for AI Fitness Gym.
 
-Implements 9-feature Biomechanical Tagging (7 original + 2 Phase 2 additions):
-  Feature 8: torsional_joint_loading  — distinguishes curtsy lunge from reverse lunge
-             for ACL/meniscus patients (rotational stress, not just joint identity).
-  Feature 9: spinal_shear_level       — separates anterior shear (RDL, good morning)
-             from pure axial compression (back squat) for spondylolisthesis safety.
+Implements 10-feature Biomechanical Tagging:
+  Feature 8:  torsional_joint_loading  — distinguishes curtsy lunge from reverse lunge
+              for ACL/meniscus patients (rotational stress, not just joint identity).
+  Feature 9:  spinal_shear_level       — separates anterior shear (RDL, good morning)
+              from pure axial compression (back squat) for spondylolisthesis safety.
+  Feature 10: joint_actions (Phase 3)  — encodes WHAT a joint is doing, not just WHICH
+              joint is involved. Fixes the PFPS bug: KNEE_EXTENSION_OPEN blocks
+              leg_extension but leaves KNEE_FLEXION_OPEN (leg curl) perfectly safe.
+              blocked_chains on InjuryConstraint is deprecated in favour of this.
 
 All enums are closed vocabularies. Ordinal features use IntEnum so the
 deterministic filter can compare with `<=`. Categorical features use
@@ -85,6 +89,44 @@ class ShearLevel(IntEnum):
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Feature 10: Joint action vocabulary  ← Phase 3 addition
+# ─────────────────────────────────────────────────────────────────────
+class JointAction(str, Enum):
+    """
+    Encodes the specific movement a joint performs during an exercise,
+    including both the ACTION (flexion/extension/rotation) and the
+    CHAIN STATUS (open/closed).
+
+    This replaces the blunt `blocked_chains` approach on InjuryConstraint.
+    Example: PFPS constraint = blocked_joint_actions: [KNEE_EXTENSION_OPEN_CHAIN]
+      - leg_extension  [KNEE_EXTENSION_OPEN_CHAIN]  → BLOCKED  ✓
+      - lying_leg_curl [KNEE_FLEXION_OPEN_CHAIN]    → ALLOWED  ✓  (was BLOCKED in v0)
+      - back_squat     [KNEE_EXTENSION_CLOSED_CHAIN] → ALLOWED  ✓
+    """
+    # ── Knee ─────────────────────────────────────────────────────────
+    KNEE_EXTENSION_OPEN   = "KNEE_EXTENSION_OPEN_CHAIN"    # leg extension machine
+    KNEE_EXTENSION_CLOSED = "KNEE_EXTENSION_CLOSED_CHAIN"  # squat ascent, step-up
+    KNEE_FLEXION_OPEN     = "KNEE_FLEXION_OPEN_CHAIN"      # lying/seated leg curl
+    KNEE_FLEXION_CLOSED   = "KNEE_FLEXION_CLOSED_CHAIN"    # squat descent
+    # ── Hip ──────────────────────────────────────────────────────────
+    HIP_FLEXION_OPEN      = "HIP_FLEXION_OPEN_CHAIN"       # lying leg raise, hanging leg raise
+    HIP_FLEXION_CLOSED    = "HIP_FLEXION_CLOSED_CHAIN"     # squat descent, hinge loading
+    HIP_EXTENSION_CLOSED  = "HIP_EXTENSION_CLOSED_CHAIN"   # squat ascent, deadlift, hip thrust
+    HIP_ABDUCTION_OPEN    = "HIP_ABDUCTION_OPEN_CHAIN"     # clamshell, side-lying abduction
+    # ── Spine ────────────────────────────────────────────────────────
+    SPINAL_FLEXION_DYNAMIC    = "SPINAL_FLEXION_DYNAMIC"       # crunch, hanging leg raise
+    SPINAL_EXTENSION_DYNAMIC  = "SPINAL_EXTENSION_DYNAMIC"     # hyperextension
+    SPINAL_ROTATION_DYNAMIC   = "SPINAL_ROTATION_DYNAMIC"      # russian twist
+    SPINAL_ISOMETRIC_BRACING  = "SPINAL_ISOMETRIC_BRACING"     # plank, bird-dog, dead bug
+    SPINAL_LATERAL_FLEXION    = "SPINAL_LATERAL_FLEXION"        # side plank (isometric lateral)
+    # ── Shoulder ─────────────────────────────────────────────────────
+    SHOULDER_OVERHEAD_LOADED      = "SHOULDER_OVERHEAD_LOADED"      # overhead press
+    SHOULDER_HORIZONTAL_LOADED    = "SHOULDER_HORIZONTAL_LOADED"    # bird-dog arm, pallof press
+    # ── Ankle ────────────────────────────────────────────────────────
+    ANKLE_PLANTARFLEXION_LOADED   = "ANKLE_PLANTARFLEXION_LOADED"   # calf raise
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Feature 4: Grip demand (ordinal)
 # ─────────────────────────────────────────────────────────────────────
 class GripDemand(IntEnum):
@@ -131,7 +173,7 @@ class BiomechanicalTags(BaseModel):
     exercise_id: str
     name: str
     primary_joints_involved: List[Joint]
-    kinetic_chain_loading: ChainStatus
+    kinetic_chain_loading: ChainStatus      # kept for debug/display; safety logic uses joint_actions
     axial_compression_level: CompressionLevel
     grip_requirement: GripDemand
     joint_impact_level: ImpactLevel
@@ -139,18 +181,16 @@ class BiomechanicalTags(BaseModel):
     metabolic_density: MetabolicDensity
     # ── Phase 2 additions ──────────────────────────────────────────
     torsional_joint_loading: bool = False
-    """
-    True when the exercise loads a joint through the rotational/transverse
-    plane under significant load (pivoting, crossing, valgus forcing).
-    Examples: curtsy lunge, kb_swing (fatigue), russian_twist.
-    Distinguishes curtsy lunge from reverse lunge for ACL/meniscus patients.
-    """
     spinal_shear_level: ShearLevel = ShearLevel.NONE
-    """
-    Anterior shear force on the lumbar spine. See ShearLevel for convention.
-    An exercise can have LOW axial compression but HIGH shear (RDL).
-    An exercise can have HIGH axial compression but LOW shear (back squat).
-    """
+    # ── Phase 3 addition ───────────────────────────────────────────
+    joint_actions: List[JointAction] = Field(
+        default_factory=list,
+        description=(
+            "The specific joint movements performed under load during this exercise. "
+            "Encodes both action-type (flexion/extension) and chain status (open/closed). "
+            "Used by the filter to match blocked_joint_actions on InjuryConstraint."
+        )
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -158,31 +198,41 @@ class BiomechanicalTags(BaseModel):
 # ─────────────────────────────────────────────────────────────────────
 class InjuryConstraint(BaseModel):
     """
-    Parallel to the 7 features - one constraint field per feature axis.
-    Defaults are the most permissive (HIGH ceilings, empty block lists),
-    so an absent constraint = "no restriction on this axis".
+    One constraint field per feature axis. Defaults are maximally permissive
+    (HIGH ceilings, empty block lists) — absent constraint = no restriction.
 
     The intake LLM populates this from a raw injury string. Pydantic
-    enforces the closed vocabularies at the structured-output layer.
+    enforces closed vocabularies at the structured-output layer.
     """
-    # Parallel to Feature 1
+    # Feature 1: block specific joints (anatomical identity)
     blocked_joints: List[Joint] = Field(default_factory=list)
-    # Parallel to Feature 2  ← THE MODIFICATION
-    # Enables blocking specific chain statuses (e.g. OPEN_UNLOADED for
-    # patellofemoral pain) without blocking the joint outright.
-    blocked_chains: List[ChainStatus] = Field(default_factory=list)
-    # Parallel to Feature 3 (ordinal cap)
+    # Feature 2: DEPRECATED — superseded by blocked_joint_actions (Feature 10).
+    # Kept for backward compatibility; the filter still checks it but the intake
+    # LLM should no longer populate it. Remove in a future cleanup pass.
+    blocked_chains: List[ChainStatus] = Field(
+        default_factory=list,
+        description="DEPRECATED: use blocked_joint_actions instead."
+    )
+    # Feature 3: axial compression ceiling
     max_axial_compression: CompressionLevel = CompressionLevel.HIGH
-    # Parallel to Feature 4 (ordinal cap)
+    # Feature 4: grip ceiling
     max_grip_requirement: GripDemand = GripDemand.HEAVY
-    # Parallel to Feature 5 (ordinal cap)
+    # Feature 5: impact ceiling
     max_impact: ImpactLevel = ImpactLevel.HIGH
-    # Parallel to Feature 6 (binary)
+    # Feature 6: upper-limb active support flag
     block_upper_limb_active: bool = False
-    # Parallel to Feature 7 (ordinal cap)
+    # Feature 7: metabolic density ceiling
     max_metabolic_density: MetabolicDensity = MetabolicDensity.HIGH
-    # ── Phase 2 additions ──────────────────────────────────────────
-    # Parallel to Feature 8 (binary)
+    # Feature 8: torsional loading flag
     block_torsional_loading: bool = False
-    # Parallel to Feature 9 (ordinal cap)
+    # Feature 9: spinal shear ceiling
     max_spinal_shear: ShearLevel = ShearLevel.HIGH
+    # Feature 10: exact joint-action blocklist  ← Phase 3
+    blocked_joint_actions: List[JointAction] = Field(
+        default_factory=list,
+        description=(
+            "Block specific joint movements (action + chain status). "
+            "More precise than blocked_chains: KNEE_EXTENSION_OPEN blocks leg_extension "
+            "but leaves KNEE_FLEXION_OPEN (leg curl) safely available."
+        )
+    )
