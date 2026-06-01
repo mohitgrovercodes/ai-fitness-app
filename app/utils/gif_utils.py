@@ -18,6 +18,7 @@ class MediaMatcher:
         self.gifs: Dict[str, str] = {}
         self.images: Dict[str, str] = {}
         self.instructions: Dict[str, str] = {}
+        self.final_descriptions: Dict[str, str] = {}
         
         self.prefixes = [
             "metaburn", "holman", "rusin", "30 arms", "30 shoulders", 
@@ -73,6 +74,26 @@ class MediaMatcher:
                 if img_rel and (self.dataset_dir / img_rel).exists():
                     self.images[norm_name] = img_rel
             
+            # Load final master dataset for fallback descriptions
+            final_master_file = self.root_dir / "data" / "final_master_exercises.json"
+            if final_master_file.exists():
+                with open(final_master_file, "r", encoding="utf-8") as f:
+                    master_data = json.load(f)
+                for item in master_data:
+                    name = item.get("name")
+                    if not name: continue
+                    norm = self._normalize(name)
+                    desc = item.get("description")
+                    prep = item.get("preparation")
+                    exec_ = item.get("execution")
+                    final_desc = ""
+                    if prep or exec_:
+                        final_desc = f"{prep or ''} {exec_ or ''}".strip()
+                    elif desc:
+                        final_desc = desc
+                    if final_desc:
+                        self.final_descriptions[norm] = final_desc
+
             logger.info(f"✅ [Media Matcher] Loaded {len(self.gifs)} GIFs and {len(self.images)} Images.")
         except Exception as e:
             logger.error(f"❌ [Media Matcher] Error: {e}")
@@ -90,7 +111,7 @@ class MediaMatcher:
         
         result["gif"] = self.gifs.get(norm_name)
         result["image"] = self.images.get(norm_name)
-        result["instructions"] = self.instructions.get(norm_name)
+        result["instructions"] = self.instructions.get(norm_name) or self.final_descriptions.get(norm_name)
 
         if not result["gif"] or not result["image"] or not result["instructions"]:
             if not result["gif"]:
@@ -187,9 +208,18 @@ class MediaMatcher:
             # Attempt to pull instruction from the matched fuzzy key
             for k, v in self.gifs.items():
                 if v == result["gif"]:
-                    result["instructions"] = self.instructions.get(k)
+                    result["instructions"] = self.instructions.get(k) or self.final_descriptions.get(k)
                     if result["instructions"]:
                         break
+                        
+        if not result["instructions"]:
+            # Last resort for instructions: fuzzy match over final_descriptions
+            # Sort keys so that longer, more specific keys are tested first.
+            sorted_keys = sorted(self.final_descriptions.keys(), key=len, reverse=True)
+            for k in sorted_keys:
+                if len(k) > 4 and (k in norm_name or norm_name in k):
+                    result["instructions"] = self.final_descriptions[k]
+                    break
 
         return result
 
