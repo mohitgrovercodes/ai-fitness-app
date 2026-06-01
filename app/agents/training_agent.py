@@ -59,7 +59,9 @@ STRICT POLICIES:
 10. LANGUAGE TRANSLATION (MANDATORY): You MUST write the string values for `description`, `benefit`, and `tip` in the {target_language} language. Keep the JSON keys and anatomical terms in English.
 
 MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
-- DATABASE OVERWRITE (UNIVERSAL CONTINUITY & ANTI-LAZINESS PROTOCOL): Whether you are generating a short N-day plan or a long-term repeating cycle of C days, you MUST dynamically generate a continuous timeline without any gaps. You are strictly prohibited from summarizing, skipping, or cutting short the sequence. If the plan or cycle is 5, 6, or 7 days long, you MUST output all exercises for ALL days in full detail. You MUST explicitly output every sequential day exactly from Day 1 up to the final day (e.g., Day 1, Day 2, Day 3, Day 4, Day 5). You are STRICTLY FORBIDDEN from outputting just Day 1 and stopping early. Missing any day inside your generated sequence will cause a system failure.
+- UNIVERSAL CONTINUITY & ANTI-LAZINESS PROTOCOL (MANDATORY): You MUST generate a continuous timeline without gaps.
+  • SHORT PLANS (N <= 12 days): You MUST explicitly output every sequential day from Day 1 up to the final day N (e.g., Day 1, Day 2, Day 3, Day 4). Missing any day in this sequence is a system failure.
+  • LONG-TERM PLANS (N > 12 days): You MUST ONLY output the microcycle of C days (exactly 3, 4, or 5 days, e.g. Day 1, Day 2, Day 3, Day 4). You are STRICTLY FORBIDDEN from outputting any day beyond the microcycle length (do NOT output Day 5, Day 6, etc. in your workout list). The backend will repeat and expand your microcycle to the full N days with progressive overload.
 - Detect exactly what duration (N days) the user is asking for from their message (e.g., "today" = 1, "4 days" = 4, "a week" = 7, "a month" = 30).
 - DYNAMIC SPLIT SELECTION: {dynamic_split_rules}
 - DYNAMIC REST DAYS (CRITICAL): If a day is meant for rest or active recovery, you MUST put it entirely inside the `rest_days` array. DO NOT create a fake 'Rest' exercise inside the `workout` array. The `workout` array must remain 100% clean, containing only active physical exercises.
@@ -336,7 +338,11 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
         elif n_days <= max_days:
             split_rules = f"• N = {n_days} (Short Plan): Generate exactly {n_days} unique days. Apply a logical split (e.g., Push/Pull/Legs). Try to minimize repeating exercises, but you MAY repeat them across different days if necessary to fulfill a highly specific user focus. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., \"Day 1 - Push\", \"Day 3 - Rest\")."
         else:
-            split_rules = f"• N = {n_days} (Long-term Plan): Generate a microcycle and explain repeats."
+            split_rules = (
+                f"• N = {n_days} (Long-term Plan): You are STRICTLY FORBIDDEN from generating all {n_days} days. "
+                f"Instead, generate exactly a 3, 4, or 5 day repeating microcycle split (e.g., Day 1 - Push, Day 2 - Pull, Day 3 - Legs, Day 4 - Rest/Core). "
+                f"Do NOT output any day beyond Day 4 or Day 5 in your workout list. The backend will automatically expand your microcycle to the full {n_days} days and program progressive overload."
+            )
             
         state.setdefault("_extra_prompt_vars", {})["dynamic_split_rules"] = split_rules
         
@@ -444,6 +450,7 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
             return ""
         lines = []
         for r in results:
+            eid = r.get('id', 'N/A')
             name = r.get('name', 'Unknown')
             muscle = r.get('main_muscle', 'N/A')
             equip = r.get('equipment', 'N/A')
@@ -457,7 +464,7 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
             if img: media_info.append(f"Image Available: {img}")
             
             media_str = "\n  ".join(media_info) if media_info else "No media available"
-            lines.append(f"• {name} (Muscle: {muscle}, Equipment: {equip})\n  {media_str}\n  Prep: {prep}\n  Execution: {exe}")
+            lines.append(f"• {name} (ID: {eid}, Muscle: {muscle}, Equipment: {equip})\n  {media_str}\n  Prep: {prep}\n  Execution: {exe}")
         return "\n\n".join(lines)
     
     def _validate_output(self, output: Dict[str, Any], context: str, state: Any = None) -> Dict[str, Any]:
