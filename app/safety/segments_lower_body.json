@@ -1,0 +1,50 @@
+[
+  {"exercise_id": "back_squat",            "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+  {"exercise_id": "front_squat",           "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+  {"exercise_id": "goblet_squat",          "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+  {"exercise_id": "bw_squat",              "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+  {"exercise_id": "box_squat",             "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+  {"exercise_id": "wall_sit",              "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": []},
+
+  {"exercise_id": "rdl_bb",               "primary_segment": "LOWER_POSTERIOR", "secondary_segments": []},
+  {"exercise_id": "conv_deadlift",         "primary_segment": "LOWER_POSTERIOR", "secondary_segments": ["LOWER_ANTERIOR", "CORE_POSTERIOR"]},
+  {"exercise_id": "sumo_deadlift",         "primary_segment": "LOWER_POSTERIOR", "secondary_segments": ["LOWER_ANTERIOR"]},
+  {"exercise_id": "good_morning",          "primary_segment": "LOWER_POSTERIOR", "secondary_segments": ["CORE_POSTERIOR"]},
+  {"exercise_id": "kb_swing",              "primary_segment": "LOWER_POSTERIOR", "secondary_segments": ["CORE_POSTERIOR"]},
+
+  {"exercise_id": "walking_lunge",         "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+  {"exercise_id": "reverse_lunge",         "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+  {"exercise_id": "bulgarian_split_squat", "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+  {"exercise_id": "step_up",               "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+  {"exercise_id": "curtsy_lunge",          "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": ["LOWER_LATERAL"]},
+
+  {"exercise_id": "hip_thrust",            "primary_segment": "LOWER_POSTERIOR", "secondary_segments": []},
+  {"exercise_id": "glute_bridge",          "primary_segment": "LOWER_POSTERIOR", "secondary_segments": []},
+  {"exercise_id": "single_leg_glute_bridge","primary_segment": "LOWER_POSTERIOR","secondary_segments": ["LOWER_LATERAL"]},
+  {"exercise_id": "hyperextension",        "primary_segment": "CORE_POSTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+  {"exercise_id": "cable_pull_through",    "primary_segment": "LOWER_POSTERIOR", "secondary_segments": []},
+
+  {"exercise_id": "leg_extension",         "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": []},
+  {"exercise_id": "lying_leg_curl",        "primary_segment": "LOWER_POSTERIOR", "secondary_segments": []},
+  {"exercise_id": "seated_leg_curl",       "primary_segment": "LOWER_POSTERIOR", "secondary_segments": []},
+  {"exercise_id": "leg_press",             "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+
+  {"exercise_id": "standing_calf_raise",   "primary_segment": "LOWER_POSTERIOR", "secondary_segments": []},
+  {"exercise_id": "seated_calf_raise",     "primary_segment": "LOWER_POSTERIOR", "secondary_segments": []},
+  {"exercise_id": "donkey_calf_raise",     "primary_segment": "LOWER_POSTERIOR", "secondary_segments": []},
+
+  {"exercise_id": "plank",                 "primary_segment": "CORE_ANTERIOR",   "secondary_segments": ["CORE_POSTERIOR"]},
+  {"exercise_id": "side_plank",            "primary_segment": "CORE_ANTERIOR",   "secondary_segments": []},
+  {"exercise_id": "crunch",                "primary_segment": "CORE_ANTERIOR",   "secondary_segments": []},
+  {"exercise_id": "russian_twist",         "primary_segment": "CORE_ANTERIOR",   "secondary_segments": []},
+  {"exercise_id": "hanging_leg_raise",     "primary_segment": "CORE_ANTERIOR",   "secondary_segments": ["LOWER_ANTERIOR"]},
+  {"exercise_id": "lying_leg_raise",       "primary_segment": "CORE_ANTERIOR",   "secondary_segments": ["LOWER_ANTERIOR"]},
+  {"exercise_id": "dead_bug",              "primary_segment": "CORE_ANTERIOR",   "secondary_segments": []},
+  {"exercise_id": "bird_dog",              "primary_segment": "CORE_POSTERIOR",  "secondary_segments": ["LOWER_POSTERIOR"]},
+  {"exercise_id": "pallof_press",          "primary_segment": "CORE_ANTERIOR",   "secondary_segments": []},
+
+  {"exercise_id": "clamshell",             "primary_segment": "LOWER_LATERAL",   "secondary_segments": []},
+  {"exercise_id": "sl_rdl_bw",             "primary_segment": "LOWER_POSTERIOR", "secondary_segments": ["LOWER_LATERAL"]},
+  {"exercise_id": "couch_stretch",         "primary_segment": "LOWER_ANTERIOR",  "secondary_segments": []},
+  {"exercise_id": "90_90_hip_mobility",    "primary_segment": "LOWER_LATERAL",   "secondary_segments": ["LOWER_POSTERIOR"]}
+]

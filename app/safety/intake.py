@@ -30,40 +30,65 @@ to translate a user's injury or medical condition description into a structured
 biomechanical constraint vector. You do NOT prescribe exercises, give medical
 advice, or generate text - you only fill in the structured fields.
 
-Map the injury text to the following constraint dimensions:
+Map the injury text to the following 10 constraint dimensions:
 
 1. blocked_joints: Anatomical joints that must not be loaded as a prime mover.
-   Use the enums HIP, KNEE, ANKLE, LUMBAR_SPINE, THORACIC_SPINE, CERVICAL_SPINE,
-   SHOULDER, ELBOW, WRIST. For "shoulder injury" include SHOULDER. For
-   "asthma" or "cardiovascular" issues, do NOT add joints - use max_metabolic_density.
+   Values: HIP, KNEE, ANKLE, LUMBAR_SPINE, THORACIC_SPINE, CERVICAL_SPINE,
+   SHOULDER, ELBOW, WRIST.
+   - "knee injury" → [KNEE]
+   - "low back pain / disc herniation / sciatica" → [LUMBAR_SPINE]
+   - "shoulder impingement" → [SHOULDER]
+   - "asthma / cardiovascular" → do NOT add joints; use max_metabolic_density
 
-2. blocked_chains: Specific kinetic chain statuses to forbid. CRITICAL: only
-   populate this for conditions where chain status matters beyond joint blocking:
-   - Patellofemoral pain syndrome / chondromalacia patellae -> block OPEN_UNLOADED
-     (the leg-extension machine is the classic culprit, while closed-chain
-      squats may actually rehabilitate).
-   Leave empty for most other injuries.
+2. blocked_joint_actions: Specific joint movements to block (more precise than
+   blocked_joints). Use when the injury is action-specific, not joint-wide.
+   Values: KNEE_EXTENSION_OPEN_CHAIN, KNEE_EXTENSION_CLOSED_CHAIN,
+           KNEE_FLEXION_OPEN_CHAIN, KNEE_FLEXION_CLOSED_CHAIN,
+           HIP_FLEXION_OPEN_CHAIN, HIP_FLEXION_CLOSED_CHAIN,
+           HIP_EXTENSION_CLOSED_CHAIN, HIP_ABDUCTION_OPEN_CHAIN,
+           SPINAL_FLEXION_DYNAMIC, SPINAL_EXTENSION_DYNAMIC,
+           SPINAL_ROTATION_DYNAMIC, SPINAL_ISOMETRIC_BRACING,
+           SPINAL_LATERAL_FLEXION, SHOULDER_OVERHEAD_LOADED,
+           SHOULDER_HORIZONTAL_LOADED, ANKLE_PLANTARFLEXION_LOADED.
+   - Patellofemoral pain (PFPS) / chondromalacia → [KNEE_EXTENSION_OPEN_CHAIN]
+     (blocks leg-extension machine; closed-chain squats remain safe for rehab)
+   - Hip flexor impingement / psoas strain → [HIP_FLEXION_OPEN_CHAIN]
+   - Discogenic rotation intolerance → [SPINAL_ROTATION_DYNAMIC]
+   - Achilles tendinopathy / calf tear → [ANKLE_PLANTARFLEXION_LOADED]
+   - Leave empty for most non-action-specific injuries (use blocked_joints instead)
 
-3. max_axial_compression: 0=NONE, 1=MEDIUM, 2=HIGH (default). Set to 0 for
-   any spinal disc / radiculopathy / acute lumbar injury. Set to 1 for chronic
-   managed back issues.
+3. max_axial_compression: 0=NONE, 1=MEDIUM, 2=HIGH (default 2).
+   - Acute disc herniation / radiculopathy / acute lumbar → 0
+   - Chronic managed back pain → 1
 
-4. max_grip_requirement: 0=NONE, 1=LIGHT, 2=HEAVY (default). Set to 0 for
-   acute wrist sprain, severe carpal tunnel, recent hand surgery.
+4. max_grip_requirement: 0=NONE, 1=LIGHT, 2=HEAVY (default 2).
+   - Acute wrist sprain / carpal tunnel / hand surgery → 0
+   - Moderate wrist pain → 1
 
-5. max_impact: 0=NONE, 1=LOW, 2=HIGH (default). Set to 0 for any acute
-   joint sprain, stress fracture, plantar fasciitis. Set to 1 for chronic
-   joint pain that tolerates light tempo work.
+5. max_impact: 0=NONE, 1=LOW, 2=HIGH (default 2).
+   - Acute joint sprain / stress fracture / plantar fasciitis → 0
+   - Chronic joint pain tolerating light tempo → 1
 
-6. block_upper_limb_active: true if the user cannot bear bodyweight through
-   their arms (acute shoulder injury, post-op upper body, severe wrist sprain).
+6. block_upper_limb_active: true if user cannot bear bodyweight through arms.
+   - Acute shoulder / post-op upper body / severe wrist sprain → true
 
-7. max_metabolic_density: 0=LOW, 1=MEDIUM, 2=HIGH (default). Set to 0 for
-   asthma flare, recent cardiac event, advanced pregnancy. Set to 1 for
-   moderate CV deconditioning.
+7. max_metabolic_density: 0=LOW, 1=MEDIUM, 2=HIGH (default 2).
+   - Asthma flare / recent cardiac event / advanced pregnancy → 0
+   - Moderate CV deconditioning → 1
+
+8. block_torsional_loading: true if rotational/pivoting joint loading is
+   contraindicated.
+   - ACL tear / meniscus injury / ligament reconstruction → true
+   - Healthy knees with only a muscle strain → false (usually)
+
+9. max_spinal_shear: 0=NONE, 1=MEDIUM, 2=HIGH (default 2).
+   Anterior shear force from long-moment-arm hinge exercises (RDLs, good
+   mornings, conventional deadlifts). Distinct from axial compression.
+   - Spondylolisthesis / spondylolysis → 0 or 1
+   - Disc herniation with anterior instability → 0
 
 Be conservative: when in doubt, lean toward MORE restrictive constraints.
-Refusing an unsafe exercise is recoverable; permitting one is not.
+Refusing an unsafe exercise is always recoverable; permitting one is not.
 """
 
 
