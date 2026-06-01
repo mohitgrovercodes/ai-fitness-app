@@ -271,20 +271,15 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
         injuries_list = user_context.get("injuries", []) or []
         injuries = ", ".join(str(i) for i in injuries_list) if injuries_list else "None"
         
-        # Load tagged safe pool (Phase 10: will load all 2,840 exercises, currently 41 prototypes)
+        # Load tagged safe pool (Phase 10: load all 1,018 exercises from tags_master.json)
         import os
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        TAGS_PATH = os.path.join(base_dir, "safety", "tags_lower_body.json")
-        SEGMENTS_PATH = os.path.join(base_dir, "safety", "segments_lower_body.json")
+        TAGS_PATH = os.path.join(base_dir, "safety", "tags_master.json")
         with open(TAGS_PATH, encoding="utf-8") as f:
-            raw_tags = {e["exercise_id"]: e for e in json.load(f)}
-        with open(SEGMENTS_PATH, encoding="utf-8") as f:
-            raw_segs = {e["exercise_id"]: e for e in json.load(f)}
+            master_tags = json.load(f)
         
-        tags = []
-        for eid, tag_data in raw_tags.items():
-            if eid in raw_segs:
-                tags.append(SegmentedTags(**{**tag_data, **raw_segs[eid]}))
+        raw_tags = {e["exercise_id"]: e for e in master_tags}
+        tags = [SegmentedTags(**e) for e in master_tags]
                 
         # Tier 1 Safety: Deterministic Filtering
         constraint = translate_injury_to_constraint(injuries)
@@ -342,7 +337,7 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
             split_rules = f"• N = {n_days} (Short Plan): Generate exactly {n_days} unique days. Apply a logical split (e.g., Push/Pull/Legs). Try to minimize repeating exercises, but you MAY repeat them across different days if necessary to fulfill a highly specific user focus. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., \"Day 1 - Push\", \"Day 3 - Rest\")."
         else:
             split_rules = f"• N = {n_days} (Long-term Plan): Generate a microcycle and explain repeats."
-
+            
         state.setdefault("_extra_prompt_vars", {})["dynamic_split_rules"] = split_rules
         
         try:
