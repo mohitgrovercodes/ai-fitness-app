@@ -59,9 +59,7 @@ STRICT POLICIES:
 10. LANGUAGE TRANSLATION (MANDATORY): You MUST write the string values for `description`, `benefit`, and `tip` in the {target_language} language. Keep the JSON keys and anatomical terms in English.
 
 MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
-- UNIVERSAL CONTINUITY & ANTI-LAZINESS PROTOCOL (MANDATORY): You MUST generate a continuous timeline without gaps.
-  • SHORT PLANS (N <= 12 days): You MUST explicitly output every sequential day from Day 1 up to the final day N (e.g., Day 1, Day 2, Day 3, Day 4). Missing any day in this sequence is a system failure.
-  • LONG-TERM PLANS (N > 12 days): You MUST ONLY output the microcycle of C days (exactly 3, 4, or 5 days, e.g. Day 1, Day 2, Day 3, Day 4). You are STRICTLY FORBIDDEN from outputting any day beyond the microcycle length (do NOT output Day 5, Day 6, etc. in your workout list). The backend will repeat and expand your microcycle to the full N days with progressive overload.
+- DATABASE OVERWRITE (UNIVERSAL CONTINUITY & ANTI-LAZINESS PROTOCOL): Whether you are generating a short N-day plan or a long-term repeating cycle of C days, you MUST dynamically generate a continuous timeline without any gaps. You are strictly prohibited from summarizing, skipping, or cutting short the sequence. If the plan or cycle is 5, 6, or 7 days long, you MUST output all exercises for ALL days in full detail. You MUST explicitly output every sequential day exactly from Day 1 up to the final day (e.g., Day 1, Day 2, Day 3, Day 4, Day 5). You are STRICTLY FORBIDDEN from outputting just Day 1 and stopping early. Missing any day inside your generated sequence will cause a system failure.
 - Detect exactly what duration (N days) the user is asking for from their message (e.g., "today" = 1, "4 days" = 4, "a week" = 7, "a month" = 30).
 - DYNAMIC SPLIT SELECTION: {dynamic_split_rules}
 - DYNAMIC REST DAYS (CRITICAL): If a day is meant for rest or active recovery, you MUST put it entirely inside the `rest_days` array. DO NOT create a fake 'Rest' exercise inside the `workout` array. The `workout` array must remain 100% clean, containing only active physical exercises.
