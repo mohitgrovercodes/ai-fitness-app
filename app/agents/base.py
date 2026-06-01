@@ -138,11 +138,27 @@ class BaseRAGAgent:
         # return goal-relevant results — no extra LLM call, zero extra cost.
         enriched_query = self._build_enriched_query(query, goal, diet_pref, weight_kg, injuries, activity_level)
         
-        # Increase candidate pool size if injuries are reported (Tier 1 safety)
-        n_results = 15 if (has_injuries and self.agent_name == "Training Agent") else 5
-        
-        db_results  = await self.rag_tool.search(enriched_query, n_results=n_results, diet_preference=diet_pref)
-        
+        # ── PHASE 1: Knowledge Retrieval ─────────────────────────────────────────
+        db_results = []
+        if hasattr(self.rag_tool, '_run'):
+            # Default fetch
+            extra_vars = state.get("_extra_prompt_vars", {})
+            allowed_ids = extra_vars.get("allowed_ids", None)
+            
+            # Fetch a larger pool from DB to ensure enough matches after filtering
+            raw_n_results = 150 if allowed_ids else 30
+            db_results = await self.rag_tool._run(query=enriched_query, n_results=raw_n_results, diet_preference=diet_pref)
+            
+            if allowed_ids:
+                allowed_set = set(allowed_ids)
+                db_results = [res for res in db_results if res.get('id') in allowed_set]
+                db_results = db_results[:30] # Trim back down to 30 for context window
+                
+        elif hasattr(self.rag_tool, 'search'):
+            # Increase candidate pool size if injuries are reported (Tier 1 safety)
+            n_results = 15 if (has_injuries and self.agent_name == "Training Agent") else 5
+            db_results = await self.rag_tool.search(enriched_query, n_results=n_results, diet_preference=diet_pref)
+
         # Run deterministic injury safety pre-filtering using dynamic exclusions
         if has_injuries and self.agent_name == "Training Agent":
             db_results = self._filter_unsafe_exercises(db_results, dynamic_exclusions)

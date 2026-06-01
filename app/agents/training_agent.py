@@ -310,6 +310,8 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
                 }
             }
             
+        safe_pool_ids = [ex.exercise_id for ex in safe_pool]
+
         # Dynamically rebuild structured output schema to strictly enforce safe_pool
         DynamicAnalysisSchema = build_dynamic_training_analysis(safe_pool)
         original_llm = self.llm
@@ -326,6 +328,7 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
         max_days = max(1, safe_output_tokens // (tokens_per_exercise * exercises_per_day))
         state = dict(state)
         state.setdefault("_extra_prompt_vars", {})["max_training_days"] = max_days
+        state.setdefault("_extra_prompt_vars", {})["allowed_ids"] = safe_pool_ids
         
         n_days = await self._detect_n_days(query)
         if n_days == 1:
@@ -344,6 +347,8 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
             # If the LLM hallucinates an exercise outside the safe_pool (because it's desperate to fulfill 
             # a specific request like "calves"), Pydantic will throw a ValidationError.
             if "validation error" in str(e).lower() or "literal_error" in str(e).lower():
+                import logging
+                logging.getLogger("fit_bot").error(f"Validation Error caught: {e}")
                 user_context = state.get("user_context", {})
                 has_injuries = bool(user_context.get("injuries") or user_context.get("medical_conditions"))
                 reason = "within your medical constraints" if has_injuries else "with the currently available database exercises"
