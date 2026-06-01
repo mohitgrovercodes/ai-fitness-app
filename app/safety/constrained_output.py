@@ -99,10 +99,12 @@ def build_workout_schema(safe_pool: List[BiomechanicalTags]):
         """
         exercise_id: safe_ids_type  # type: ignore[valid-type]
         day: str = Field(
+            default="Day 1",
             description="Training day label, e.g. 'Day 1', 'Monday', 'Push Day'."
         )
-        sets: int = Field(ge=1, le=8, description="Number of sets (1–8).")
+        sets: int = Field(default=3, ge=1, le=8, description="Number of sets (1–8).")
         reps: str = Field(
+            default="8-12",
             description="Rep target as a string: '8-12', '5', 'AMRAP', '30s hold', etc."
         )
         rest_seconds: Optional[int] = Field(
