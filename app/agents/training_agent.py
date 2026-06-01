@@ -331,7 +331,7 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
         if n_days == 1:
             split_rules = "• N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty."
         elif n_days <= max_days:
-            split_rules = f"• N = {n_days} (Short Plan): Generate exactly {n_days} unique days. Apply a logical split (e.g., Push/Pull/Legs). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., \"Day 1 - Push\", \"Day 3 - Rest\")."
+            split_rules = f"• N = {n_days} (Short Plan): Generate exactly {n_days} unique days. Apply a logical split (e.g., Push/Pull/Legs). Try to minimize repeating exercises, but you MAY repeat them across different days if necessary to fulfill a highly specific user focus. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., \"Day 1 - Push\", \"Day 3 - Rest\")."
         else:
             split_rules = f"• N = {n_days} (Long-term Plan): Generate a microcycle and explain repeats."
 
@@ -342,21 +342,26 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
             result = await self.run_logic(state, specialist_key="training", topic="fitness workout exercise")
         except Exception as e:
             # If the LLM hallucinates an exercise outside the safe_pool (because it's desperate to fulfill 
-            # a specific request like "calves" when calves are medically blocked), Pydantic will throw a ValidationError.
+            # a specific request like "calves"), Pydantic will throw a ValidationError.
             if "validation error" in str(e).lower() or "literal_error" in str(e).lower():
+                user_context = state.get("user_context", {})
+                has_injuries = bool(user_context.get("injuries") or user_context.get("medical_conditions"))
+                reason = "within your medical constraints" if has_injuries else "with the currently available database exercises"
+                
+                msg = f"I could not find enough unique exercises matching your highly specific request {reason}."
                 return {
                     "specialist_results": {
                         "training": {
-                            "answer": "I could not find any safe exercises matching your specific request that fit within your medical constraints.",
+                            "answer": msg,
                             "status": "success",
                             "is_accurate": True,
                             "needs_web_search": False,
                             "sub_queries": [],
-                            "final_answer": "I could not find any safe exercises matching your specific request that fit within your medical constraints.",
-                            "summary": "I could not find any safe active exercises matching your specific request that fit within your medical constraints.",
+                            "final_answer": msg,
+                            "summary": msg,
                             "workout": [],
                             "rest_days": [],
-                            "tip": "Try a broader muscle group or consult a physical therapist.",
+                            "tip": "Try a broader muscle group (e.g., Leg Day instead of Calves) so I can build a balanced plan.",
                             "exercise_gifs": {},
                             "exercise_images": {}
                         }
@@ -405,9 +410,13 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
             # couldn't satisfy the highly specific user query (e.g. asking for calves when ankle is blocked)
             # A workout with only rest days is not a workout.
             if not workout_list:
-                refusal_msg = "I could not find any safe active exercises matching your specific request that fit within your medical constraints."
+                user_context = state.get("user_context", {})
+                has_injuries = bool(user_context.get("injuries") or user_context.get("medical_conditions"))
+                reason = "within your medical constraints" if has_injuries else "with the currently available database exercises"
+                
+                refusal_msg = f"I could not find enough unique active exercises matching your highly specific request {reason}."
                 result["specialist_results"]["training"]["summary"] = refusal_msg
-                result["specialist_results"]["training"]["tip"] = "Try a broader muscle group or consult a physical therapist."
+                result["specialist_results"]["training"]["tip"] = "Try a broader muscle group (e.g., Leg Day instead of Calves) so I can build a balanced plan."
                 return result
 
             if n_days > 1 and (workout_list or rest_list):
