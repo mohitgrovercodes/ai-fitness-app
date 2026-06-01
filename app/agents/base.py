@@ -203,6 +203,15 @@ class BaseRAGAgent:
                               "\n".join([r['content'] for r in web_data.get("results", [])[:3]])
 
                 prompt_vars["context"] = f"{context_str}\n\n[Live Web Data]:\n{web_context}"
+                
+                # ── Phase 11: Trigger background extraction ──
+                try:
+                    from app.safety.web_logger import run_web_extraction_pipeline
+                    import asyncio
+                    asyncio.create_task(run_web_extraction_pipeline(query, web_context))
+                except Exception as e:
+                    logger.error(f"Failed to trigger web extraction: {e}")
+
                 analysis = await chain.ainvoke(prompt_vars)
             else:
                 logger.warning(f"  ⚠️ [{self.agent_name}] Web search unavailable. Falling back to expert knowledge.")
