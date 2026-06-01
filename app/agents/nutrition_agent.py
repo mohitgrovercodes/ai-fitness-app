@@ -129,7 +129,7 @@ DATA SANITY CHECK (MANDATORY — apply to EVERY retrieved food before using it):
 - SANITY RULE 7 (PRACTICAL & CHEWABLE FOOD): You MUST prioritize whole, chewable, and culturally relevant practical meals. LIMIT smoothies or protein shakes to an absolute maximum of 1 per day.
 - SANITY RULE 8 (DYNAMIC CALORIE PACING): Enforce realistic digestion pacing across the day. Distribute calories dynamically based on the total meal count and the user's specific goal. A main meal (Lunch/Dinner) MUST carry the primary caloric load to ensure satiety. Snacks MUST dynamically remain light enough to not disrupt appetite for the next meal. No single meal should be unrealistically large.
 - SANITY RULE 9 (DATABASE OVERWRITE - MACROS & SIDES): If a database food has a poor Protein-to-Carb ratio (like Rice or mixed Thali), you MUST dynamically restrict its portion to prevent a carbohydrate explosion. To hit the required protein target, you MUST NOT scale up the mixed food; instead, you MUST dynamically ADD a pure protein side-dish to the meal (e.g., 'Thali + Side of Soya Chunks' or 'Pilaf + 100g Paneer Tikka').
-- UNIVERSAL SCHEDULE SYNC: To ensure perfect alignment with the Training agent, you MUST ALWAYS schedule Day 3 and Day 7 as Rest Days. Adjust your meal timing (e.g., removing Pre/Post-Workout meals on these days) around this shared pattern.
+- DYNAMIC SCHEDULE SYNC: To ensure perfect alignment with the Training agent, the user's rest days for this workout cycle are dynamically determined as: [{dynamic_rest_days}]. You MUST adjust your meal timing (e.g., removing Pre/Post-Workout meals and lowering carbs) specifically on these dynamic rest days. If no rest days are provided, assume every day is a training day.
 
 MULTI-DAY PLAN RULES (CRITICAL):
 - Detect exactly what duration (N days) the user is asking for from their message:
@@ -249,13 +249,24 @@ Current Context: {summary}
 
     async def run(self, state: AgentState) -> Dict[str, Any]:
         state = dict(state)
-        self._rotation_size = self._compute_chunk_size()
-        state.setdefault("_extra_prompt_vars", {})["rotation_size"] = self._rotation_size
-
+        
         query = state['messages'][-1].content
         n_days = await self._detect_n_days(query)
-        chunk_size = self._compute_chunk_size()
-
+        
+        # Determine chunk size, overriding with training cycle length if perfectly synced
+        training_cycle = state.get("_extra_prompt_vars", {}).get("training_cycle_length")
+        if training_cycle and isinstance(training_cycle, int) and training_cycle > 0:
+            chunk_size = training_cycle
+        else:
+            chunk_size = self._compute_chunk_size()
+            
+        self._rotation_size = chunk_size
+        extra_vars = state.setdefault("_extra_prompt_vars", {})
+        extra_vars["rotation_size"] = self._rotation_size
+        
+        # Fallback for direct API calls bypassing the graph orchestrator
+        if "dynamic_rest_days" not in extra_vars:
+            extra_vars["dynamic_rest_days"] = "None specified"
         if n_days > chunk_size:
             return await self._run_chunked(state, query, n_days)
         else:
@@ -288,17 +299,17 @@ Current Context: {summary}
         seconds_per_call = 15       # approximate LLM call latency
         acceptable_wait = 90        # max seconds user waits comfortably
         max_api_calls = max(1, acceptable_wait // seconds_per_call)  # = 6
-        chunk_size = self._compute_chunk_size()
+        chunk_size = getattr(self, '_rotation_size', self._compute_chunk_size())
         max_generatable = chunk_size * max_api_calls
         return min(n_days, max_generatable)
 
     def _build_chunks(self, days_to_generate: int) -> list:
         """
         Dynamically partition days_to_generate into chunks.
-        Each chunk size = _compute_chunk_size() (token-budget derived).
+        Each chunk size = _rotation_size (dynamically derived from training cycle or token-budget).
         Returns: [{"label": "Days 1-8", "days": "Day 1, Day 2, ..., Day 8"}, ...]
         """
-        chunk_size = self._compute_chunk_size()
+        chunk_size = getattr(self, '_rotation_size', self._compute_chunk_size())
         chunks = []
         day_num = 1
         while day_num <= days_to_generate:
@@ -405,7 +416,7 @@ Current Context: {summary}
         context_str = self._format_context(db_results) or "No specific data retrieved."
 
         # ── Step 2: Compute rotation/chunk plan (all dynamic) ────────────────
-        rotation_size    = self._compute_chunk_size()        # token-budget derived (e.g. 8)
+        rotation_size    = getattr(self, '_rotation_size', self._compute_chunk_size())
         is_rotation      = n_days > rotation_size             # long plan = rotation template
         days_to_generate = rotation_size if is_rotation else n_days  # generate only 1 cycle for long plans
         DAY_CHUNKS       = self._build_chunks(days_to_generate)
@@ -443,8 +454,10 @@ Current Context: {summary}
                 "  Choose meal types (Breakfast / Lunch / Snack / Dinner / Post-Workout / Pre-Workout / etc.) "
                 "  that best fit the user's goal and day type.\n"
                 "- Each day must have DIFFERENT foods — no repeats across days\n"
-                "- In the `day` field use: 'Day X - [Day Type]' where you decide "
-                "  [Day Type] based on user goal (Training Day / Rest Day / Active Recovery / High Carb / etc.)\n"
+                "- In the `day` field use: 'Day X - [Day Type]'.\n"
+                "- STRICT RULE FOR DAY TYPE: You MUST check if 'Day X' is listed in the dynamic rest days [{dynamic_rest_days}]. "
+                "If it IS in the list, you MUST label it as a 'Rest Day' and NO Post-Workout/Pre-Workout meals are allowed! "
+                "If it is NOT in the list, label it as a 'Training Day'. DO NOT invent your own rest days!\n"
                 "- Set is_accurate=True, needs_web_search=False, sub_queries=[]\n\n"
                 "FOOD DATA:\n{context}"
             ))
@@ -457,7 +470,7 @@ Current Context: {summary}
             logger.info(f"🍽️  [Nutrition Chunked] Generating {chunk['label']}...")
             previous_meals_memory = ", ".join(list(set([m.get("name", "") for m in all_meals if m.get("name")]))) or "None"
             try:
-                analysis = await chunk_chain.ainvoke({
+                invoke_payload = {
                     "previous_meals_memory": previous_meals_memory,
                     # Human prompt variables
                     "conv_summary":         conv_summary,
@@ -487,7 +500,12 @@ Current Context: {summary}
                     "intelligence_context": intelligence_context,
                     "rotation_size":        rotation_size,
                     "target_language":      state.get("language", "english"),
-                })
+                }
+                
+                # Inject any dynamically added extra variables (like dynamic_rest_days)
+                invoke_payload.update(state.get("_extra_prompt_vars", {}))
+                
+                analysis = await chunk_chain.ainvoke(invoke_payload)
                 chunk_meals = analysis.meals if hasattr(analysis, 'meals') else []
                 all_meals.extend([m.model_dump() if hasattr(m, 'model_dump') else m for m in chunk_meals])
                 logger.info(f"✅ [Nutrition Chunked] {chunk['label']} — {len(chunk_meals)} meals")

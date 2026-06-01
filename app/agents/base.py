@@ -244,7 +244,14 @@ class BaseRAGAgent:
         # This dynamically captures metadata like 'exercise_gifs', 'nutritional_info', etc.
         logger.info(f"[{self.agent_name}] Raw Analysis: {analysis}")
         standard_fields = {"is_accurate", "needs_web_search", "sub_queries", "final_answer", "quantity_multiplier"}
-        analysis_dict = analysis.model_dump() if hasattr(analysis, "model_dump") else analysis.__dict__
+        
+        if hasattr(analysis, "model_dump"):
+            analysis_dict = analysis.model_dump()
+        elif hasattr(analysis, "dict"):
+            analysis_dict = analysis.dict()
+        else:
+            analysis_dict = analysis.__dict__
+            
         # Media fields that should always be included (even if empty dict)
         always_include = {"exercise_gifs", "exercise_images"}
         

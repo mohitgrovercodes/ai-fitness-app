@@ -14,7 +14,8 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
- 
+    reset_token = Column(String(255), unique=True, index=True, nullable=True)
+    reset_token_expires = Column(DateTime, nullable=True)
  
 
     def to_dict(self) -> dict:

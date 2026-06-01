@@ -25,6 +25,27 @@ st.set_page_config(
 
 username = st.text_input("username", autocomplete="username")            
 def render_login_form() -> None:
+    token = st.query_params.get("token")
+    if token:
+        st.title("🔐 Reset Password")
+        with st.form("reset_password_form", clear_on_submit=True):
+            new_password = st.text_input("New Password", type="password")
+            confirm_password = st.text_input("Confirm Password", type="password")
+            if st.form_submit_button("Reset Password", type="primary"):
+                if not new_password or new_password != confirm_password:
+                    st.error("Passwords do not match or are empty!")
+                else:
+                    try:
+                        auth.reset_password(token, new_password)
+                        st.success("Password reset successfully! You can now log in.")
+                        st.query_params.clear()
+                    except ApiError as e:
+                        st.error(f"Reset failed: {e}")
+        if st.button("Back to Login"):
+            st.query_params.clear()
+            st.rerun()
+        return
+
     st.title("🏋️ AI Fitness Gym")
     st.caption(
         "Developer visualization for the Multi-Agent Fitness & Nutrition Platform"
@@ -50,6 +71,19 @@ def render_login_form() -> None:
                         st.rerun()
                     except ApiError as e:
                         st.error(f"Login failed: {e}")
+                        
+        with st.expander("Forgot Password?"):
+            with st.form("forgot_password_form"):
+                fp_email = st.text_input("Enter your registered email")
+                if st.form_submit_button("Send Reset Link"):
+                    if not fp_email:
+                        st.error("Email is required.")
+                    else:
+                        try:
+                            auth.forgot_password(fp_email)
+                            st.success("If that email exists, a reset link has been sent (check console for link).")
+                        except ApiError as e:
+                            st.error(f"Failed: {e}")
 
     # ── Register tab ─────────────────────────────────────────────────
     with tab_register:

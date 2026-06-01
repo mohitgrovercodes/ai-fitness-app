@@ -56,6 +56,14 @@ def logout() -> None:
     for key in ("token", "user_id", "username", "profile_exists", "profile_data"):
         st.session_state.pop(key, None)
 
+def forgot_password(email: str) -> dict:
+    """POST /api/auth/forgot-password"""
+    return post("/api/auth/forgot-password", json={"email": email})
+
+def reset_password(token: str, new_password: str) -> dict:
+    """POST /api/auth/reset-password"""
+    return post("/api/auth/reset-password", json={"token": token, "new_password": new_password})
+
 
 def is_authenticated() -> bool:
     return bool(st.session_state.get("token"))
