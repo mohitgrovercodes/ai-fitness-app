@@ -80,3 +80,29 @@ def delete_account(db: Session, user_id: str, payload):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete account. Please try again later.",
         )
+
+def forgot_password(db: Session, payload):
+    try:
+        result = AuthService.forgot_password(db, payload.email)
+        return success(result, "Forgot password processed")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Unexpected error during forgot password")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process request. Please try again later.",
+        )
+
+def reset_password(db: Session, payload):
+    try:
+        result = AuthService.reset_password(db, payload.token, payload.new_password)
+        return success(result, "Reset password processed")
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Unexpected error during reset password")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset password. Please try again later.",
+        )

@@ -21,3 +21,10 @@ class DeleteAccountSchema(BaseModel):
         min_length=1,
         description="Current account password — required to confirm deletion.",
     )
+
+class ForgotPasswordSchema(BaseModel):
+    email: EmailStr
+
+class ResetPasswordSchema(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=1)
