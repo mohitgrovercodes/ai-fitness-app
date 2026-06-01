@@ -267,11 +267,15 @@ def maybe_refuse(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Goal classifier (lightweight — no LLM)
-# ─────────────────────────────────────────────────────────────────────────────
+# Goal classifier
+from pydantic import BaseModel
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from app.core.config import settings
+from app.utils.logger import logger
 
 _GOAL_KEYWORDS: Dict[str, List[str]] = {
-    "leg_day":       ["leg day", "leg session", "lower day", "quads", "hamstrings"],
+    "leg_day":       ["leg day", "leg session", "lower day", "quads", "hamstrings", "legs", "leg workout", "leg plan", "leg training"],
     "lower_body":    ["lower body", "lower-body", "legs and glutes", "lower"],
     "push_day":      ["push day", "push session", "chest day", "chest and shoulders"],
     "pull_day":      ["pull day", "pull session", "back day", "back and biceps"],
@@ -282,22 +286,59 @@ _GOAL_KEYWORDS: Dict[str, List[str]] = {
     "rehab":         ["rehab", "rehabilitation", "physio session"],
 }
 
+from typing import Literal
+
+GoalEnum = Literal[
+    "leg_day", "lower_body", "push_day", "pull_day", 
+    "upper_body", "core", "full_body", "active_recovery", "rehab"
+]
+
+class GoalClassification(BaseModel):
+    goal: GoalEnum
 
 def classify_goal(user_query: str) -> str:
     """
-    Lightweight keyword-based goal classifier. Returns a key from GOAL_SEGMENT_MAP.
-
-    Runs locally (no LLM call). Returns "full_body" as a conservative default
-    when no specific goal keyword is found — full_body has the most segments,
-    so it is the hardest to satisfy and produces the most conservative refusal
-    behaviour.
-
-    For production, consider replacing/augmenting with a small intent
-    classification LLM call (gpt-4o-mini, temperature=0, ~50 tokens).
+    LLM-powered intent classification. Maps the user's query to a key in GOAL_SEGMENT_MAP.
+    Handles typos, synonyms, and different languages automatically.
     """
-    query_lower = user_query.lower()
-    for goal, keywords in _GOAL_KEYWORDS.items():
-        for kw in keywords:
-            if kw in query_lower:
-                return goal
-    return "full_body"   # conservative default
+    try:
+        llm = ChatOpenAI(
+            model="gpt-4o-mini",
+            temperature=0,
+            api_key=settings.OPENAI_API_KEY,
+            max_retries=2,
+        ).with_structured_output(GoalClassification, method="function_calling")
+        
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are a fitness intent classifier. Read the user's workout request and map it to exactly ONE of the following internal goal keys based on which body parts they want to train:\n"
+             "- 'leg_day': For lower body, quads, hamstrings, legs, glutes, calves.\n"
+             "- 'push_day': For chest, shoulders, triceps, pushing movements.\n"
+             "- 'pull_day': For back, biceps, pulling movements, lats.\n"
+             "- 'upper_body': For general upper body (chest, back, shoulders, arms).\n"
+             "- 'core': For abs, core, obliques, midsection.\n"
+             "- 'active_recovery': For stretching, light mobility, recovery.\n"
+             "- 'rehab': For physiotherapy, injury rehab.\n"
+             "- 'full_body': For full body, general fitness, or if the request is vague/unspecified.\n"
+             "Account for typos, slang, and non-English languages. Return ONLY the string key."),
+            ("human", "{query}")
+        ])
+        
+        chain = prompt | llm
+        result = chain.invoke({"query": user_query})
+        valid_keys = list(GOAL_SEGMENT_MAP.keys())
+        
+        if result.goal in valid_keys:
+            logger.info(f"🎯 [Goal Classifier] '{user_query}' -> {result.goal}")
+            return result.goal
+        else:
+            logger.warning(f"⚠️ [Goal Classifier] LLM returned invalid goal '{result.goal}'. Defaulting to full_body.")
+            return "full_body"
+            
+    except Exception as e:
+        logger.error(f"❌ [Goal Classifier] LLM failed: {e}. Falling back to keywords.")
+        query_lower = user_query.lower()
+        for goal, keywords in _GOAL_KEYWORDS.items():
+            for kw in keywords:
+                if kw in query_lower:
+                    return goal
+        return "full_body"   # conservative default

@@ -340,6 +340,29 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
         try:
             # Execute Adaptive RAG with strictly constrained safe_pool vocabulary
             result = await self.run_logic(state, specialist_key="training", topic="fitness workout exercise")
+        except Exception as e:
+            # If the LLM hallucinates an exercise outside the safe_pool (because it's desperate to fulfill 
+            # a specific request like "calves" when calves are medically blocked), Pydantic will throw a ValidationError.
+            if "validation error" in str(e).lower() or "literal_error" in str(e).lower():
+                return {
+                    "specialist_results": {
+                        "training": {
+                            "answer": "I could not find any safe exercises matching your specific request that fit within your medical constraints.",
+                            "status": "success",
+                            "is_accurate": True,
+                            "needs_web_search": False,
+                            "sub_queries": [],
+                            "final_answer": "I could not find any safe exercises matching your specific request that fit within your medical constraints.",
+                            "summary": "I could not find any safe active exercises matching your specific request that fit within your medical constraints.",
+                            "workout": [],
+                            "rest_days": [],
+                            "tip": "Try a broader muscle group or consult a physical therapist.",
+                            "exercise_gifs": {},
+                            "exercise_images": {}
+                        }
+                    }
+                }
+            raise e
         finally:
             self.llm = original_llm
             
@@ -378,6 +401,15 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
             workout_list = training_data.get("workout", [])
             rest_list = training_data.get("rest_days", [])
             
+            # Post-generation fallback: If the LLM generated no exercises, the safe pool 
+            # couldn't satisfy the highly specific user query (e.g. asking for calves when ankle is blocked)
+            # A workout with only rest days is not a workout.
+            if not workout_list:
+                refusal_msg = "I could not find any safe active exercises matching your specific request that fit within your medical constraints."
+                result["specialist_results"]["training"]["summary"] = refusal_msg
+                result["specialist_results"]["training"]["tip"] = "Try a broader muscle group or consult a physical therapist."
+                return result
+
             if n_days > 1 and (workout_list or rest_list):
                 e_workout, e_rest = self._expand_cycle(workout_list, rest_list, n_days)
                 training_data["workout"] = e_workout

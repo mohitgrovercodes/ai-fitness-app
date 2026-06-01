@@ -635,6 +635,7 @@ class AIService:
         return {
             "summary": output.get("summary", ""),
             "workout": output.get("workout", []),
+            "rest_days": output.get("rest_days", []),
             "tip": output.get("tip", ""),
         }
 
