@@ -33,9 +33,7 @@ def safety_violations(
     # 1. Joint loading
     if set(ex.primary_joints_involved) & set(c.blocked_joints):
         violations.append("blocked_joint")
-    # 2. Chain status
-    if ex.kinetic_chain_loading in c.blocked_chains:
-        violations.append("blocked_chain")
+
     # 3. Axial compression (ordinal)
     if ex.axial_compression_level > c.max_axial_compression:
         violations.append("axial_compression_exceeded")

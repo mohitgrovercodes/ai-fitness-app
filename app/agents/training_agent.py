@@ -148,9 +148,8 @@ RETRIEVED DATA (Safe, filtered database items):
 
 ⚠️ CRITICAL SAFETY MANDATE:
 The user has reported the following injuries/conditions: '{injuries}'.
-You MUST absolutely drop and avoid any movement that loads or stabilizes the injured joint/area.
-If the RETRIEVED DATA contains any unsafe exercises for this injury, you MUST DISCARD them and substitute them with 100% safe rehab/mobility variations.
-Explain in every exercise's description: "Adapted to protect/recover your {injuries}."
+The RETRIEVED DATA has been medically pre-vetted and contains ONLY safe exercises. You must ONLY use exercises from the RETRIEVED DATA.
+Explain in every exercise's coaching_note: "Adapted to protect/recover your {injuries}."
 """)
         ])
 

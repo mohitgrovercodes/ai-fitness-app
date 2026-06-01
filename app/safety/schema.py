@@ -214,13 +214,7 @@ class InjuryConstraint(BaseModel):
     """
     # Feature 1: block specific joints (anatomical identity)
     blocked_joints: List[Joint] = Field(default_factory=list)
-    # Feature 2: DEPRECATED — superseded by blocked_joint_actions (Feature 10).
-    # Kept for backward compatibility; the filter still checks it but the intake
-    # LLM should no longer populate it. Remove in a future cleanup pass.
-    blocked_chains: List[ChainStatus] = Field(
-        default_factory=list,
-        description="DEPRECATED: use blocked_joint_actions instead."
-    )
+
     # Feature 3: axial compression ceiling
     max_axial_compression: CompressionLevel = CompressionLevel.HIGH
     # Feature 4: grip ceiling
