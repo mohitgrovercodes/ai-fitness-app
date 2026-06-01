@@ -272,8 +272,10 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
         injuries = ", ".join(str(i) for i in injuries_list) if injuries_list else "None"
         
         # Load tagged safe pool (Phase 10: will load all 2,840 exercises, currently 41 prototypes)
-        TAGS_PATH = r"d:\AI\IMGProjects\ai-fitness-app\ai-fitness-app\app\safety\tags_lower_body.json"
-        SEGMENTS_PATH = r"d:\AI\IMGProjects\ai-fitness-app\ai-fitness-app\app\safety\segments_lower_body.json"
+        import os
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        TAGS_PATH = os.path.join(base_dir, "safety", "tags_lower_body.json")
+        SEGMENTS_PATH = os.path.join(base_dir, "safety", "segments_lower_body.json")
         with open(TAGS_PATH, encoding="utf-8") as f:
             raw_tags = {e["exercise_id"]: e for e in json.load(f)}
         with open(SEGMENTS_PATH, encoding="utf-8") as f:
