@@ -14,9 +14,10 @@ class MediaMatcher:
         self.dataset_dir = self.root_dir / "Data" / "exercises-dataset"
         self.mapping_file = self.dataset_dir / "data" / "exercises (1).json"
         
-        # Two types of mappings
+        # Two types of mappings + text instructions
         self.gifs: Dict[str, str] = {}
         self.images: Dict[str, str] = {}
+        self.instructions: Dict[str, str] = {}
         
         self.prefixes = [
             "metaburn", "holman", "rusin", "30 arms", "30 shoulders", 
@@ -55,9 +56,14 @@ class MediaMatcher:
                 name = item.get("name")
                 gif_rel = item.get("gif")
                 img_rel = item.get("image")
+                steps = item.get("steps", [])
                 
                 if not name: continue
                 norm_name = self._normalize(name)
+                
+                if steps and isinstance(steps, list):
+                    self.instructions[norm_name] = " ".join(steps)
+                    
 
                 # Verify and map GIF
                 if gif_rel and (self.dataset_dir / gif_rel).exists():
@@ -73,19 +79,20 @@ class MediaMatcher:
 
     def get_media(self, exercise_name: str) -> Dict[str, Optional[str]]:
         """
-        Returns a dict with 'gif' and 'image' paths if found.
+        Returns a dict with 'gif', 'image', and 'instructions' paths/strings if found.
         """
         # LAZY LOAD on first call
         if not self.gifs and not self.images:
             self._load_mappings()
 
         norm_name = self._normalize(exercise_name)
-        result = {"gif": None, "image": None}
-        # ... (rest of method remains same but uses self._load_mappings checks)
+        result = {"gif": None, "image": None, "instructions": None}
+        
         result["gif"] = self.gifs.get(norm_name)
         result["image"] = self.images.get(norm_name)
+        result["instructions"] = self.instructions.get(norm_name)
 
-        if not result["gif"] or not result["image"]:
+        if not result["gif"] or not result["image"] or not result["instructions"]:
             if not result["gif"]:
                 sorted_gif_keys = sorted(self.gifs.keys(), key=len, reverse=True)
                 for key in sorted_gif_keys:
@@ -175,6 +182,14 @@ class MediaMatcher:
                         result["gif"] = self.gifs[best_key]
                     if not result["image"] and best_key in self.images:
                         result["image"] = self.images[best_key]
+
+        if not result["instructions"] and result["gif"]:
+            # Attempt to pull instruction from the matched fuzzy key
+            for k, v in self.gifs.items():
+                if v == result["gif"]:
+                    result["instructions"] = self.instructions.get(k)
+                    if result["instructions"]:
+                        break
 
         return result
 

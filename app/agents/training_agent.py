@@ -393,12 +393,20 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
 
                 eid = item_dict.get("exercise_id")
                 tag_info = raw_tags.get(eid, {})
+                ex_name = tag_info.get("name", eid)
+                
+                from app.utils.gif_utils import media_matcher
+                matched = media_matcher.get_media(ex_name)
+                instructions = matched.get("instructions")
+                if not instructions:
+                    instructions = item_dict.get("coaching_note", "Follow standard form securely.")
+
                 hydrated_workout.append({
                     "day": item_dict.get("day", ""),
-                    "name": tag_info.get("name", eid),
+                    "name": ex_name,
                     "target_muscle": tag_info.get("primary_joints_involved", []),
                     "benefit": item_dict.get("coaching_note", "Adapted safely."),
-                    "description": item_dict.get("coaching_note", "Follow standard form securely."),
+                    "description": instructions,
                     "sets": str(item_dict.get("sets", "3")),
                     "reps": str(item_dict.get("reps", "")),
                     "gif_path": "",
