@@ -1,8 +1,11 @@
 """
-Biomechanical safety schema for AI Fitness Gym - PROTOTYPE.
+Biomechanical safety schema for AI Fitness Gym.
 
-Implements the 7-Feature Biomechanical Tagging strategy with one addition:
-`blocked_chains` on the constraint vector (rationale in README.md).
+Implements 9-feature Biomechanical Tagging (7 original + 2 Phase 2 additions):
+  Feature 8: torsional_joint_loading  — distinguishes curtsy lunge from reverse lunge
+             for ACL/meniscus patients (rotational stress, not just joint identity).
+  Feature 9: spinal_shear_level       — separates anterior shear (RDL, good morning)
+             from pure axial compression (back squat) for spondylolisthesis safety.
 
 All enums are closed vocabularies. Ordinal features use IntEnum so the
 deterministic filter can compare with `<=`. Categorical features use
@@ -62,6 +65,26 @@ class CompressionLevel(IntEnum):
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Feature 9: Spinal shear (ordinal)  ← Phase 2 addition
+# ─────────────────────────────────────────────────────────────────────
+class ShearLevel(IntEnum):
+    """
+    Anterior shear force on the lumbar spine from long-moment-arm hinges.
+    Distinct from axial compression: a back squat compresses vertically
+    (HIGH compression) but has LOW shear. An RDL has MODERATE compression
+    but HIGH shear due to the horizontal moment arm.
+
+    Clinically relevant for: spondylolisthesis, spondylolysis, disc
+    herniation with anterior instability.
+
+    Ordinal: NONE < MEDIUM < HIGH.
+    """
+    NONE = 0    # vertical-load or supine/seated — squat, calf raise, plank, crunch
+    MEDIUM = 1  # moderate forward lean — sumo deadlift, back squat, hyperextension
+    HIGH = 2    # long horizontal moment arm — RDL, good morning, conventional deadlift
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Feature 4: Grip demand (ordinal)
 # ─────────────────────────────────────────────────────────────────────
 class GripDemand(IntEnum):
@@ -114,6 +137,20 @@ class BiomechanicalTags(BaseModel):
     joint_impact_level: ImpactLevel
     upper_limb_stabilization: UpperLimbDemand
     metabolic_density: MetabolicDensity
+    # ── Phase 2 additions ──────────────────────────────────────────
+    torsional_joint_loading: bool = False
+    """
+    True when the exercise loads a joint through the rotational/transverse
+    plane under significant load (pivoting, crossing, valgus forcing).
+    Examples: curtsy lunge, kb_swing (fatigue), russian_twist.
+    Distinguishes curtsy lunge from reverse lunge for ACL/meniscus patients.
+    """
+    spinal_shear_level: ShearLevel = ShearLevel.NONE
+    """
+    Anterior shear force on the lumbar spine. See ShearLevel for convention.
+    An exercise can have LOW axial compression but HIGH shear (RDL).
+    An exercise can have HIGH axial compression but LOW shear (back squat).
+    """
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -144,3 +181,8 @@ class InjuryConstraint(BaseModel):
     block_upper_limb_active: bool = False
     # Parallel to Feature 7 (ordinal cap)
     max_metabolic_density: MetabolicDensity = MetabolicDensity.HIGH
+    # ── Phase 2 additions ──────────────────────────────────────────
+    # Parallel to Feature 8 (binary)
+    block_torsional_loading: bool = False
+    # Parallel to Feature 9 (ordinal cap)
+    max_spinal_shear: ShearLevel = ShearLevel.HIGH
