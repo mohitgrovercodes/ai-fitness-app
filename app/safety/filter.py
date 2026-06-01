@@ -3,10 +3,10 @@ Deterministic safety filter - the absolute physical safety shield.
 
 Operates entirely on structured tags. No strings, no LLM calls, no
 fuzzy matching. Given a list of tagged exercise candidates and an
-InjuryConstraint vector, returns the subset that passes ALL seven
+InjuryConstraint vector, returns the subset that passes ALL nine
 biomechanical safety checks.
 
-Each check corresponds to exactly one of the 7 features. Failures are
+Each check corresponds to exactly one of the 9 features. Failures are
 attributed to a specific axis (auditable, debuggable).
 """
 from typing import List, Tuple
@@ -15,6 +15,7 @@ from app.safety.schema import (
     BiomechanicalTags,
     InjuryConstraint,
     UpperLimbDemand,
+    ShearLevel,
 )
 
 
@@ -49,6 +50,12 @@ def safety_violations(
     # 7. Metabolic density (ordinal)
     if ex.metabolic_density > c.max_metabolic_density:
         violations.append("metabolic_density_exceeded")
+    # 8. Torsional / rotational joint loading  ← Phase 2
+    if c.block_torsional_loading and ex.torsional_joint_loading:
+        violations.append("torsional_loading_forbidden")
+    # 9. Spinal shear (ordinal)  ← Phase 2
+    if ex.spinal_shear_level > c.max_spinal_shear:
+        violations.append("spinal_shear_exceeded")
 
     return violations
 
