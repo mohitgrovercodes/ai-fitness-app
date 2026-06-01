@@ -122,6 +122,14 @@ class JointAction(str, Enum):
     # ── Shoulder ─────────────────────────────────────────────────────
     SHOULDER_OVERHEAD_LOADED      = "SHOULDER_OVERHEAD_LOADED"      # overhead press
     SHOULDER_HORIZONTAL_LOADED    = "SHOULDER_HORIZONTAL_LOADED"    # bird-dog arm, pallof press
+    # ── Elbow ────────────────────────────────────────────────────────
+    ELBOW_FLEXION_OPEN    = "ELBOW_FLEXION_OPEN_CHAIN"     # bicep curl
+    ELBOW_FLEXION_CLOSED  = "ELBOW_FLEXION_CLOSED_CHAIN"   # pull-up, row
+    ELBOW_EXTENSION_OPEN  = "ELBOW_EXTENSION_OPEN_CHAIN"   # tricep extension
+    ELBOW_EXTENSION_CLOSED= "ELBOW_EXTENSION_CLOSED_CHAIN" # push-up, bench press
+    # ── Wrist ────────────────────────────────────────────────────────
+    WRIST_FLEXION_OPEN    = "WRIST_FLEXION_OPEN_CHAIN"     # wrist curl
+    WRIST_EXTENSION_OPEN  = "WRIST_EXTENSION_OPEN_CHAIN"   # reverse wrist curl
     # ── Ankle ────────────────────────────────────────────────────────
     ANKLE_PLANTARFLEXION_LOADED   = "ANKLE_PLANTARFLEXION_LOADED"   # calf raise
 
