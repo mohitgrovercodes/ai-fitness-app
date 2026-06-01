@@ -304,6 +304,7 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
                 # 1. Run LLM Biomechanical Safety Gate
                 audited_workout = await self._run_injury_safety_gate(training_data["workout"], injuries)
                 
+
                 # 2. Run Deterministic Python Backstop Filter to catch any remaining leaks (e.g. Seated Leg Extension)
                 backstop_workout = []
                 exclusions = {
@@ -312,7 +313,11 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
                     "shoulder": ["overhead press", "military press", "bench press", "dip", "handstand", "pushup", "push-up", "shoulder press", "upright row"],
                     "wrist": ["push-up", "pushup", "plank", "handstand", "clean", "snatch", "bench press", "barbell wrist curl", "barbell curl"],
                     "hand": ["dumbbell", "barbell", "kettlebell", "handle", "grip", "row", "press", "curl", "raise", "pullup", "pull-up", "pushup", "push-up", "deadlift", "dip", "clean", "snatch", "bench", "fly"],
-                    "finger": ["dumbbell", "barbell", "kettlebell", "handle", "grip", "row", "press", "curl", "raise", "pullup", "pull-up", "pushup", "push-up", "deadlift", "dip", "clean", "snatch", "bench", "fly"]
+                    "finger": ["dumbbell", "barbell", "kettlebell", "handle", "grip", "row", "press", "curl", "raise", "pullup", "pull-up", "pushup", "push-up", "deadlift", "dip", "clean", "snatch", "bench", "fly"],
+                    "groin": ["lunge", "squat", "leg press", "leg extension", "adductor", "abductor", "groin", "groiner", "jump", "burpee", "side lunge", "cossack squat"],
+                    "ankle": ["calf raise", "calf", "jump", "burpee", "box jump", "running", "treadmill", "hiit", "squat", "lunge", "ankle", "leg press", "leg extension"],
+                    "foot": ["calf raise", "calf", "jump", "burpee", "box jump", "running", "treadmill", "hiit", "squat", "lunge", "ankle", "foot", "leg press", "leg extension"],
+                    "elbow": ["pushup", "push-up", "press", "dip", "tricep", "bicep", "curl", "extension", "pullup", "pull-up", "chin-up", "elbow"]
                 }
                 
                 # Fetch dynamic exclusions computed at intake, or query them dynamically
@@ -401,24 +406,44 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
                         
                         chosen_fallback = None
                         if safe_fallbacks:
+                            # Avoid duplicates: track names already present in the backstop workout
+                            existing_names = []
+                            for x in backstop_workout:
+                                x_name = x.get("name", "").lower() if isinstance(x, dict) else getattr(x, "name", "").lower()
+                                existing_names.append(x_name)
+                            
+                            # Filter to find unused safe fallbacks
+                            unused_fallbacks = []
+                            for opt in safe_fallbacks:
+                                opt_name = opt["name"].lower()
+                                is_used = False
+                                for ext_name in existing_names:
+                                    if opt_name in ext_name or ext_name in opt_name:
+                                        is_used = True
+                                        break
+                                if not is_used:
+                                    unused_fallbacks.append(opt)
+                                    
+                            fallback_candidates = unused_fallbacks if unused_fallbacks else safe_fallbacks
+                            
                             if is_lower_body:
                                 # Prioritize lower body fallbacks
-                                for opt in safe_fallbacks:
+                                for opt in fallback_candidates:
                                     opt_muscles = [m.lower() for m in opt["target_muscle"]]
                                     if any(m in ["glutes", "hamstrings", "calves", "legs"] for m in opt_muscles):
                                         chosen_fallback = opt
                                         break
                             else:
                                 # Prioritize upper body or core fallbacks
-                                for opt in safe_fallbacks:
+                                for opt in fallback_candidates:
                                     opt_muscles = [m.lower() for m in opt["target_muscle"]]
                                     if any(m in ["rotator cuff", "shoulders", "core", "abs", "lower back"] for m in opt_muscles):
                                         chosen_fallback = opt
                                         break
                             
-                            # Fall back to the first safe option if no muscle split match was found
-                            if not chosen_fallback:
-                                chosen_fallback = safe_fallbacks[0]
+                            # Fall back to the first available candidate if no specific split match
+                            if not chosen_fallback and fallback_candidates:
+                                chosen_fallback = fallback_candidates[0]
                                 
                         if not chosen_fallback:
                             fallback_name = "Crunches"
