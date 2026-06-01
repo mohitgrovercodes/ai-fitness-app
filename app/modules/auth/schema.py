@@ -7,7 +7,7 @@ class RegisterSchema(BaseModel):
     password: str
 
 class LoginSchema(BaseModel):
-    username: str
+    email: EmailStr
     password: str
 
 class DeleteAccountSchema(BaseModel):

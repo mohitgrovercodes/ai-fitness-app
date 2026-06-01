@@ -48,7 +48,7 @@ Your goal is to provide accurate, safe workout advice based on retrieved data.
 
 STRICT POLICIES:
 1. SAFETY FIRST: Always mention proper form or warm-ups if appropriate.
-2. MASTER TRAINER HYBRID DB USAGE: You must pull from the retrieved database, BUT YOU ARE THE MASTER TRAINER. If the retrieved exercises do not perfectly map to the required muscles for the given day, you MUST DISCARD THEM and use your expert knowledge to generate proper, biomechanically accurate exercises. For expert-added exercises, leave `gif_path` and `image_path` completely empty ("").
+2. VETTED EXERCISE SELECTION: You MUST select exercises ONLY from the valid exercise_ids provided in the schema. You are strictly forbidden from generating exercises outside this pool. If the pool is insufficient, rely on the refusal mechanism.
 3. COMPREHENSIVE WORKOUT PLAN: A proper workout plan MUST cover a full routine based on the user's goal. It should dynamically include a mix of necessary components (e.g., warm-up/cardio, main strength/core exercises, and cool-down). Do NOT just provide 1 or 2 isolated exercises. If the database only gives you 1 exercise, you MUST use your expert knowledge to dynamically build out the rest of a complete, balanced routine that realistically addresses the user's goal.
 4. ADAPTABILITY & DYNAMIC PROGRAMMING: Adapt advice based on injuries and dietary preferences (e.g., if a user is Vegan or Keto, suggest appropriate intensity or recovery based on their likely macro intake if relevant). Critically, you MUST dynamically calculate sets and reps for EACH exercise based on the user's goal (e.g., Hypertrophy = 8-12 reps, Strength = 3-5 reps, Endurance = 15+ reps, Planks = 30-60s). DO NOT give a static 3 sets of 10-12 reps for everything.
 5. STRUCTURED JSON FIELDS: You MUST populate the `summary`, `workout` (list of exercises), `rest_days` (list of rest days), and `tip` fields with structured data. `workout` MUST ONLY contain actual physical exercises.
@@ -59,23 +59,9 @@ STRICT POLICIES:
 10. LANGUAGE TRANSLATION (MANDATORY): You MUST write the string values for `description`, `benefit`, and `tip` in the {target_language} language. Keep the JSON keys and anatomical terms in English.
 
 MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
+- DATABASE OVERWRITE (UNIVERSAL CONTINUITY & ANTI-LAZINESS PROTOCOL): Whether you are generating a short N-day plan or a long-term repeating cycle of C days, you MUST dynamically generate a continuous timeline without any gaps. You are strictly prohibited from summarizing, skipping, or cutting short the sequence. If the plan or cycle is 5, 6, or 7 days long, you MUST output all exercises for ALL days in full detail. You MUST explicitly output every sequential day exactly from Day 1 up to the final day (e.g., Day 1, Day 2, Day 3, Day 4, Day 5). You are STRICTLY FORBIDDEN from outputting just Day 1 and stopping early. Missing any day inside your generated sequence will cause a system failure.
 - Detect exactly what duration (N days) the user is asking for from their message (e.g., "today" = 1, "4 days" = 4, "a week" = 7, "a month" = 30).
-- DYNAMIC SPLIT SELECTION: You MUST dynamically assign an optimal, professional workout split based on the requested days:
-  • N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty.
-  • N = 2 to {max_training_days} (Short Plans): Generate exactly N unique days. Apply a logical split (e.g., N=3 is Push/Pull/Legs; N=4 is Upper/Lower; N=5 is Bro Split). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push", "Day 3 - Rest"). DATABASE OVERWRITE (UNIVERSAL CONTINUITY): You MUST dynamically generate a continuous timeline without any gaps. For ANY requested duration of N days, you MUST explicitly output every sequential day exactly from Day 1 up to Day N (i.e., Day 1, Day 2, Day 3 ... Day N). You are STRICTLY FORBIDDEN from skipping any intermediate days or stopping early. Even if a specific day falls on a mandatory rest day, you MUST still generate the rest details for that exact day number. Missing any day between 1 and N is a fatal error.
-  • N > {max_training_days} (Long-term Plans): This is real gym programming. DO NOT generate N different workout days.
-    STEP 1 — DETERMINE CYCLE LENGTH: Use your fitness expertise to select the optimal split cycle for the user's goal.
-      Examples: Muscle Gain → PPL (6-day cycle) or Upper/Lower (4-day cycle)
-               Fat Loss → Full Body (3-day cycle) or Circuit (4-day cycle)
-               General Fitness → 3 or 4-day full body split
-      The cycle length is YOUR decision based on fitness science — it is NOT fixed.
-    STEP 2 — GENERATE THE CYCLE: Generate exactly that many unique days as a REPEATING MICROCYCLE.
-    CRITICAL HARD LIMIT: YOU MUST STOP GENERATING AFTER THE BASE CYCLE. DO NOT generate Day 7, Day 8, Day 9, etc., if your cycle is only 6 days. DO NOT output exercises named "Repeat Day 1". The backend Python engine will handle the mathematical expansion and progressive overload automatically.
-    STEP 3 — PROGRESSION PLAN: In `summary`, explain:
-      - How many times to repeat this cycle to complete N days (e.g. ceil(N / cycle_length))
-      - Week-by-week progressive overload: Week 1 = baseline, Week 2 = +2 reps, Week 3 = +weight, etc.
-    STEP 4 — ROOT LEVEL `tip`: In the top-level `tip` JSON field (outside of the rest_days array), state exactly: "Repeat this X-day cycle Y times over N days. Increase [metric] each week."
-    You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push (Cycle Day 1)").
+- DYNAMIC SPLIT SELECTION: {dynamic_split_rules}
 - DYNAMIC REST DAYS (CRITICAL): If a day is meant for rest or active recovery, you MUST put it entirely inside the `rest_days` array. DO NOT create a fake 'Rest' exercise inside the `workout` array. The `workout` array must remain 100% clean, containing only active physical exercises.
 - DYNAMIC DAILY VOLUME & VARIETY: DO NOT just divide the retrieved exercises across the days, and DO NOT repeat the exact same exercises on different days of a cycle. Generate a massive pool of 20-30 DIVERSE exercises across the cycle (e.g. Incline Press on Day 1, Flat Press on Day 4). An intense day should have 5-8 exercises.
 - UNIVERSAL SCHEDULE SYNC: To ensure perfect alignment with the Nutrition agent, you MUST ALWAYS schedule Day 3 and Day 7 as Rest/Recovery days across all multi-day cycles, overriding any conflicting activity level rules. Structure your workout split logically around this shared pattern.
@@ -104,13 +90,15 @@ GOAL-SPECIFIC WORKOUT RULES (MANDATORY):
 
 🟢 MUSCLE GAIN / BULKING (when user mentions: gain weight, muscle gain, hypertrophy):
 - Focus entirely on Progressive Overload on heavy compound lifts.
+- You MUST use a 5-day or 6-day cycle for Muscle Gain. You are strictly forbidden from shrinking it to 3 or 4 days.
+- You MUST generate AT LEAST 20-30 physical exercises in the `workout` array across the cycle.
 - Keep cardio minimal to avoid burning excess calories.
 - Use traditional hypertrophy rep ranges (8-12 reps) and longer rest periods (90-120 seconds).
 
 UNIVERSAL INJURY OVERRIDE (HIGHEST PRIORITY — OVERRIDES ALL OTHER RULES):
 If the user reports ANY injury, pain, or medical condition (e.g., shoulder, knee, lower back, wrist), INJURY SAFETY WINS over ALL other rules. 
 - Overrides "THE BIG 5" & "MUSCLE GAIN": You MUST skip heavy lifts (squats, bench press, deadlifts, overhead presses) if they load the injured area, regardless of the day's focus or hypertrophy goals.
-- INJURY VOLUME CAP: Injured users need recovery capacity. You MUST cap volume to a maximum of 3-4 sets per exercise. NEVER prescribe 5-6 sets for an injured user.
+- INJURY VOLUME CAP: Injured users need recovery capacity. You MUST cap volume to a maximum of 3-4 sets per exercise. NEVER prescribe 5-6 sets for an injured user. DO NOT add extra Rest Days or shrink the cycle length just because of an injury. The cycle length must remain standard (e.g. 5 or 6 days).
 
 INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC — BIOMECHANICS SAFETY PROTOCOL):
 1. DEDUCE affected regions from the reported injury (e.g., "lower back pain" → lumbar spine, hips; "shoulder pain" → deltoids, rotator cuff; "wrist pain" → forearms, wrists).
@@ -146,6 +134,24 @@ Current Context: {summary}
             output_schema=TrainingAnalysis,
             system_prompt=system_prompt
         )
+        # Override the base prompt to include the high-visibility recency safety mandate (Tier 2 Safety)
+        from langchain_core.prompts import ChatPromptTemplate
+        self.prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("human", """CONVERSATION SUMMARY (for context):
+{summary}
+
+QUESTION: {query}
+
+RETRIEVED DATA (Safe, filtered database items):
+{context}
+
+⚠️ CRITICAL SAFETY MANDATE:
+The user has reported the following injuries/conditions: '{injuries}'.
+The RETRIEVED DATA has been medically pre-vetted and contains ONLY safe exercises. You must ONLY use exercises from the RETRIEVED DATA.
+Explain in every exercise's coaching_note: "Adapted to protect/recover your {injuries}."
+""")
+        ])
 
     async def _detect_n_days(self, query: str) -> int:
         from langchain_openai import ChatOpenAI
@@ -250,30 +256,174 @@ Current Context: {summary}
         return expanded_workouts, expanded_rests
 
     async def run(self, state: AgentState) -> Dict[str, Any]:
-        # Inject max_training_days into state so run_logic passes it to the prompt.
-        safe_output_tokens = 2500   # Strongly clamped to prevent NoneType JSON truncation errors
-        tokens_per_exercise = 200   # Sets + reps + long descriptions (conservative buffer)
-        exercises_per_day   = 6     # typical session volume max
+        import json
+        from app.safety.intake import translate_injury_to_constraint
+        from app.safety.filter import filter_with_audit
+        from app.safety.refusal import maybe_refuse, classify_goal, SegmentedTags
+        from app.safety.dynamic_schema import build_dynamic_training_analysis
+        from langchain_openai import ChatOpenAI
+        from app.core.config import settings
+        
+        user_context = state.get("user_context", {}) or {}
+        injuries_list = user_context.get("injuries", []) or []
+        injuries = ", ".join(str(i) for i in injuries_list) if injuries_list else "None"
+        
+        # Load tagged safe pool (Phase 10: will load all 2,840 exercises, currently 41 prototypes)
+        TAGS_PATH = r"d:\AI\IMGProjects\ai-fitness-app\ai-fitness-app\app\safety\tags_lower_body.json"
+        SEGMENTS_PATH = r"d:\AI\IMGProjects\ai-fitness-app\ai-fitness-app\app\safety\segments_lower_body.json"
+        with open(TAGS_PATH, encoding="utf-8") as f:
+            raw_tags = {e["exercise_id"]: e for e in json.load(f)}
+        with open(SEGMENTS_PATH, encoding="utf-8") as f:
+            raw_segs = {e["exercise_id"]: e for e in json.load(f)}
+        
+        tags = []
+        for eid, tag_data in raw_tags.items():
+            if eid in raw_segs:
+                tags.append(SegmentedTags(**{**tag_data, **raw_segs[eid]}))
+                
+        # Tier 1 Safety: Deterministic Filtering
+        constraint = translate_injury_to_constraint(injuries)
+        safe_pool, _ = filter_with_audit(tags, constraint)
+        
+        # Segment Coverage Refusal Mechanism
+        query = state['messages'][-1].content
+        goal_key = classify_goal(query)
+        decision = maybe_refuse(safe_pool, goal_key, min_per_segment=2)
+        
+        if decision.should_refuse:
+            return {
+                "specialist_results": {
+                    "training": {
+                        "answer": decision.refusal_message,
+                        "status": "success",
+                        "is_accurate": True,
+                        "needs_web_search": False,
+                        "sub_queries": [],
+                        "final_answer": decision.refusal_message,
+                        "summary": decision.refusal_message,
+                        "workout": [],
+                        "rest_days": [],
+                        "tip": "Consult a physiotherapist.",
+                        "exercise_gifs": {},
+                        "exercise_images": {}
+                    }
+                }
+            }
+            
+        # Dynamically rebuild structured output schema to strictly enforce safe_pool
+        DynamicAnalysisSchema = build_dynamic_training_analysis(safe_pool)
+        original_llm = self.llm
+        self.llm = ChatOpenAI(
+            model="gpt-4o-mini", 
+            temperature=0.3, 
+            api_key=settings.OPENAI_API_KEY,
+            max_retries=3
+        ).with_structured_output(DynamicAnalysisSchema, method="function_calling")
+
+        safe_output_tokens = 15000
+        tokens_per_exercise = 200
+        exercises_per_day   = 6
         max_days = max(1, safe_output_tokens // (tokens_per_exercise * exercises_per_day))
-        # Store so run_logic picks it up via prompt_vars injection below
         state = dict(state)
         state.setdefault("_extra_prompt_vars", {})["max_training_days"] = max_days
         
-        query = state['messages'][-1].content
         n_days = await self._detect_n_days(query)
+        if n_days == 1:
+            split_rules = "• N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty."
+        elif n_days <= max_days:
+            split_rules = f"• N = {n_days} (Short Plan): Generate exactly {n_days} unique days. Apply a logical split (e.g., Push/Pull/Legs). Try to minimize repeating exercises, but you MAY repeat them across different days if necessary to fulfill a highly specific user focus. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., \"Day 1 - Push\", \"Day 3 - Rest\")."
+        else:
+            split_rules = f"• N = {n_days} (Long-term Plan): Generate a microcycle and explain repeats."
+
+        state.setdefault("_extra_prompt_vars", {})["dynamic_split_rules"] = split_rules
         
-        result = await self.run_logic(state, specialist_key="training", topic="fitness workout exercise")
-        
-        if n_days > 1 and "specialist_results" in result and "training" in result["specialist_results"]:
+        try:
+            # Execute Adaptive RAG with strictly constrained safe_pool vocabulary
+            result = await self.run_logic(state, specialist_key="training", topic="fitness workout exercise")
+        except Exception as e:
+            # If the LLM hallucinates an exercise outside the safe_pool (because it's desperate to fulfill 
+            # a specific request like "calves"), Pydantic will throw a ValidationError.
+            if "validation error" in str(e).lower() or "literal_error" in str(e).lower():
+                user_context = state.get("user_context", {})
+                has_injuries = bool(user_context.get("injuries") or user_context.get("medical_conditions"))
+                reason = "within your medical constraints" if has_injuries else "with the currently available database exercises"
+                
+                msg = f"I could not find enough unique exercises matching your highly specific request {reason}."
+                return {
+                    "specialist_results": {
+                        "training": {
+                            "answer": msg,
+                            "status": "success",
+                            "is_accurate": True,
+                            "needs_web_search": False,
+                            "sub_queries": [],
+                            "final_answer": msg,
+                            "summary": msg,
+                            "workout": [],
+                            "rest_days": [],
+                            "tip": "Try a broader muscle group (e.g., Leg Day instead of Calves) so I can build a balanced plan.",
+                            "exercise_gifs": {},
+                            "exercise_images": {}
+                        }
+                    }
+                }
+            raise e
+        finally:
+            self.llm = original_llm
+            
+        if "specialist_results" in result and "training" in result["specialist_results"]:
             training_data = result["specialist_results"]["training"]
+            
+            # Hydrate WorkoutItem back to WorkoutExercise for the frontend
+            hydrated_workout = []
+            for item in training_data.get("workout", []):
+                if hasattr(item, "model_dump"):
+                    item_dict = item.model_dump()
+                elif hasattr(item, "dict"):
+                    item_dict = item.dict()
+                elif isinstance(item, dict):
+                    item_dict = item
+                else:
+                    item_dict = getattr(item, "__dict__", {})
+
+                eid = item_dict.get("exercise_id")
+                tag_info = raw_tags.get(eid, {})
+                hydrated_workout.append({
+                    "day": item_dict.get("day", ""),
+                    "name": tag_info.get("name", eid),
+                    "target_muscle": tag_info.get("primary_joints_involved", []),
+                    "benefit": item_dict.get("coaching_note", "Adapted safely."),
+                    "description": item_dict.get("coaching_note", "Follow standard form securely."),
+                    "sets": str(item_dict.get("sets", "3")),
+                    "reps": str(item_dict.get("reps", "")),
+                    "gif_path": "",
+                    "image_path": ""
+                })
+            
+            training_data["workout"] = hydrated_workout
+            training_data = self._validate_output(training_data, context="", state=state)
+            
             workout_list = training_data.get("workout", [])
             rest_list = training_data.get("rest_days", [])
             
-            if workout_list or rest_list:
+            # Post-generation fallback: If the LLM generated no exercises, the safe pool 
+            # couldn't satisfy the highly specific user query (e.g. asking for calves when ankle is blocked)
+            # A workout with only rest days is not a workout.
+            if not workout_list:
+                user_context = state.get("user_context", {})
+                has_injuries = bool(user_context.get("injuries") or user_context.get("medical_conditions"))
+                reason = "within your medical constraints" if has_injuries else "with the currently available database exercises"
+                
+                refusal_msg = f"I could not find enough unique active exercises matching your highly specific request {reason}."
+                result["specialist_results"]["training"]["summary"] = refusal_msg
+                result["specialist_results"]["training"]["tip"] = "Try a broader muscle group (e.g., Leg Day instead of Calves) so I can build a balanced plan."
+                return result
+
+            if n_days > 1 and (workout_list or rest_list):
                 e_workout, e_rest = self._expand_cycle(workout_list, rest_list, n_days)
                 training_data["workout"] = e_workout
                 training_data["rest_days"] = e_rest
-                
+
         return result
 
     def _format_context(self, results: List[Dict]) -> str:
@@ -311,8 +461,9 @@ Current Context: {summary}
 
         # ── STEP 1: Rescue paths that LLM dumped in the text instead of JSON ──
         final_answer = output.get("answer", "")
-        gifs_dict = output.get("exercise_gifs", {})
-        imgs_dict = output.get("exercise_images", {})
+        # Filter out hallucinated paths from LLM's raw dict immediately
+        gifs_dict = {k: v for k, v in output.get("exercise_gifs", {}).items() if v in all_valid_gifs}
+        imgs_dict = {k: v for k, v in output.get("exercise_images", {}).items() if v in all_valid_images}
         
         # New approach: Extract from the structured 'workout' list directly!
         workout_list = output.get("workout", [])

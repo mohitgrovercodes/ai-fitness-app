@@ -6,10 +6,15 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.tools.web_search_tool import WebSearchTool
 from app.utils.logger import logger
 
+
 class DomainAgent(BaseRAGAgent):
     """
     Specialist Agent for General Fitness Knowledge.
     Handles topics like anatomy, physiology, hypertrophy science, BMR, etc.
+
+    Includes a smart LLM-based topic gate that runs BEFORE the web search
+    to reject off-topic queries (saving API cost) while accepting any
+    legitimate fitness, nutrition, or exercise-science question.
     """
     def __init__(self):
         from app.core.config import settings
@@ -57,8 +62,75 @@ USER QUERY: {user_input}"""),
             ("human", "{user_input}")
         ])
 
+    async def _is_relevant(self, query: str) -> bool:
+        """
+        Lightweight LLM gate (structured output, gpt-4o-mini, temp=0).
+        Decides if a query falls within the fitness / nutrition / exercise-science
+        domain.  Runs BEFORE the expensive web search to save API cost on junk.
+        Returns True if relevant, False otherwise.
+        """
+        from pydantic import BaseModel, Field
+
+        class RelevanceVerdict(BaseModel):
+            is_relevant: bool = Field(
+                description="True if the query is about fitness, exercise science, "
+                            "nutrition science, sports medicine, body composition, "
+                            "supplementation, recovery, anatomy for exercise, or "
+                            "the user's personal fitness profile. False otherwise."
+            )
+            reason: str = Field(description="One-sentence justification")
+
+        try:
+            gate_llm = self.llm.with_structured_output(
+                RelevanceVerdict, method="function_calling"
+            )
+            verdict: RelevanceVerdict = await gate_llm.ainvoke(
+                f"""You are a strict topic-relevance classifier for a fitness and nutrition AI application.
+The user query may be in English, Hindi (Devanagari), or Hinglish (Roman-script Hindi).
+
+ACCEPT queries about:
+- Exercise science, workout techniques, training principles, gym equipment
+- Nutrition science, macronutrients, micronutrients, supplements, hydration
+- Human anatomy and physiology AS IT RELATES TO exercise or fitness
+- Sports medicine, injury prevention, recovery, flexibility, mobility
+- Body composition, weight management, BMR, TDEE, metabolic science
+- Sleep science AS IT RELATES TO fitness performance or muscle recovery
+- The user's personal profile data (weight, height, BMI, goals, injuries)
+- Mental health AS IT RELATES TO fitness motivation or exercise psychology
+- History or origin of specific exercises, sports, or fitness practices
+
+REJECT queries about:
+- Geography, politics, history (non-fitness), entertainment, pop culture
+- General science NOT related to fitness (physics, chemistry, astronomy)
+- Technology, programming, business, finance, law
+- Random trivia, fun facts, riddles, jokes
+- Any topic that has NO reasonable connection to fitness, health, or nutrition
+
+USER QUERY: "{query}"
+
+Classify this query strictly."""
+            )
+            logger.info(
+                f"🔬 [Domain Gate] LLM verdict: relevant={verdict.is_relevant} | "
+                f"reason='{verdict.reason}'"
+            )
+            return verdict.is_relevant
+        except Exception as e:
+            # Fail-open: if the gate itself errors, let the query through
+            logger.warning(f"[Domain Gate] LLM relevance check failed: {e} — allowing query as fallback.")
+            return True
+
     async def run(self, state: AgentState) -> Dict[str, Any]:
         user_input = state['messages'][-1].content
+
+        # ── TOPIC GATE: LLM Relevance Check ──────────────────────────────────
+        # Runs BEFORE the web search call to avoid wasting API cost on
+        # off-topic queries.  Cheap (~150 tokens, gpt-4o-mini).
+        if not await self._is_relevant(user_input):
+            logger.info(f"🚫 [Domain Agent] Query rejected by topic gate: '{user_input[:60]}...'")
+            return self._rejection_response()
+
+        # ── PASSED GATE — proceed with normal flow ───────────────────────────
         user_context = state.get("user_context", {})
         full_name      = user_context.get("full_name", "User")
         goal           = user_context.get("goal", "General Fitness")
@@ -86,8 +158,7 @@ USER QUERY: {user_input}"""),
             )
         logger.info(f"🧬 [Domain Agent] Analyzing general fitness query: '{user_input[:50]}...'")
 
-        # Step 1: Attempt to find up-to-date info via Web Search if query is complex
-        # We search if the query looks like it needs a factual check.
+        # Step 1: Web Search for up-to-date context
         context = "No additional context found."
         try:
             search_results = await self.web_search.search(f"fitness science {user_input}")
@@ -121,6 +192,25 @@ USER QUERY: {user_input}"""),
                     "answer": res.content,
                     "status": "success",
                     "sources": "web_search" if context != "No additional context found." else "internal_knowledge"
+                }
+            }
+        }
+
+    @staticmethod
+    def _rejection_response() -> Dict[str, Any]:
+        """Standard response when a query is outside the fitness/nutrition domain."""
+        return {
+            "specialist_results": {
+                "domain": {
+                    "answer": (
+                        "That's an interesting question, but it falls outside my area of expertise! "
+                        "I'm your AI Exercise Scientist — I specialize in fitness science, nutrition, "
+                        "exercise physiology, and everything gym-related. "
+                        "Feel free to ask me anything about workouts, diet, supplements, recovery, "
+                        "or how your body works during training! 💪"
+                    ),
+                    "status": "rejected",
+                    "sources": "topic_gate"
                 }
             }
         }

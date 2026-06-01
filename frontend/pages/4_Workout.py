@@ -115,7 +115,7 @@ if submitted:
             data = post(
                 "/api/ai/generate-workout",
                 json=payload,
-                timeout=180,
+                timeout=3600,
             )
             
             st.success("✅ Workout plan generated successfully!")
