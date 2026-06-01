@@ -1,0 +1,86 @@
+"""
+Deterministic safety filter - the absolute physical safety shield.
+
+Operates entirely on structured tags. No strings, no LLM calls, no
+fuzzy matching. Given a list of tagged exercise candidates and an
+InjuryConstraint vector, returns the subset that passes ALL seven
+biomechanical safety checks.
+
+Each check corresponds to exactly one of the 7 features. Failures are
+attributed to a specific axis (auditable, debuggable).
+"""
+from typing import List, Tuple
+
+from app.safety.schema import (
+    BiomechanicalTags,
+    InjuryConstraint,
+    UpperLimbDemand,
+)
+
+
+def safety_violations(
+    ex: BiomechanicalTags, c: InjuryConstraint
+) -> List[str]:
+    """
+    Return a list of axis names that this exercise violates. Empty list
+    means the exercise is safe under the given constraint. Useful for
+    debugging which rule blocked a specific exercise.
+    """
+    violations: List[str] = []
+
+    # 1. Joint loading
+    if set(ex.primary_joints_involved) & set(c.blocked_joints):
+        violations.append("blocked_joint")
+    # 2. Chain status
+    if ex.kinetic_chain_loading in c.blocked_chains:
+        violations.append("blocked_chain")
+    # 3. Axial compression (ordinal)
+    if ex.axial_compression_level > c.max_axial_compression:
+        violations.append("axial_compression_exceeded")
+    # 4. Grip (ordinal)
+    if ex.grip_requirement > c.max_grip_requirement:
+        violations.append("grip_exceeded")
+    # 5. Impact (ordinal)
+    if ex.joint_impact_level > c.max_impact:
+        violations.append("impact_exceeded")
+    # 6. Upper-limb stabilization
+    if c.block_upper_limb_active and ex.upper_limb_stabilization == UpperLimbDemand.ACTIVE:
+        violations.append("upper_limb_loading_forbidden")
+    # 7. Metabolic density (ordinal)
+    if ex.metabolic_density > c.max_metabolic_density:
+        violations.append("metabolic_density_exceeded")
+
+    return violations
+
+
+def is_safe(ex: BiomechanicalTags, c: InjuryConstraint) -> bool:
+    """Boolean fast-path - True if no axis violated."""
+    return not safety_violations(ex, c)
+
+
+def filter_safe_exercises(
+    candidates: List[BiomechanicalTags],
+    constraint: InjuryConstraint,
+) -> List[BiomechanicalTags]:
+    """Return the subset of candidates that pass all 7 safety axes."""
+    return [ex for ex in candidates if is_safe(ex, constraint)]
+
+
+def filter_with_audit(
+    candidates: List[BiomechanicalTags],
+    constraint: InjuryConstraint,
+) -> Tuple[List[BiomechanicalTags], List[Tuple[BiomechanicalTags, List[str]]]]:
+    """
+    Two-output variant for the evaluation harness:
+      - safe: passing exercises
+      - blocked: tuples of (exercise, violations) explaining each rejection
+    """
+    safe: List[BiomechanicalTags] = []
+    blocked: List[Tuple[BiomechanicalTags, List[str]]] = []
+    for ex in candidates:
+        v = safety_violations(ex, constraint)
+        if not v:
+            safe.append(ex)
+        else:
+            blocked.append((ex, v))
+    return safe, blocked
