@@ -21,6 +21,7 @@ from app.safety.schema import (
     ImpactLevel,
     InjuryConstraint,
     MetabolicDensity,
+    TriageReasoning,
 )
 from app.utils.logger import logger
 
@@ -28,9 +29,12 @@ from app.utils.logger import logger
 _SYSTEM_PROMPT = """You are a sports-medicine triage assistant. Your ONLY job is
 to translate a user's injury or medical condition description into a structured
 biomechanical constraint vector. You do NOT prescribe exercises, give medical
-advice, or generate text - you only fill in the structured fields.
+advice, or generate text outside of the structured fields.
 
-Map the injury text to the following 10 constraint dimensions:
+FIRST, write a detailed step-by-step `clinical_analysis`. Think through the anatomy affected, 
+the implications for weight-bearing (especially arms vs legs), and systemic impacts.
+
+THEN, map the injury text to the following 10 constraint dimensions in the `constraint` field:
 
 1. blocked_joints: Anatomical joints that must not be loaded as a prime mover.
    Values: HIP, KNEE, ANKLE, LUMBAR_SPINE, THORACIC_SPINE, CERVICAL_SPINE,
@@ -70,7 +74,8 @@ Map the injury text to the following 10 constraint dimensions:
    - Chronic joint pain tolerating light tempo → 1
 
 6. block_upper_limb_active: true if user cannot bear bodyweight through arms.
-   - Acute shoulder / post-op upper body / severe wrist sprain → true
+   - Any arm/wrist fracture, acute shoulder injury, post-op upper body -> true
+   - Even if it's just one arm (e.g. right arm fracture), set to true.
 
 7. max_metabolic_density: 0=LOW, 1=MEDIUM, 2=HIGH (default 2).
    - Asthma flare / recent cardiac event / advanced pregnancy → 0
@@ -106,14 +111,16 @@ def translate_injury_to_constraint(injury_text: str) -> InjuryConstraint:
             temperature=0,
             api_key=settings.OPENAI_API_KEY,
             max_retries=2,
-        ).with_structured_output(InjuryConstraint, method="function_calling")
+        ).with_structured_output(TriageReasoning, method="function_calling")
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", _SYSTEM_PROMPT),
             ("human", "Injury / condition: {injury}"),
         ])
         chain = prompt | llm
-        constraint = chain.invoke({"injury": injury_text.strip()})
+        triage_result = chain.invoke({"injury": injury_text.strip()})
+        logger.info(f"🩺 [Intake Reasoning] {triage_result.clinical_analysis}")
+        constraint = triage_result.constraint
         logger.info(f"🩺 [Intake] '{injury_text}' -> {constraint.model_dump()}")
         return constraint
     except Exception as e:
