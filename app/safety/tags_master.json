@@ -21779,5 +21779,2365 @@
       "LOWER_ANTERIOR",
       "LOWER_POSTERIOR"
     ]
+  },
+  {
+    "exercise_id": "ex_2636",
+    "name": "Single-arm palm-in dumbbell shoulder press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2637",
+    "name": "Standing palms-in shoulder press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2638",
+    "name": "Seated Dumbbell Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2639",
+    "name": "Standing dumbbell shoulder press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2640",
+    "name": "Single-arm lateral raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2641",
+    "name": "Power Partials",
+    "primary_joints_involved": [
+      "KNEE",
+      "HIP"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 1,
+    "joint_actions": [
+      "KNEE_EXTENSION_CLOSED_CHAIN",
+      "HIP_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "LOWER_POSTERIOR",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2642",
+    "name": "Overhead dumbbell front raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2643",
+    "name": "Seated dumbbell shoulder press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2644",
+    "name": "Alternating standing shoulder press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2645",
+    "name": "Single-arm incline rear delt raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2647",
+    "name": "Alternating Deltoid Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2648",
+    "name": "Single-dumbbell front raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2649",
+    "name": "Single-arm standing shoulder press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2650",
+    "name": "Bent-over dumbbell rear delt row",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 1,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_FLEXION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "CORE_POSTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2651",
+    "name": "Incline dumbbell front raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2652",
+    "name": "Side Lateral Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2653",
+    "name": "Dumbbell external shoulder rotation",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": true,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2654",
+    "name": "Single-arm incline lateral raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2655",
+    "name": "Seated rear delt fly",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_SUPPORTED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2656",
+    "name": "Seated Side Lateral Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_SUPPORTED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2657",
+    "name": "Head-on-bench dumbbell rear delt raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2658",
+    "name": "Cuban press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_FLEXION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2702",
+    "name": "Holman Left Front Raise with Right Hold",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2703",
+    "name": "Holman Right Front Raise with Left Hold",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2704",
+    "name": "Holman Alternating Front Raise to Side Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2705",
+    "name": "Holman Heavy Right Arm Overhead Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2706",
+    "name": "Holman Heavy Left Arm Overhead Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2707",
+    "name": "Holman Right Arm Heavy Overhead Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2708",
+    "name": "Holman Right Diagonal Lunge to Overhead Press",
+    "primary_joints_involved": [
+      "KNEE",
+      "HIP",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 2,
+    "torsional_joint_loading": true,
+    "spinal_shear_level": 1,
+    "joint_actions": [
+      "KNEE_FLEXION_CLOSED_CHAIN",
+      "KNEE_EXTENSION_CLOSED_CHAIN",
+      "HIP_FLEXION_CLOSED_CHAIN",
+      "HIP_EXTENSION_CLOSED_CHAIN",
+      "SHOULDER_OVERHEAD_LOADED"
+    ],
+    "primary_segment": "LOWER_ANTERIOR",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2709",
+    "name": "Holman Left Arm Heavy Overhead Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2710",
+    "name": "Holman Weighted Palms-In Overhead Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2711",
+    "name": "Dumbbell racked carry",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "CORE_POSTERIOR",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2712",
+    "name": "Dumbbell clean and push-press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW",
+      "KNEE",
+      "ANKLE"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 2,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 1,
+    "joint_actions": [
+      "KNEE_EXTENSION_CLOSED_CHAIN",
+      "HIP_EXTENSION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "LOWER_ANTERIOR",
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2713",
+    "name": "Total Fitness Dumbbell Farmer's Carry",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW",
+      "WRIST"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 2,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN",
+      "WRIST_FLEXION_OPEN_CHAIN"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "LOWER_POSTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2714",
+    "name": "Single-arm dumbbell racked carry",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "CORE_ANTERIOR",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2715",
+    "name": "Jordan Shallow Dumbbell Pull-Over",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2716",
+    "name": "Dumbbell shadow boxing",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW",
+      "WRIST"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 2,
+    "torsional_joint_loading": true,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_FLEXION_OPEN_CHAIN",
+      "WRIST_FLEXION_OPEN_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2717",
+    "name": "30 Shoulders Alternating Dumbbell Front Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2718",
+    "name": "30 Shoulders Bent-Over Dumbbell Reverse Fly",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 1,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2719",
+    "name": "30 Shoulders Dumbbell Front Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2720",
+    "name": "30 Shoulders Dumbbell Lateral Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2722",
+    "name": "30 Shoulders Incline Face-Down Dumbbell Reverse Fly",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2723",
+    "name": "30 Shoulders Seated Dumbbell Front Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2724",
+    "name": "30 Shoulders Seated Dumbbell Side Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2761",
+    "name": "Plate front raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2767",
+    "name": "Seated face pull",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_SUPPORTED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_FLEXION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2768",
+    "name": "Seated cable shoulder press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2770",
+    "name": "Standing cable rear delt row",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_FLEXION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2771",
+    "name": "Standing Low-Pulley Deltoid Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2772",
+    "name": "Standing crossed-cable rear delt fly",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2773",
+    "name": "Alternating Cable Shoulder Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2776",
+    "name": "Lying cable front raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2777",
+    "name": "Lying cable lateral raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_SUPPORTED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2778",
+    "name": "Single-arm cable lateral raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2779",
+    "name": "AA Cable Leaning Side Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2780",
+    "name": "30 Shoulders Bent-Over Low Cable Reverse Fly",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 1,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2781",
+    "name": "30 Shoulders Cable Rope Face Pull",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_FLEXION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2782",
+    "name": "30 Shoulders Cable Straight-Bar Front Raise",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2783",
+    "name": "30 Shoulders Cable Straight-Bar Upright Row",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_FLEXION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2784",
+    "name": "30 Shoulders High Cable Reverse Fly",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2785",
+    "name": "30 Shoulders Single-Arm Bent-Over Cable Reverse Fly",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 1,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2801",
+    "name": "Shoulder Circles",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 0,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2819",
+    "name": "HM Shoulder Stretch on Floor",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 0,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2835",
+    "name": "Band overhead triceps press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2837",
+    "name": "Band straight-arm pull-down",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2838",
+    "name": "Band skullcrusher",
+    "primary_joints_involved": [
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2839",
+    "name": "Single-arm band kick-back",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2840",
+    "name": "Incline EZ-bar skullcrusher",
+    "primary_joints_involved": [
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2841",
+    "name": "Decline Close-Grip Bench To Skull Crusher",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2842",
+    "name": "Bench Press - Powerlifting",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2843",
+    "name": "Behind-the-head skullcrusher",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2844",
+    "name": "Standing barbell overhead triceps extension",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN",
+      "SHOULDER_OVERHEAD_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2845",
+    "name": "Reverse-grip bench press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2846",
+    "name": "Bench Press with Chains",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2847",
+    "name": "Floor Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2848",
+    "name": "One Arm Floor Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2849",
+    "name": "Pin Presses",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2850",
+    "name": "JM Press With Bands",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2851",
+    "name": "JM Press",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2852",
+    "name": "Floor Press with Chains",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2853",
+    "name": "Reverse Band Bench Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2854",
+    "name": "Decline Barbell Triceps Extension - Gethin Variation",
+    "primary_joints_involved": [
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2855",
+    "name": "AM Skullcrusher",
+    "primary_joints_involved": [
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2856",
+    "name": "30 Arms Close-Grip Bench Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "ELBOW_EXTENSION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2858",
+    "name": "FYR2 Sprawl Over Kettlebell",
+    "primary_joints_involved": [
+      "HIP",
+      "KNEE",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 1,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 2,
+    "torsional_joint_loading": true,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "HIP_FLEXION_CLOSED_CHAIN",
+      "KNEE_EXTENSION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "CORE_ANTERIOR",
+    "secondary_segments": [
+      "LOWER_ANTERIOR",
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2936",
+    "name": "Feet-elevated bench dip",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2937",
+    "name": "Bodyweight triceps press",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2939",
+    "name": "Tricep Side Stretch",
+    "primary_joints_involved": [
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "OPEN_UNLOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 0,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PULL",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "ex_2940",
+    "name": "Overhead Triceps",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2941",
+    "name": "Russian Bar Dip",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2942",
+    "name": "Straight-arm plank with kick-back",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW",
+      "LUMBAR_SPINE"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "CORE_ANTERIOR",
+    "secondary_segments": [
+      "UPPER_PUSH"
+    ]
+  },
+  {
+    "exercise_id": "ex_2943",
+    "name": "TBS Dip",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2944",
+    "name": "Bench Dips - Gethin Variation",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2945",
+    "name": "Banded dip",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2946",
+    "name": "HM Chair Dip",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2947",
+    "name": "Holman Step Triceps Dip",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2948",
+    "name": "Holman Chair Triceps Dip",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2949",
+    "name": "Bodyweight Triceps Rope Press",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
+  },
+  {
+    "exercise_id": "ex_2950",
+    "name": "Holman Heavy Triceps Overhead Press",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 2,
+    "grip_requirement": 2,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_OVERHEAD_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2952",
+    "name": "FYR2 Triceps Push-Up",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2954",
+    "name": "30 Arms Close-Grip Push-Up",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2955",
+    "name": "30 Arms BFR Close-Grip Push-Up",
+    "primary_joints_involved": [
+      "ELBOW",
+      "SHOULDER"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "ACTIVE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_FLEXION_CLOSED_CHAIN",
+      "SHOULDER_HORIZONTAL_LOADED"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2956",
+    "name": "Supine Chest Throw",
+    "primary_joints_involved": [
+      "SHOULDER",
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 1,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "SHOULDER_HORIZONTAL_LOADED",
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "CORE_ANTERIOR"
+    ]
+  },
+  {
+    "exercise_id": "ex_2958",
+    "name": "EZ-bar skullcrusher",
+    "primary_joints_involved": [
+      "ELBOW"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 0,
+    "grip_requirement": 1,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ELBOW_EXTENSION_CLOSED_CHAIN"
+    ],
+    "primary_segment": "UPPER_PUSH",
+    "secondary_segments": [
+      "UPPER_PULL"
+    ]
   }
 ]

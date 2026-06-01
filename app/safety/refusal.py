@@ -211,15 +211,30 @@ def maybe_refuse(
         return RefusalDecision(should_refuse=False)
 
     counts = coverage_by_segment(safe_pool)
+    
+    # Also count compound (high intensity) exercises per segment
+    compound_counts: Dict[Segment, int] = {seg: 0 for seg in Segment}
+    for ex in safe_pool:
+        if ex.metabolic_density >= 1 or ex.kinetic_chain_loading == "CLOSED_LOADED":
+            compound_counts[ex.primary_segment] += 1
+            for sec in ex.secondary_segments:
+                compound_counts[sec] += 1
 
-    coverage_detail = [
-        SegmentCoverage(
-            segment=seg,
-            count=counts[seg],
-            is_sufficient=counts[seg] >= min_per_segment,
+    coverage_detail = []
+    for seg in target_segments:
+        # Require at least one compound/high-density movement for hypertrophy/strength goals
+        is_sufficient = counts[seg] >= min_per_segment
+        if goal in ["leg_day", "push_day", "pull_day", "full_body"]:
+            if compound_counts[seg] < 1:
+                is_sufficient = False
+                
+        coverage_detail.append(
+            SegmentCoverage(
+                segment=seg,
+                count=counts[seg],
+                is_sufficient=is_sufficient,
+            )
         )
-        for seg in target_segments
-    ]
 
     missing = [c.segment for c in coverage_detail if not c.is_sufficient]
 
