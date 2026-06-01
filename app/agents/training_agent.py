@@ -48,7 +48,7 @@ Your goal is to provide accurate, safe workout advice based on retrieved data.
 
 STRICT POLICIES:
 1. SAFETY FIRST: Always mention proper form or warm-ups if appropriate.
-2. MASTER TRAINER HYBRID DB USAGE: You must pull from the retrieved database, BUT YOU ARE THE MASTER TRAINER. If the retrieved exercises do not perfectly map to the required muscles for the given day, you MUST DISCARD THEM and use your expert knowledge to generate proper, biomechanically accurate exercises. For expert-added exercises, leave `gif_path` and `image_path` completely empty ("").
+2. VETTED EXERCISE SELECTION: You MUST select exercises ONLY from the valid exercise_ids provided in the schema. You are strictly forbidden from generating exercises outside this pool. If the pool is insufficient, rely on the refusal mechanism.
 3. COMPREHENSIVE WORKOUT PLAN: A proper workout plan MUST cover a full routine based on the user's goal. It should dynamically include a mix of necessary components (e.g., warm-up/cardio, main strength/core exercises, and cool-down). Do NOT just provide 1 or 2 isolated exercises. If the database only gives you 1 exercise, you MUST use your expert knowledge to dynamically build out the rest of a complete, balanced routine that realistically addresses the user's goal.
 4. ADAPTABILITY & DYNAMIC PROGRAMMING: Adapt advice based on injuries and dietary preferences (e.g., if a user is Vegan or Keto, suggest appropriate intensity or recovery based on their likely macro intake if relevant). Critically, you MUST dynamically calculate sets and reps for EACH exercise based on the user's goal (e.g., Hypertrophy = 8-12 reps, Strength = 3-5 reps, Endurance = 15+ reps, Planks = 30-60s). DO NOT give a static 3 sets of 10-12 reps for everything.
 5. STRUCTURED JSON FIELDS: You MUST populate the `summary`, `workout` (list of exercises), `rest_days` (list of rest days), and `tip` fields with structured data. `workout` MUST ONLY contain actual physical exercises.
@@ -257,242 +257,125 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
         return expanded_workouts, expanded_rests
 
     async def run(self, state: AgentState) -> Dict[str, Any]:
-        # Inject max_training_days into state so run_logic passes it to the prompt.
-        safe_output_tokens = 15000  # Large token limit to allow 6-day splits without backend truncation
-        tokens_per_exercise = 200   # Sets + reps + long descriptions (conservative buffer)
-        exercises_per_day   = 6     # typical session volume max
+        import json
+        from app.safety.intake import translate_injury_to_constraint
+        from app.safety.filter import filter_with_audit
+        from app.safety.refusal import maybe_refuse, classify_goal, SegmentedTags
+        from app.safety.dynamic_schema import build_dynamic_training_analysis
+        from langchain_openai import ChatOpenAI
+        from app.core.config import settings
+        
+        user_context = state.get("user_context", {}) or {}
+        injuries_list = user_context.get("injuries", []) or []
+        injuries = ", ".join(str(i) for i in injuries_list) if injuries_list else "None"
+        
+        # Load tagged safe pool (Phase 10: will load all 2,840 exercises, currently 41 prototypes)
+        TAGS_PATH = r"d:\AI\IMGProjects\ai-fitness-app\ai-fitness-app\app\safety\tags_lower_body.json"
+        SEGMENTS_PATH = r"d:\AI\IMGProjects\ai-fitness-app\ai-fitness-app\app\safety\segments_lower_body.json"
+        with open(TAGS_PATH, encoding="utf-8") as f:
+            raw_tags = {e["exercise_id"]: e for e in json.load(f)}
+        with open(SEGMENTS_PATH, encoding="utf-8") as f:
+            raw_segs = {e["exercise_id"]: e for e in json.load(f)}
+        
+        tags = []
+        for eid, tag_data in raw_tags.items():
+            if eid in raw_segs:
+                tags.append(SegmentedTags(**{**tag_data, **raw_segs[eid]}))
+                
+        # Tier 1 Safety: Deterministic Filtering
+        constraint = translate_injury_to_constraint(injuries)
+        safe_pool, _ = filter_with_audit(tags, constraint)
+        
+        # Segment Coverage Refusal Mechanism
+        query = state['messages'][-1].content
+        goal_key = classify_goal(query)
+        decision = maybe_refuse(safe_pool, goal_key, min_per_segment=2)
+        
+        if decision.should_refuse:
+            return {
+                "specialist_results": {
+                    "training": {
+                        "answer": decision.refusal_message,
+                        "status": "success",
+                        "is_accurate": True,
+                        "needs_web_search": False,
+                        "sub_queries": [],
+                        "final_answer": decision.refusal_message,
+                        "summary": decision.refusal_message,
+                        "workout": [],
+                        "rest_days": [],
+                        "tip": "Consult a physiotherapist.",
+                        "exercise_gifs": {},
+                        "exercise_images": {}
+                    }
+                }
+            }
+            
+        # Dynamically rebuild structured output schema to strictly enforce safe_pool
+        DynamicAnalysisSchema = build_dynamic_training_analysis(safe_pool)
+        original_llm = self.llm
+        self.llm = ChatOpenAI(
+            model="gpt-4o-mini", 
+            temperature=0.3, 
+            api_key=settings.OPENAI_API_KEY,
+            max_retries=3
+        ).with_structured_output(DynamicAnalysisSchema, method="function_calling")
+
+        safe_output_tokens = 15000
+        tokens_per_exercise = 200
+        exercises_per_day   = 6
         max_days = max(1, safe_output_tokens // (tokens_per_exercise * exercises_per_day))
-        # Store so run_logic picks it up via prompt_vars injection below
         state = dict(state)
         state.setdefault("_extra_prompt_vars", {})["max_training_days"] = max_days
         
-        query = state['messages'][-1].content
         n_days = await self._detect_n_days(query)
-        
         if n_days == 1:
             split_rules = "• N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty."
         elif n_days <= max_days:
-            split_rules = f"• N = {n_days} (Short Plan): Generate exactly {n_days} unique days. Apply a logical split (e.g., Push/Pull/Legs). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., \"Day 1 - Push\", \"Day 3 - Rest\"). DO NOT generate a microcycle and do NOT generate any text about repeating the cycle."
+            split_rules = f"• N = {n_days} (Short Plan): Generate exactly {n_days} unique days. Apply a logical split (e.g., Push/Pull/Legs). DO NOT repeat the same exercises across all days. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., \"Day 1 - Push\", \"Day 3 - Rest\")."
         else:
-            split_rules = f"""• N = {n_days} (Long-term Plan): This is real gym programming. DO NOT generate {n_days} different workout days.
-    STEP 1 — DETERMINE CYCLE LENGTH: Use your fitness expertise to select the optimal split cycle for the user's goal.
-      Examples: Muscle Gain → PPL (6-day cycle) or Bro Split (5-day cycle)
-                Fat Loss → Full Body (3-day cycle) or Circuit (4-day cycle)
-      The cycle length is YOUR decision based on fitness science — it is NOT fixed.
-    STEP 2 — GENERATE THE CYCLE: Generate exactly that many unique days as a REPEATING MICROCYCLE. 
-    CRITICAL HARD LIMIT: YOU MUST STOP GENERATING AFTER THE BASE CYCLE. DO NOT generate Day 7, Day 8, Day 9, etc., if your cycle is only 6 days. DO NOT output exercises named "Repeat Day 1". The backend Python engine will handle the mathematical expansion and progressive overload automatically.
-    STEP 3 — PROGRESSION PLAN: In `summary`, explain:
-      - How many times to repeat this cycle to complete {n_days} days (e.g. ceil({n_days} / cycle_length))
-      - Week-by-week progressive overload: Week 1 = baseline, Week 2 = +2 reps, Week 3 = +weight, etc.
-    STEP 4 — ROOT LEVEL `tip`: In the top-level `tip` JSON field (outside of the rest_days array), state exactly: "Repeat this X-day cycle Y times over {n_days} days. Increase [metric] each week."
-    You MUST populate the `day` field for every exercise (e.g., "Day 1 - Push (Cycle Day 1)")."""
+            split_rules = f"• N = {n_days} (Long-term Plan): Generate a microcycle and explain repeats."
 
         state.setdefault("_extra_prompt_vars", {})["dynamic_split_rules"] = split_rules
         
-        result = await self.run_logic(state, specialist_key="training", topic="fitness workout exercise")
-        
+        try:
+            # Execute Adaptive RAG with strictly constrained safe_pool vocabulary
+            result = await self.run_logic(state, specialist_key="training", topic="fitness workout exercise")
+        finally:
+            self.llm = original_llm
+            
         if "specialist_results" in result and "training" in result["specialist_results"]:
             training_data = result["specialist_results"]["training"]
             
-            # ── Tier 3 Safety: Run post-generation safety gate if injuries are present ──
-            user_context = state.get("user_context", {}) or {}
-            injuries_list = user_context.get("injuries", []) or []
-            injuries = ", ".join(str(i) for i in injuries_list) if injuries_list else "None"
-            has_injuries = injuries and injuries.lower() != "none" and injuries.strip() != ""
+            # Hydrate WorkoutItem back to WorkoutExercise for the frontend
+            hydrated_workout = []
+            for item in training_data.get("workout", []):
+                if hasattr(item, "model_dump"):
+                    item_dict = item.model_dump()
+                elif hasattr(item, "dict"):
+                    item_dict = item.dict()
+                elif isinstance(item, dict):
+                    item_dict = item
+                else:
+                    item_dict = getattr(item, "__dict__", {})
+
+                eid = item_dict.get("exercise_id")
+                tag_info = raw_tags.get(eid, {})
+                hydrated_workout.append({
+                    "day": item_dict.get("day", ""),
+                    "name": tag_info.get("name", eid),
+                    "target_muscle": tag_info.get("primary_joints_involved", []),
+                    "benefit": item_dict.get("coaching_note", "Adapted safely."),
+                    "description": item_dict.get("coaching_note", "Follow standard form securely."),
+                    "sets": str(item_dict.get("sets", "3")),
+                    "reps": str(item_dict.get("reps", "")),
+                    "gif_path": "",
+                    "image_path": ""
+                })
             
-            if has_injuries and "workout" in training_data and training_data["workout"]:
-                # 1. Run LLM Biomechanical Safety Gate
-                audited_workout = await self._run_injury_safety_gate(training_data["workout"], injuries)
-                
-
-                # 2. Run Deterministic Python Backstop Filter to catch any remaining leaks (e.g. Seated Leg Extension)
-                backstop_workout = []
-                exclusions = {
-                    "knee": ["squat", "lunge", "leg press", "leg extension", "quadriceps", "leg lift", "jump", "burpee", "groiner", "thruster", "box jump"],
-                    "back": ["deadlift", "barbell row", "squat", "overhead press", "bent-over row", "good morning", "kettlebell swing", "thruster"],
-                    "shoulder": ["overhead press", "military press", "bench press", "dip", "handstand", "pushup", "push-up", "shoulder press", "upright row"],
-                    "wrist": ["push-up", "pushup", "plank", "handstand", "clean", "snatch", "bench press", "barbell wrist curl", "barbell curl"],
-                    "hand": ["dumbbell", "barbell", "kettlebell", "handle", "grip", "row", "press", "curl", "raise", "pullup", "pull-up", "pushup", "push-up", "deadlift", "dip", "clean", "snatch", "bench", "fly"],
-                    "finger": ["dumbbell", "barbell", "kettlebell", "handle", "grip", "row", "press", "curl", "raise", "pullup", "pull-up", "pushup", "push-up", "deadlift", "dip", "clean", "snatch", "bench", "fly"],
-                    "groin": ["lunge", "squat", "leg press", "leg extension", "adductor", "abductor", "groin", "groiner", "jump", "burpee", "side lunge", "cossack squat"],
-                    "ankle": ["calf raise", "calf", "jump", "burpee", "box jump", "running", "treadmill", "hiit", "squat", "lunge", "ankle", "leg press", "leg extension"],
-                    "foot": ["calf raise", "calf", "jump", "burpee", "box jump", "running", "treadmill", "hiit", "squat", "lunge", "ankle", "foot", "leg press", "leg extension"],
-                    "elbow": ["pushup", "push-up", "press", "dip", "tricep", "bicep", "curl", "extension", "pullup", "pull-up", "chin-up", "elbow"]
-                }
-                
-                # Fetch dynamic exclusions computed at intake, or query them dynamically
-                dynamic_exclusions = state.get("_extra_prompt_vars", {}).get("dynamic_exclusions", [])
-                if not dynamic_exclusions:
-                    dynamic_exclusions = await self._get_dynamic_injury_exclusions(injuries)
-                
-                active_exclusions = set(dynamic_exclusions)
-                
-                # Merge our standard hardcoded lists as absolute guarantees for common joints
-                for injury in injuries_list:
-                    injury_lower = str(injury).lower()
-                    for key, words in exclusions.items():
-                        if key in injury_lower:
-                            active_exclusions.update(words)
-                
-                # Curated list of ultra-safe, biomechanically isolated fallback exercises
-                fallback_options = [
-                    {
-                        "name": "Crunches",
-                        "target_muscle": ["Core", "Abs"],
-                        "desc": "Lie on your back with knees bent and feet flat on the floor. Cross your arms over your chest (do not use hands for support or weight). Slowly curl your head and shoulders up off the floor, contracting your abs.",
-                        "benefit": "100% hands-free, spine-safe, and joint-friendly core exercise requiring no equipment or joint load."
-                    },
-                    {
-                        "name": "Glute Bridge",
-                        "target_muscle": ["Glutes", "Hamstrings"],
-                        "desc": "Lie flat on your back with knees bent and feet flat on the floor, hip-width apart. Keep your arms relaxed at your sides. Press through your heels to lift your hips until your thighs and torso align.",
-                        "benefit": "Builds glute and hamstring strength while placing zero load on the knees, wrists, shoulders, or upper body."
-                    },
-                    {
-                        "name": "Seated Calf Raise",
-                        "target_muscle": ["Calves"],
-                        "desc": "Sit comfortably on a chair or bench with your feet flat on the floor. Press down through the balls of your feet to raise your heels as high as possible, then lower them slowly under control.",
-                        "benefit": "Strengthens the calf muscles isometrics/mobility without loading any upper-body joints or placing stress on the spine."
-                    },
-                    {
-                        "name": "Rotator Cuff External Rotation",
-                        "target_muscle": ["Rotator Cuff", "Shoulders"],
-                        "desc": "Stand or sit upright. Keep your elbow bent at 90 degrees and tucked close to your side. Slowly rotate your forearm outward away from your stomach, then return to the start.",
-                        "benefit": "Directly strengthens rotator cuff stabilizers without loading the wrists, hands, or lower body."
-                    },
-                    {
-                        "name": "Bird-Dog",
-                        "target_muscle": ["Core", "Lower Back"],
-                        "desc": "Start on your hands and knees in a tabletop position. Slowly extend your right arm straight forward and left leg straight backward. Return to the starting position and repeat on the other side.",
-                        "benefit": "Improves spinal alignment and core stabilization without compressive spinal load."
-                    }
-                ]
-                
-                for ex in audited_workout:
-                    name = ex.get("name") if isinstance(ex, dict) else getattr(ex, "name", "")
-                    name_lower = name.lower()
-                    
-                    is_unsafe = False
-                    for word in active_exclusions:
-                        if word in name_lower:
-                            is_unsafe = True
-                            break
-                            
-                    if is_unsafe:
-                        logger.warning(f"🛡️ [Tier 3 Backstop] Caught unsafe exercise leak: '{name}'. Replacing with joint-safe rehab fallback.")
-                        
-                        # Filter fallback options that do not violate any active exclusions
-                        safe_fallbacks = []
-                        for opt in fallback_options:
-                            opt_name_lower = opt["name"].lower()
-                            opt_desc_lower = opt["desc"].lower()
-                            opt_benefit_lower = opt["benefit"].lower()
-                            opt_muscles = [m.lower() for m in opt["target_muscle"]]
-                            
-                            is_opt_unsafe = False
-                            for word in active_exclusions:
-                                if (word in opt_name_lower or 
-                                    word in opt_desc_lower or 
-                                    word in opt_benefit_lower or 
-                                    any(word in m for m in opt_muscles)):
-                                    is_opt_unsafe = True
-                                    break
-                            if not is_opt_unsafe:
-                                safe_fallbacks.append(opt)
-                        
-                        # Classify the original exercise body segment
-                        orig_muscles = [m.lower() for m in (ex.get("target_muscle", []) if isinstance(ex, dict) else getattr(ex, "target_muscle", []))]
-                        is_lower_body = any(m in ["quadriceps", "hamstrings", "glutes", "calves", "legs", "thighs", "hips"] for m in orig_muscles)
-                        
-                        chosen_fallback = None
-                        if safe_fallbacks:
-                            # Avoid duplicates: track names already present in the backstop workout
-                            existing_names = []
-                            for x in backstop_workout:
-                                x_name = x.get("name", "").lower() if isinstance(x, dict) else getattr(x, "name", "").lower()
-                                existing_names.append(x_name)
-                            
-                            # Filter to find unused safe fallbacks
-                            unused_fallbacks = []
-                            for opt in safe_fallbacks:
-                                opt_name = opt["name"].lower()
-                                is_used = False
-                                for ext_name in existing_names:
-                                    if opt_name in ext_name or ext_name in opt_name:
-                                        is_used = True
-                                        break
-                                if not is_used:
-                                    unused_fallbacks.append(opt)
-                                    
-                            fallback_candidates = unused_fallbacks if unused_fallbacks else safe_fallbacks
-                            
-                            if is_lower_body:
-                                # Prioritize lower body fallbacks
-                                for opt in fallback_candidates:
-                                    opt_muscles = [m.lower() for m in opt["target_muscle"]]
-                                    if any(m in ["glutes", "hamstrings", "calves", "legs"] for m in opt_muscles):
-                                        chosen_fallback = opt
-                                        break
-                            else:
-                                # Prioritize upper body or core fallbacks
-                                for opt in fallback_candidates:
-                                    opt_muscles = [m.lower() for m in opt["target_muscle"]]
-                                    if any(m in ["rotator cuff", "shoulders", "core", "abs", "lower back"] for m in opt_muscles):
-                                        chosen_fallback = opt
-                                        break
-                            
-                            # Fall back to the first available candidate if no specific split match
-                            if not chosen_fallback and fallback_candidates:
-                                chosen_fallback = fallback_candidates[0]
-                                
-                        if not chosen_fallback:
-                            fallback_name = "Crunches"
-                            fallback_target = ["Core", "Abs"]
-                            fallback_desc = f"Adapted to protect/recover your {injuries}. Lie on your back with knees bent and feet flat on the floor. Cross your arms over your chest (do not use hands for support or weight). Slowly curl head and shoulders up."
-                            fallback_benefit = "100% hands-free, equipment-free, and spine-safe core recovery movement."
-                        else:
-                            fallback_name = chosen_fallback["name"]
-                            fallback_target = chosen_fallback["target_muscle"]
-                            fallback_desc = f"Adapted to protect/recover your {injuries}. " + chosen_fallback["desc"]
-                            fallback_benefit = chosen_fallback["benefit"]
-                            
-                        # Build safe replacement item
-                        if isinstance(ex, dict):
-                            new_ex = {
-                                "day": ex.get("day", ""),
-                                "name": fallback_name,
-                                "target_muscle": fallback_target,
-                                "benefit": fallback_benefit,
-                                "description": fallback_desc,
-                                "sets": ex.get("sets", "3"),
-                                "reps": ex.get("reps", "12"),
-                                "gif_path": "",
-                                "image_path": ""
-                            }
-                        else:
-                            new_ex = WorkoutExercise(
-                                day=getattr(ex, "day", ""),
-                                name=fallback_name,
-                                target_muscle=fallback_target,
-                                benefit=fallback_benefit,
-                                description=fallback_desc,
-                                sets=getattr(ex, "sets", "3"),
-                                reps=getattr(ex, "reps", "12"),
-                                gif_path="",
-                                image_path=""
-                            )
-                        backstop_workout.append(new_ex)
-                    else:
-                        backstop_workout.append(ex)
-                        
-                training_data["workout"] = backstop_workout
-                
-                # ── Tier 3.5 Media Resolution Sync ──
-                # Re-run your _validate_output function on the final, safety-audited workout list!
-                # This will cleanly fuzzy-match the newly substituted exercises (e.g. Glute Bridge, Lying Leg Raises)
-                # against the local media library and inject their correct GIF/image paths.
-                training_data = self._validate_output(training_data, context="", state=state)
-
+            training_data["workout"] = hydrated_workout
+            training_data = self._validate_output(training_data, context="", state=state)
+            
             workout_list = training_data.get("workout", [])
             rest_list = training_data.get("rest_days", [])
             
@@ -500,90 +383,8 @@ Explain in every exercise's description: "Adapted to protect/recover your {injur
                 e_workout, e_rest = self._expand_cycle(workout_list, rest_list, n_days)
                 training_data["workout"] = e_workout
                 training_data["rest_days"] = e_rest
-                
+
         return result
-
-    async def _run_injury_safety_gate(self, workout_list: List[Any], injuries: str) -> List[Dict]:
-        """
-        Tier 3 Safety: Run a gpt-4o-mini structured validation sweep over the generated workout list.
-        Uses advanced anatomical, biomechanical, kinetic-chain and joint-stabilization reasoning.
-        """
-        if not workout_list or not injuries or injuries.lower() == "none":
-            return workout_list
-
-        from langchain_openai import ChatOpenAI
-        from langchain_core.prompts import ChatPromptTemplate
-        from pydantic import BaseModel, Field
-        from app.core.config import settings
-        import json
-
-        # Prepare a custom safety schema container for structured output
-        class WorkoutSafetyContainer(BaseModel):
-            workout: List[WorkoutExercise]
-
-        # Convert the existing workout list to a plain dictionary list
-        workout_data = []
-        for item in workout_list:
-            if hasattr(item, "model_dump"):
-                workout_data.append(item.model_dump())
-            elif hasattr(item, "dict"):
-                workout_data.append(item.dict())
-            elif isinstance(item, dict):
-                workout_data.append(item)
-            else:
-                workout_data.append(getattr(item, "__dict__", {}))
-
-        logger.info(f"🛡️ [Tier 3 Safety Gate] Reviewing workout plan for injury: '{injuries}'")
-
-        try:
-            llm = ChatOpenAI(
-                model="gpt-4o-mini", 
-                temperature=0, 
-                api_key=settings.OPENAI_API_KEY
-            ).with_structured_output(WorkoutSafetyContainer, method="function_calling")
-
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", """You are the Chief Biomechanics & Safety Officer at 'Agentic AI Gym'.
-Your sole mission is to review the generated workout plan and replace any biomechanically unsafe exercises to protect the user's reported injuries/conditions: '{injuries}'.
-
-IMPORTANT: DO NOT USE SIMPLE KEYWORD MATCHING. You MUST perform deep anatomical, kinetic-chain, and joint-stabilization reasoning.
-
-BIOMECHANICAL RISK ASSESSMENT RULES:
-1. Joint Load & Kinetic Chain: Deduce which joints are affected by the injury (e.g., lumbar spine for back pain; patellofemoral joint for knee pain; glenohumeral joint for shoulder pain).
-2. Action Check: For each exercise, analyze its execution. Does it load the affected joint, require it to absorb high impact, or force it to stabilize heavy weight?
-   - Example: Seated Shoulder Press loads the lumbar spine compressively. Standing Barbell Row requires intense spinal stabilization. Broad Jumps place high impact on the knee.
-3. Zero-Risk Substitution Mandate: If an exercise has even a minor risk of aggravation, you MUST replace it with a 100% safe, supported, or unloaded rehab alternative targeting the same muscle group if possible, or a restorative movement.
-   - Knee Injury (e.g., knee pain, patella, meniscus, ACL): AVOID squats, lunges, leg press, extensions, jumps, thrusters. REPLACE WITH: Seated leg curls, glute bridges, clamshells, straight leg raises, seated calf raises.
-   - Lower Back Injury (e.g., back pain, spinal strain): AVOID deadlifts, squats, standing rows, standing overhead press, bent-over rows. REPLACE WITH: Seated chest-supported cable/machine rows, bird-dog, glute bridges, lying leg curls, planks (if pain-free).
-   - Shoulder Injury (e.g., shoulder pain, rotator cuff): AVOID overhead press, military press, flat bench press, dips. REPLACE WITH: Pec deck flys, internal/external rotator cuff rotations, face pulls, light chest-supported rows.
-   - Wrist Injury (e.g., wrist pain, sprained wrist): AVOID planks/pushups on palms, straight-bar curls/presses. REPLACE WITH: Forearm planks, fist pushups, neutral-grip dumbbell work (with wrist braces/wraps), or pure legs/core machine exercises.
-   - Hand/Finger Injury (e.g. fractures, broken bones, sprains): AVOID all gripping, holding, or weight-bearing on the hands. You are strictly forbidden from prescribing dumbbells, barbells, kettlebells, handles, or pushups. REPLACE WITH: 100% hands-free exercises (such as seated machines using elbow pads, leg press, leg curls, bodyweight squats, wall sits, crunches, lying leg raises). If a routine is for Upper Body, you must completely pivot it to safe lower-body or core active recovery.
-
-For each exercise in the provided workout list:
-- Determine if it is unsafe/aggravating.
-- If it is unsafe, replace it with a safe rehab or joint-friendly alternative.
-- If you replace an exercise:
-  a. Keep the original 'day' value.
-  b. Set 'gif_path' and 'image_path' to empty strings ("").
-  c. Append/prepend " [Adapted for {injuries} recovery]" to its 'description' and 'benefit' so the user knows it's customized.
-- If it is already safe, do NOT modify it (keep all its original fields, including media paths, exactly as-is)."""),
-                ("human", "Input Workout JSON:\n{workout_json}\n\nReturn the audited safe workout matching the structured schema.")
-            ])
-
-            chain = prompt | llm
-            safety_output = await chain.ainvoke({
-                "injuries": injuries,
-                "workout_json": json.dumps(workout_data, ensure_ascii=False)
-            })
-
-            if safety_output and safety_output.workout:
-                logger.info(f"🛡️ [Tier 3 Safety Gate] Clean sweep completed successfully. Returning validated exercises.")
-                return safety_output.workout
-            return workout_list
-
-        except Exception as e:
-            logger.error(f"❌ [Tier 3 Safety Gate] Validation Error: {e}. Failing open to avoid crashing.")
-            return workout_list
 
     def _format_context(self, results: List[Dict]) -> str:
         """Convert DB results into meaningful exercise context."""
