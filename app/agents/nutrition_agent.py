@@ -261,8 +261,12 @@ Current Context: {summary}
             chunk_size = self._compute_chunk_size()
             
         self._rotation_size = chunk_size
-        state.setdefault("_extra_prompt_vars", {})["rotation_size"] = self._rotation_size
-
+        extra_vars = state.setdefault("_extra_prompt_vars", {})
+        extra_vars["rotation_size"] = self._rotation_size
+        
+        # Fallback for direct API calls bypassing the graph orchestrator
+        if "dynamic_rest_days" not in extra_vars:
+            extra_vars["dynamic_rest_days"] = "None specified"
         if n_days > chunk_size:
             return await self._run_chunked(state, query, n_days)
         else:
