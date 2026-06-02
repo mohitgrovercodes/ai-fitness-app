@@ -59,8 +59,7 @@ STRICT POLICIES:
 10. LANGUAGE TRANSLATION (MANDATORY): You MUST write the string values for `description`, `benefit`, and `tip` in the {target_language} language. Keep the JSON keys and anatomical terms in English.
 
 MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
-- DATABASE OVERWRITE (UNIVERSAL CONTINUITY & ANTI-LAZINESS PROTOCOL): Whether you are generating a short N-day plan or a long-term repeating cycle of C days, you MUST dynamically generate a continuous timeline without any gaps. You are strictly prohibited from summarizing, skipping, or cutting short the sequence. If the plan or cycle is 5, 6, or 7 days long, you MUST output all exercises for ALL days in full detail. You MUST explicitly output every sequential day exactly from Day 1 up to the final day (e.g., Day 1, Day 2, Day 3, Day 4, Day 5). You are STRICTLY FORBIDDEN from outputting just Day 1 and stopping early. Missing any day inside your generated sequence will cause a system failure.
-- Detect exactly what duration (N days) the user is asking for from their message (e.g., "today" = 1, "4 days" = 4, "a week" = 7, "a month" = 30).
+- CONTINUITY & ANTI-LAZINESS PROTOCOL: You MUST generate a continuous timeline without any gaps for the EXACT number of days requested in the SPLIT SELECTION below. You are strictly prohibited from summarizing, skipping, or cutting short. You MUST explicitly output every sequential day exactly from Day 1 up to the requested final day.
 - DYNAMIC SPLIT SELECTION: {dynamic_split_rules}
 - DYNAMIC REST DAYS (CRITICAL): If a day is meant for rest or active recovery, you MUST put it entirely inside the `rest_days` array. DO NOT create a fake 'Rest' exercise inside the `workout` array. The `workout` array must remain 100% clean, containing only active physical exercises.
 - DYNAMIC DAILY VOLUME & VARIETY: DO NOT just divide the retrieved exercises across the days, and DO NOT repeat the exact same exercises on different days. MINIMUM DAILY VOLUME RULE (CRITICAL): You MUST generate a minimum of 3 exercises for EVERY single training day (preferably 4-6 depending on activity level). It is completely unacceptable and a failure of the task to output a training day with only 1 or 2 exercises. If the database provides too few exercises, you MUST use your expert knowledge to dynamically invent and add standard exercises (e.g., Push-ups, Squats, Planks) to meet the minimum threshold.
@@ -102,10 +101,15 @@ INJURY-AWARE EXERCISE SELECTION (100% DYNAMIC — BIOMECHANICS SAFETY PROTOCOL):
 2. ZERO STABILIZATION RULE: You are STRICTLY FORBIDDEN from including any exercise that requires the injured area to stabilize the body or bear load. 
    - Example (Lower Body Injury): NO standing presses, NO bent-over rows, NO burpees. Use chest-supported, seated, or lying variations ONLY.
    - Example (Upper Body/Wrist Injury): NO planks, NO push-ups, NO front squats. Use leg press, belt squats, or hands-free core exercises.
-3. NO SNEAKY LEAKS: Do NOT include machine variations of forbidden movements (e.g., no Smith Machine Squats for knee pain, no Smith Bench for shoulder pain). Do NOT add "Full Body HIIT" finishers that use the injured joints.
-4. MANDATORY DAILY REHAB WARMUP: You MUST start EVERY single active workout day with 1-2 specific Rehab or Mobility exercises targeted at recovering the injured joint (e.g., external rotations for shoulder pain, cat-cow for back pain) BEFORE the main lifts.
-5. SAFE CARDIO: Use purely unloaded cardio for the injured joint (e.g., swimming or stationary bike for leg pain; walking or stationary bike for shoulder pain).
-6. You MUST explicitly state in EVERY substituted/rehab exercise's `description`: "Adapted to protect/recover your [injured area]."
+3. ZERO-RISK SUBSTITUTION MANDATE: If an exercise has even a minor risk of aggravation, you MUST prioritize a 100% safe, supported, or unloaded rehab alternative.
+   - Knee Injury (e.g., knee pain, patella, meniscus, ACL): AVOID squats, lunges, leg press, extensions, jumps, thrusters. REPLACE WITH: Seated leg curls, glute bridges, clamshells, straight leg raises, seated calf raises.
+   - Lower Back Injury (e.g., back pain, spinal strain): AVOID deadlifts, squats, standing rows, standing overhead press, bent-over rows. REPLACE WITH: Seated chest-supported cable/machine rows, bird-dog, glute bridges, lying leg curls, planks (if pain-free).
+   - Shoulder Injury (e.g., shoulder pain, rotator cuff): AVOID overhead press, military press, flat bench press, dips. REPLACE WITH: Pec deck flys, internal/external rotator cuff rotations, face pulls, light chest-supported rows.
+   - Wrist Injury (e.g., wrist pain, sprained wrist): AVOID planks/pushups on palms, straight-bar curls/presses. REPLACE WITH: Forearm planks, fist pushups, neutral-grip dumbbell work (with wrist braces/wraps), or pure legs/core machine exercises.
+4. NO SNEAKY LEAKS: Do NOT include machine variations of forbidden movements (e.g., no Smith Machine Squats for knee pain, no Smith Bench for shoulder pain). Do NOT add "Full Body HIIT" finishers that use the injured joints.
+5. MANDATORY DAILY REHAB WARMUP: You MUST start EVERY single active workout day with 1-2 specific Rehab or Mobility exercises targeted at recovering the injured joint (e.g., external rotations for shoulder pain, cat-cow for back pain) BEFORE the main lifts.
+6. SAFE CARDIO: Use purely unloaded cardio for the injured joint (e.g., swimming or stationary bike for leg pain; walking or stationary bike for shoulder pain).
+7. You MUST explicitly state in EVERY substituted/rehab exercise's `description`: "Adapted to protect/recover your [injured area]."
 
 USER DATA:
 Name: {full_name}
@@ -146,7 +150,7 @@ RETRIEVED DATA (Safe, filtered database items):
 ⚠️ CRITICAL SAFETY MANDATE:
 The user has reported the following injuries/conditions: '{injuries}'.
 The RETRIEVED DATA has been medically pre-vetted and contains ONLY safe exercises. You must ONLY use exercises from the RETRIEVED DATA.
-Explain in every exercise's coaching_note: "Adapted to protect/recover your {injuries}."
+{safety_coaching_instruction}
 """)
         ])
 
@@ -325,21 +329,28 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
         safe_output_tokens = 15000
         tokens_per_exercise = 200
         exercises_per_day   = 6
-        max_days = max(1, safe_output_tokens // (tokens_per_exercise * exercises_per_day))
+        max_days = 7
         state = dict(state)
         state.setdefault("_extra_prompt_vars", {})["max_training_days"] = max_days
         state.setdefault("_extra_prompt_vars", {})["allowed_ids"] = safe_pool_ids
+
+        clean_injuries = [str(i).strip() for i in injuries_list if str(i).strip().lower() not in ("", "none")]
+        if clean_injuries:
+            safety_coaching_instruction = f'Explain in every exercise\'s coaching_note how it is adapted to protect/recover your {injuries}.'
+        else:
+            safety_coaching_instruction = 'Explain in every exercise\'s coaching_note the primary biomechanical benefit of the exercise (e.g., "Builds overall upper body strength") and a key technique cue.'
+        state.setdefault("_extra_prompt_vars", {})["safety_coaching_instruction"] = safety_coaching_instruction
         
         n_days = await self._detect_n_days(query)
         if n_days == 1:
             split_rules = "• N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty."
         elif n_days <= max_days:
-            split_rules = f"• N = {n_days} (Short Plan): Generate exactly {n_days} unique days. Apply a logical split (e.g., Push/Pull/Legs). Try to minimize repeating exercises, but you MAY repeat them across different days if necessary to fulfill a highly specific user focus. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise (e.g., \"Day 1 - Push\", \"Day 3 - Rest\")."
+            split_rules = f"• N = {n_days} (Short Plan): Generate exactly {n_days} unique days. Apply a logical split (e.g., Push/Pull/Legs). Try to minimize repeating exercises, but you MAY repeat them across different days if necessary to fulfill a highly specific user focus. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise."
         else:
             split_rules = (
-                f"• N = {n_days} (Long-term Plan): You are STRICTLY FORBIDDEN from generating all {n_days} days. "
-                f"Instead, generate exactly a 3, 4, or 5 day repeating microcycle split (e.g., Day 1 - Push, Day 2 - Pull, Day 3 - Legs, Day 4 - Rest/Core). "
-                f"Do NOT output any day beyond Day 4 or Day 5 in your workout list. The backend will automatically expand your microcycle to the full {n_days} days and program progressive overload."
+                f"• N = {n_days} (Long-term Plan): You are STRICTLY FORBIDDEN from generating {n_days} days. "
+                f"Instead, you MUST generate exactly a 4-day repeating microcycle (Day 1, Day 2, Day 3, Day 4). "
+                f"DO NOT output Day 5 or beyond. The backend will automatically expand your 4-day cycle to the full {n_days} days and program progressive overload."
             )
             
         state.setdefault("_extra_prompt_vars", {})["dynamic_split_rules"] = split_rules
@@ -437,9 +448,32 @@ Explain in every exercise's coaching_note: "Adapted to protect/recover your {inj
                 return result
 
             if n_days > 1 and (workout_list or rest_list):
-                e_workout, e_rest, cycle_length = self._expand_cycle(workout_list, rest_list, n_days, max_days=max_days)
+                e_workout, e_rest, cycle_length = self._expand_cycle(workout_list, rest_list, n_days, max_days=7)
                 training_data["workout"] = e_workout
                 training_data["rest_days"] = e_rest
+                training_data["cycle_length"] = cycle_length
+
+            # Sort exercises per-day: showing those with gif/image attached first
+            final_workout = training_data.get("workout", [])
+            if final_workout:
+                from collections import defaultdict
+                grouped = defaultdict(list)
+                day_order = []
+                for ex in final_workout:
+                    day = ex.get("day", "")
+                    if day not in grouped:
+                        day_order.append(day)
+                    grouped[day].append(ex)
+                
+                sorted_workout = []
+                for day in day_order:
+                    # Sort so that exercises with valid gif_path or image_path come first
+                    day_exercises = sorted(
+                        grouped[day],
+                        key=lambda x: (not (bool(x.get("gif_path")) or bool(x.get("image_path"))))
+                    )
+                    sorted_workout.extend(day_exercises)
+                training_data["workout"] = sorted_workout
         return result
 
     def _format_context(self, results: List[Dict]) -> str:
