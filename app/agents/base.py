@@ -357,21 +357,32 @@ Return the list matching the required structured schema. Keep keywords lowercase
         """
         Layer 1: Profile-enriched RAG search query.
         Combines user message with their profile so ChromaDB embedding search
-        returns goal-relevant results. No hardcoded keywords — uses actual user data.
-        Zero extra LLM calls.
+        returns goal-relevant results. Removes noisy structural/dietary words 
+        that confuse vector embeddings and injects foundational keywords.
         """
-        parts = [query.strip()]
+        import re
+        # Strip out structural noise like "8 day" that confuses semantic search
+        clean_query = re.sub(r'(?i)\b\d+\s*day(s)?\b', '', query).strip()
+        parts = [clean_query]
+        
         if goal and goal.lower() not in ("none", "unknown", "general fitness"):
+            if "muscle" in goal.lower() or "hypertrophy" in goal.lower() or "gain" in goal.lower() or "bulk" in goal.lower():
+                parts.append("foundational heavy compound lifts: barbell bench press, back squat, deadlift, overhead press, pull-ups, rows, hypertrophy")
+            elif "fat" in goal.lower() or "weight loss" in goal.lower() or "lose" in goal.lower():
+                parts.append("fat burning, high intensity interval training, HIIT, metcon, circuit, cardio, plyometrics, dynamic")
             parts.append(f"goal: {goal}")
-        if diet and diet.lower() not in ("none", "unknown"):
-            parts.append(f"diet: {diet}")
-        if weight_kg and str(weight_kg).lower() not in ("none", "unknown"):
-            parts.append(f"body weight: {weight_kg}kg")
-        if injuries and injuries.lower() != "none":
-            parts.append(f"injuries: {injuries}")
+            
+        # CRITICAL RAG FIX: Do NOT include Diet or Body Weight in the embedding query!
+        # Exercises in ChromaDB do not contain the word "eggetarian" or "78kg". 
+        # Including them severely dilutes the vector and causes poor retrieval.
+        
+        if injuries and injuries.lower() != "none" and injuries.strip() != "":
+            parts.append(f"avoiding aggravation for injuries: {injuries}")
+            
         if activity_level and activity_level.lower() not in ("none", "unknown"):
             parts.append(f"fitness level: {activity_level}")
-        enriched = ". ".join(parts)
+            
+        enriched = " ".join([p for p in parts if p]).strip()
         return enriched
 
     @staticmethod

@@ -62,7 +62,7 @@ MULTI-DAY & DURATION SPLIT RULES (100% DYNAMIC):
 - CONTINUITY & ANTI-LAZINESS PROTOCOL: You MUST generate a continuous timeline without any gaps for the EXACT number of days requested in the SPLIT SELECTION below. You are strictly prohibited from summarizing, skipping, or cutting short. You MUST explicitly output every sequential day exactly from Day 1 up to the requested final day.
 - DYNAMIC SPLIT SELECTION: {dynamic_split_rules}
 - DYNAMIC REST DAYS (CRITICAL): If a day is meant for rest or active recovery, you MUST put it entirely inside the `rest_days` array. DO NOT create a fake 'Rest' exercise inside the `workout` array. The `workout` array must remain 100% clean, containing only active physical exercises.
-- DYNAMIC DAILY VOLUME & VARIETY: DO NOT just divide the retrieved exercises across the days, and DO NOT repeat the exact same exercises on different days. MINIMUM DAILY VOLUME RULE (CRITICAL): You MUST generate a minimum of 3 exercises for EVERY single training day (preferably 4-6 depending on activity level). It is completely unacceptable and a failure of the task to output a training day with only 1 or 2 exercises. If the database provides too few exercises, you MUST use your expert knowledge to dynamically invent and add standard exercises (e.g., Push-ups, Squats, Planks) to meet the minimum threshold.
+- DYNAMIC DAILY VOLUME & VARIETY: You MUST generate a minimum of 3 exercises for EVERY single training day (preferably 4-6 depending on activity level). It is completely unacceptable to output a training day with only 1 or 2 exercises. To fulfill this volume across a multi-day plan, you ARE ALLOWED to reuse the same exercises across different days (e.g., repeating a Push exercise on Day 1 and Day 4) using the provided exercise IDs.
 - BIOMECHANICAL ANATOMY VALIDATOR (CRITICAL): You MUST strictly enforce muscle mapping. If a day is "Upper Body", you are FORBIDDEN from including Core or Leg exercises (like Groiners or Leg Lifts). If a day is "Lower Body", you are FORBIDDEN from including Chest or Arm exercises.
 - THE BIG 5 COMPOUND RULE: If generating a Lower Body or Full Body day, you MUST explicitly include at least one major compound lift (e.g., Barbell Squat, Leg Press, Deadlift variation, or Walking Lunges). If the database didn't return these, use your expert knowledge to inject them dynamically. Never output a Lower Body day that only has isolation exercises like Back Extensions or Leg Raises.
 
@@ -344,13 +344,22 @@ The RETRIEVED DATA has been medically pre-vetted and contains ONLY safe exercise
         n_days = await self._detect_n_days(query)
         if n_days == 1:
             split_rules = "• N = 1 (Daily): Generate a single optimized session. Leave the `day` field empty."
-        elif n_days <= max_days:
+        elif n_days < 7:
             split_rules = f"• N = {n_days} (Short Plan): Generate exactly {n_days} unique days. Apply a logical split (e.g., Push/Pull/Legs). Try to minimize repeating exercises, but you MAY repeat them across different days if necessary to fulfill a highly specific user focus. Include Rest/Active Recovery days if appropriate. You MUST populate the `day` field for every exercise."
+        elif n_days == 7:
+            split_rules = (
+                f"• N = 7 (1-Week Plan): Generate exactly 7 days. "
+                f"CRITICAL RULE: You MUST provide exactly 6 days of continuous workouts (Day 1 to Day 6) and exactly 1 Rest day on Day 7. "
+                f"You MAY repeat exercises across different days to hit the required volume. "
+                f"You MUST populate the `day` field for every exercise."
+            )
         else:
             split_rules = (
                 f"• N = {n_days} (Long-term Plan): You are STRICTLY FORBIDDEN from generating {n_days} days. "
-                f"Instead, you MUST generate exactly a 4-day repeating microcycle (Day 1, Day 2, Day 3, Day 4). "
-                f"DO NOT output Day 5 or beyond. The backend will automatically expand your 4-day cycle to the full {n_days} days and program progressive overload."
+                f"Instead, you MUST generate exactly a 7-day repeating microcycle (Day 1 to Day 7). "
+                f"CRITICAL RULE: You MUST provide exactly 6 days of continuous workouts (Day 1 to Day 6) and exactly 1 Rest day on Day 7. "
+                f"You MAY repeat exercises across different days to hit the required volume. "
+                f"DO NOT output Day 8 or beyond. The backend will automatically expand your 7-day cycle to the full {n_days} days and program progressive overload."
             )
             
         state.setdefault("_extra_prompt_vars", {})["dynamic_split_rules"] = split_rules
