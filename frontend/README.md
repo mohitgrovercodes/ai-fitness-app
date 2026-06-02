@@ -1,86 +1,64 @@
-# Frontend — AI Fitness Gym Dev Visualization
+# Frontend — AI Fitness Gym Dev UI Client
 
-Streamlit-based developer visualization for the multi-agent AI Fitness Gym backend.
-This is a **developer tool**, not the consumer-facing mobile app — it exposes agent
-traces, RAG behavior, and raw API responses behind a 🐛 Developer mode toggle.
+A Streamlit-based developer panel and visualization tool for the multi-agent AI Fitness Gym backend. This tool enables developers and researchers to interact with the backend API, review agent execution traces, upload media, and verify biomechanical safety filters.
 
-## Prerequisites
+---
 
-The FastAPI backend in `../app/` must be running, with MySQL, Redis, and ChromaDB up.
+## 1. Prerequisites & Installation
 
-```bash
-# from repo root, in one terminal:
-uvicorn app.main:app --reload
-```
-
-## Setup
+The FastAPI backend must be running alongside MySQL, Redis, and ChromaDB.
 
 ```bash
+# Install dependencies
 cd frontend
 pip install -r requirements.txt
-```
 
-The app defaults to `http://localhost:8000` for the backend. To override:
-
-```bash
-cp .streamlit/secrets.toml.example .streamlit/secrets.toml
-# then edit API_BASE_URL
-```
-
-## Run
-
-```bash
+# Start the Streamlit application
 streamlit run streamlit_app.py
 ```
+By default, the frontend connects to the backend at `http://localhost:8000`. To override this, configure `.streamlit/secrets.toml`.
 
-App opens at `http://localhost:8501`.
+---
 
-## What's here today (Phases 0 + 1)
+## 2. Core Pages & Features
 
-**Phase 0 — Foundation**
-- **Login / Register** wired to `/api/auth/login` and `/api/auth/register`
-- **Session-state auth** — JWT stored in `st.session_state.token` and
-  injected as `Authorization: Bearer ...` on every backend call by
-  `lib/api_client.py`. Token is lost on logout or tab close (no persistence).
-- **Sidebar 🐛 Developer mode toggle** — functional now; per-agent trace
-  rendering lands in Phase 5
-- **Logout button**
-- **Error normalization** — backend errors (4xx, 5xx, network) all surface
-  through a single `ApiError` exception with a clean user-facing message;
-  the SQLAlchemy / stack details never reach the UI.
+The interface consists of six core functional modules:
 
-**Phase 1 — Profile + Account**
-- **👤 Profile page** — auto-detects onboarding vs. edit mode (GETs
-  `/api/profile/me`; 404 → onboarding form, 200 → edit form pre-filled).
-  Submits via `POST /onboarding` or `PATCH /me`. Curated dropdowns for
-  goal / diet / activity / gender + "Other (type your own)" escape hatches.
-- **⚙️ Account page** — feedback summary metrics + recent history table
-  (`/api/feedback/summary` + `/history`), plus a danger-zone delete-account
-  flow that requires password re-authentication (matches the
-  `DELETE /api/auth/account` body we built in the backend).
+### 👤 Profile & Onboarding (`6_Profile.py`)
+* Automatically detects user state. If a profile doesn't exist, it displays an onboarding questionnaire.
+* Captures gender, age, height, weight, activity levels, dietary preferences, and explicit physical injuries.
+* Saves onboarding state directly to the MySQL database via `POST /api/profile/onboarding`.
 
-## Coming next
+### 💬 Multi-Turn Chat & Vision (`3_Chat.py`)
+* Supports continuous conversations with full session history.
+* **VLM Upload Widget**: Includes an upload sidebar for image formats (`.png`, `.jpg`, `.jpeg`, `.webp`).
+* **Intelligent Request Routing**:
+  * If a food image is present, the page bundles the prompt and sends a `multipart/form-data` request to `POST /api/ai/chat-vision` to evaluate caloric density and macro splits.
+  * If no image is present, it routes a standard JSON query to `POST /api/ai/chat`.
 
-| Phase | Adds |
-|---|---|
-| 2 | Chat with multi-turn + image upload (Vision Agent); workout/meal/GIF renderers |
-| 3 | Direct API pages: Generate Workout, Generate Diet, Domain Q&A |
-| 4 | Progress Agent visualizer; thumbs-up/down feedback after every AI response |
-| 5 | Backend `?debug=1` hook + per-agent trace tabs (intents, specialists, RAG, vision tier, timing) |
-| 6 | Dockerfile + docker-compose entry; error states polish |
+### 🏋️ Workout Plan Generator (`4_Workout.py`)
+* Provides a customized parameter form pre-filled with the user's cached biometrics.
+* Connects to `POST /api/ai/generate-workout` to generate safe training routines.
+* Renders workout timelines as styled cards with targeting splits, sets/reps progression, coaching notes, and embedded video/GIF loops for correct form.
 
-## File map
+### 🥗 Diet Program Builder (`5_Diet.py`)
+* Connects to `POST /api/ai/generate-diet` to calculate calorie target bands using Mifflin-St Jeor equations.
+* Renders daily macronutrient strips (Proteins, Fats, Carbs) and color-coded meal cards detailing food quantities and allergen exclusions.
 
-```
-frontend/
-├── streamlit_app.py              # entry: auth gate + welcome
-├── lib/
-│   ├── api_client.py             # requests wrapper, JWT injection, ApiError
-│   ├── auth.py                   # login / register / logout / require_auth
-│   └── debug.py                  # debug toggle + JSON panel helper
-├── .streamlit/
-│   ├── config.toml               # server port + telemetry off
-│   └── secrets.toml.example      # API_BASE_URL template
-├── requirements.txt
-└── README.md
-```
+### 📚 Textbook Research Q&A (`8_Domain.py`)
+* Submits queries to the vector store textbook database via `POST /api/ai/ask-domain`.
+* Renders academic summaries alongside detailed citation footnotes linked back to validated sports-science texts.
+
+### ⚙️ Account Management (`7_Account.py`)
+* Displays overall user feedback metrics (thumbs-up/thumbs-down history).
+* Contains a security-gated "Danger Zone" that allows accounts to be deleted only after entering the password for re-authentication.
+
+---
+
+## 3. Developer & Diagnostic Tools
+
+Exposing system logs and LLM reasoning steps is critical for debugging multi-agent graphs.
+
+* **Sidebar Developer Toggle 🐛**: Activating Developer Mode displays raw API response payloads, LangGraph execution paths, and intermediate prompt audits below the generated UI cards.
+* **Error Normalization**: Stack traces and SQL connection exceptions are caught on the backend and translated into user-friendly `ApiError` alerts in the Streamlit client.
+* **GIF Resynchronization**: When exercises are dynamically swapped or modified due to injury safety violations, the client automatically requests media verification, using fuzzy matching to display verified local files.
