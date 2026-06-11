@@ -5,6 +5,7 @@ from app.safety.constrained_output import build_workout_schema
 
 def build_dynamic_training_analysis(safe_pool):
     WorkoutItem, _ = build_workout_schema(safe_pool)
+    safe_pool_ids_str = ", ".join([f"'{ex.exercise_id}'" for ex in safe_pool])
     
     class DynamicTrainingAnalysis(BaseModel):
         is_accurate: bool = Field(description="Are the retrieved exercises relevant and safe?")
@@ -17,5 +18,11 @@ def build_dynamic_training_analysis(safe_pool):
         tip: str = Field(default="", description="Closing tip for safety or cooldown.")
         exercise_gifs: Dict[str, str] = Field(default={}, description="Mapping of exercise name to GIF relative path.")
         exercise_images: Dict[str, str] = Field(default={}, description="Mapping of exercise name to Image relative path.")
+
+    DynamicTrainingAnalysis.__doc__ = (
+        "A personalized multi-day training plan.\n"
+        "WARNING: Try to minimize repeating exercises, but you MAY repeat them across different days if necessary to fulfill a highly specific user focus.\n"
+        f"CRITICAL: You MUST select 'exercise_id' ONLY from this exact list: [{safe_pool_ids_str}]. Never invent or shorten IDs."
+    )
         
     return DynamicTrainingAnalysis

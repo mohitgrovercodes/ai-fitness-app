@@ -224,11 +224,10 @@ class InjuryConstraint(BaseModel):
     # Feature 6: upper-limb active support flag
     block_upper_limb_active: bool = False
     # Feature 7: metabolic density ceiling
-    max_metabolic_density: MetabolicDensity = MetabolicDensity.HIGH
-    # Feature 8: torsional loading flag
-    block_torsional_loading: bool = False
-    # Feature 9: spinal shear ceiling
-    max_spinal_shear: ShearLevel = ShearLevel.HIGH
+    max_metabolic_density: MetabolicDensity = Field(default=MetabolicDensity.HIGH)
+    block_torsional_loading: bool = Field(default=False)
+    max_spinal_shear: ShearLevel = Field(default=ShearLevel.HIGH)
+
     # Feature 10: exact joint-action blocklist  ← Phase 3
     blocked_joint_actions: List[JointAction] = Field(
         default_factory=list,
@@ -238,3 +237,21 @@ class InjuryConstraint(BaseModel):
             "but leaves KNEE_FLEXION_OPEN (leg curl) safely available."
         )
     )
+
+class TriageReasoning(BaseModel):
+    """
+    Chain-of-Thought wrapper for InjuryConstraint.
+    Forces the LLM to write out its clinical analysis before committing to
+    the structured constraint vector.
+    """
+    clinical_analysis: str = Field(
+        description=(
+            "Step-by-step clinical analysis of the user's injury. "
+            "Consider: What anatomy is affected? Is weight-bearing through arms or legs compromised? "
+            "What specific movements must be avoided? Does it affect systemic cardiovascular capacity?"
+        )
+    )
+    constraint: InjuryConstraint = Field(
+        description="The final deterministic constraint vector derived directly from the clinical_analysis."
+    )
+

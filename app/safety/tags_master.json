@@ -24139,5 +24139,71 @@
     "secondary_segments": [
       "UPPER_PULL"
     ]
+  },
+  {
+    "exercise_id": "web_standing_calf_raises",
+    "name": "standing calf raises",
+    "primary_joints_involved": [
+      "ANKLE"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 0,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ANKLE_PLANTARFLEXION_LOADED"
+    ],
+    "primary_segment": "LOWER_POSTERIOR",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "web_seated_calf_raises",
+    "name": "seated calf raises",
+    "primary_joints_involved": [
+      "ANKLE"
+    ],
+    "kinetic_chain_loading": "CLOSED_SUPPORTED",
+    "axial_compression_level": 0,
+    "grip_requirement": 0,
+    "joint_impact_level": 0,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 0,
+    "torsional_joint_loading": false,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "ANKLE_PLANTARFLEXION_LOADED"
+    ],
+    "primary_segment": "LOWER_POSTERIOR",
+    "secondary_segments": []
+  },
+  {
+    "exercise_id": "web_plyometric_lunges",
+    "name": "plyometric lunges",
+    "primary_joints_involved": [
+      "KNEE",
+      "HIP",
+      "ANKLE"
+    ],
+    "kinetic_chain_loading": "CLOSED_LOADED",
+    "axial_compression_level": 1,
+    "grip_requirement": 0,
+    "joint_impact_level": 2,
+    "upper_limb_stabilization": "NONE",
+    "metabolic_density": 2,
+    "torsional_joint_loading": true,
+    "spinal_shear_level": 0,
+    "joint_actions": [
+      "KNEE_FLEXION_CLOSED_CHAIN",
+      "HIP_FLEXION_CLOSED_CHAIN",
+      "ANKLE_PLANTARFLEXION_LOADED"
+    ],
+    "primary_segment": "LOWER_ANTERIOR",
+    "secondary_segments": [
+      "LOWER_POSTERIOR"
+    ]
   }
 ]

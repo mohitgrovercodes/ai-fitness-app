@@ -34,6 +34,9 @@ class TrainingRAGTool:
             logger.error(f"❌ [Training Tool] Embedding Error: {e}")
             return []
 
+    async def _run(self, query: str, n_results: int = 5, multiplier: float = 1.0, **kwargs) -> List[Dict[str, Any]]:
+        return await self.search(query, n_results, multiplier, **kwargs)
+
     async def search(self, query: str, n_results: int = 5, multiplier: float = 1.0, **kwargs) -> List[Dict[str, Any]]:
         """
         Single Semantic Search for exercises.

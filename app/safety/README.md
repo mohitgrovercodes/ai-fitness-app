@@ -1,8 +1,7 @@
-# Biomechanical Safety Prototype — Lower Body + Core Slice
+# Biomechanical Safety Engine — Full Tag Integration
 
-> **Purpose**: Validate the 7-Feature Biomechanical Tagging strategy on a
-> controlled 41-exercise slice before rolling out across the full library.
-> Self-contained — share this single document with any AI for cross-verification.
+> **Production Rollout Status**: Originally validated on a 41-exercise prototype slice, this 9-axis Biomechanical Safety Engine has been fully scaled to the entire 1,018-exercise production database stored in `tags_master.json`.
+
 
 ---
 

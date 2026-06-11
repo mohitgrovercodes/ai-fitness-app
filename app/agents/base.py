@@ -138,11 +138,27 @@ class BaseRAGAgent:
         # return goal-relevant results — no extra LLM call, zero extra cost.
         enriched_query = self._build_enriched_query(query, goal, diet_pref, weight_kg, injuries, activity_level)
         
-        # Increase candidate pool size if injuries are reported (Tier 1 safety)
-        n_results = 15 if (has_injuries and self.agent_name == "Training Agent") else 5
-        
-        db_results  = await self.rag_tool.search(enriched_query, n_results=n_results, diet_preference=diet_pref)
-        
+        # ── PHASE 1: Knowledge Retrieval ─────────────────────────────────────────
+        db_results = []
+        if hasattr(self.rag_tool, '_run'):
+            # Default fetch
+            extra_vars = state.get("_extra_prompt_vars", {})
+            allowed_ids = extra_vars.get("allowed_ids", None)
+            
+            # Fetch a larger pool from DB to ensure enough matches after filtering
+            raw_n_results = 150 if allowed_ids else 30
+            db_results = await self.rag_tool._run(query=enriched_query, n_results=raw_n_results, diet_preference=diet_pref)
+            
+            if allowed_ids:
+                allowed_set = set(allowed_ids)
+                db_results = [res for res in db_results if res.get('id') in allowed_set]
+                db_results = db_results[:30] # Trim back down to 30 for context window
+                
+        elif hasattr(self.rag_tool, 'search'):
+            # Increase candidate pool size if injuries are reported (Tier 1 safety)
+            n_results = 15 if (has_injuries and self.agent_name == "Training Agent") else 5
+            db_results = await self.rag_tool.search(enriched_query, n_results=n_results, diet_preference=diet_pref)
+
         # Run deterministic injury safety pre-filtering using dynamic exclusions
         if has_injuries and self.agent_name == "Training Agent":
             db_results = self._filter_unsafe_exercises(db_results, dynamic_exclusions)
@@ -228,7 +244,14 @@ class BaseRAGAgent:
         # This dynamically captures metadata like 'exercise_gifs', 'nutritional_info', etc.
         logger.info(f"[{self.agent_name}] Raw Analysis: {analysis}")
         standard_fields = {"is_accurate", "needs_web_search", "sub_queries", "final_answer", "quantity_multiplier"}
-        analysis_dict = analysis.model_dump() if hasattr(analysis, "model_dump") else analysis.__dict__
+        
+        if hasattr(analysis, "model_dump"):
+            analysis_dict = analysis.model_dump()
+        elif hasattr(analysis, "dict"):
+            analysis_dict = analysis.dict()
+        else:
+            analysis_dict = analysis.__dict__
+            
         # Media fields that should always be included (even if empty dict)
         always_include = {"exercise_gifs", "exercise_images"}
         
@@ -334,21 +357,32 @@ Return the list matching the required structured schema. Keep keywords lowercase
         """
         Layer 1: Profile-enriched RAG search query.
         Combines user message with their profile so ChromaDB embedding search
-        returns goal-relevant results. No hardcoded keywords — uses actual user data.
-        Zero extra LLM calls.
+        returns goal-relevant results. Removes noisy structural/dietary words 
+        that confuse vector embeddings and injects foundational keywords.
         """
-        parts = [query.strip()]
+        import re
+        # Strip out structural noise like "8 day" that confuses semantic search
+        clean_query = re.sub(r'(?i)\b\d+\s*day(s)?\b', '', query).strip()
+        parts = [clean_query]
+        
         if goal and goal.lower() not in ("none", "unknown", "general fitness"):
+            if "muscle" in goal.lower() or "hypertrophy" in goal.lower() or "gain" in goal.lower() or "bulk" in goal.lower():
+                parts.append("foundational heavy compound lifts: barbell bench press, back squat, deadlift, overhead press, pull-ups, rows, hypertrophy")
+            elif "fat" in goal.lower() or "weight loss" in goal.lower() or "lose" in goal.lower():
+                parts.append("fat burning, high intensity interval training, HIIT, metcon, circuit, cardio, plyometrics, dynamic")
             parts.append(f"goal: {goal}")
-        if diet and diet.lower() not in ("none", "unknown"):
-            parts.append(f"diet: {diet}")
-        if weight_kg and str(weight_kg).lower() not in ("none", "unknown"):
-            parts.append(f"body weight: {weight_kg}kg")
-        if injuries and injuries.lower() != "none":
-            parts.append(f"injuries: {injuries}")
+            
+        # CRITICAL RAG FIX: Do NOT include Diet or Body Weight in the embedding query!
+        # Exercises in ChromaDB do not contain the word "eggetarian" or "78kg". 
+        # Including them severely dilutes the vector and causes poor retrieval.
+        
+        if injuries and injuries.lower() != "none" and injuries.strip() != "":
+            parts.append(f"avoiding aggravation for injuries: {injuries}")
+            
         if activity_level and activity_level.lower() not in ("none", "unknown"):
             parts.append(f"fitness level: {activity_level}")
-        enriched = ". ".join(parts)
+            
+        enriched = " ".join([p for p in parts if p]).strip()
         return enriched
 
     @staticmethod

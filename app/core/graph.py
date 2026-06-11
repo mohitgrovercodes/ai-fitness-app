@@ -15,20 +15,65 @@ from app.utils.logger import logger
 async def specialists_node(state: AgentState):
     """
     NEW: Specialists Coordinator
-    Runs active agents in parallel using asyncio.gather.
-    This ensures a single join point for the synthesis layer.
+    Runs active agents. If 'workout' and 'nutrition' are both requested,
+    runs 'workout' FIRST to extract dynamic rest days, then runs remaining agents in parallel.
     """
     intents = state.get("intent", [])
     tasks = []
     
-    # Map intents to agent classes (Lazy Import)
+    # We will accumulate results here
+    final_state_updates = {"specialist_results": {}}
+    
+    # ── 1. Execute Training Agent FIRST if present (to get dynamic rest days) ──
+    dynamic_rest_days_str = ""
+    if "workout" in intents:
+        from app.agents.training_agent import TrainingAgent
+        import time
+        start_time = time.time()
+        logger.info("🧬 [Specialists] Running TrainingAgent FIRST for dynamic rest day sync...")
+        try:
+            train_result = await TrainingAgent().run(state)
+            if train_result and "specialist_results" in train_result:
+                final_state_updates["specialist_results"].update(train_result["specialist_results"])
+                
+                # Extract rest days
+                training_data = train_result["specialist_results"].get("training", {})
+                rest_list = training_data.get("rest_days", [])
+                
+                # Get the day names (e.g. "Day 3 - Rest")
+                r_days = []
+                for r in rest_list:
+                    d = r.get("day", "") if isinstance(r, dict) else getattr(r, "day", "")
+                    if d:
+                        import re
+                        match = re.search(r'Day\s*\d+', str(d), re.IGNORECASE)
+                        if match: r_days.append(match.group(0))
+                
+                if r_days:
+                    # Remove duplicates and sort
+                    r_days = sorted(list(set(r_days)))
+                    dynamic_rest_days_str = ", ".join(r_days)
+                    logger.info(f"🧬 [Specialists] Extracted dynamic rest days: {dynamic_rest_days_str}")
+        except Exception as e:
+            logger.error(f"❌ [Specialists] Failure in TrainingAgent: {e}")
+        
+        logger.info(f"✅ [Specialists] TrainingAgent completed in {time.time() - start_time:.2f}s.")
+
+    # Inject dynamic rest days and training cycle length into state for subsequent agents
+    state = dict(state)
+    state.setdefault("_extra_prompt_vars", {})["dynamic_rest_days"] = dynamic_rest_days_str or "None specified"
+    if "workout" in intents and 'train_result' in locals():
+        t_data = train_result.get("specialist_results", {}).get("training", {})
+        if "cycle_length" in t_data:
+            state["_extra_prompt_vars"]["training_cycle_length"] = t_data["cycle_length"]
+
+    # ── 2. Queue remaining agents ──
     for intent in intents:
-        if intent == "nutrition":
+        if intent == "workout":
+            continue # Already ran
+        elif intent == "nutrition":
             from app.agents.nutrition_agent import NutritionAgent
             tasks.append(NutritionAgent().run(state))
-        elif intent == "workout":
-            from app.agents.training_agent import TrainingAgent
-            tasks.append(TrainingAgent().run(state))
         elif intent == "image":
             from app.agents.vision_agent import VisionAgent
             tasks.append(VisionAgent().run(state))
@@ -39,32 +84,28 @@ async def specialists_node(state: AgentState):
             from app.agents.progress_agent import ProgressAgent
             tasks.append(ProgressAgent().run(state))
             
-    # Default to domain agent if no specific intent found
-    if not tasks:
+    # Default to domain agent if no specific intent found and training wasn't run
+    if not tasks and "workout" not in intents:
         from app.agents.domain_agent import DomainAgent
         tasks.append(DomainAgent().run(state))
         
-    # RE-ENABLED: Parallel execution using asyncio.gather
-    import time
-    start_time = time.time()
-    logger.info(f"🧬 [Specialists] Running {len(tasks)} agents in parallel...")
-    
-    try:
-        results = await asyncio.gather(*tasks)
-        duration = time.time() - start_time
-        logger.info(f"✅ [Specialists] Parallel run completed in {duration:.2f}s.")
-    except Exception as e:
-        logger.error(f"❌ [Specialists] Critical failure during parallel execution: {e}")
-        # Return empty list to prevent crash; downstream nodes will handle missing results
-        results = []
-    
-    # Merge all specialist results into a single update
-    merged_results = {}
-    for r in results:
-        if "specialist_results" in r:
-            merged_results.update(r["specialist_results"])
-            
-    return {"specialist_results": merged_results}
+    # ── 3. Run remaining agents in parallel ──
+    if tasks:
+        import time
+        start_time = time.time()
+        logger.info(f"🧬 [Specialists] Running {len(tasks)} remaining agents in parallel...")
+        try:
+            results = await asyncio.gather(*tasks)
+            for res in results:
+                if res and "specialist_results" in res:
+                    final_state_updates["specialist_results"].update(res["specialist_results"])
+            duration = time.time() - start_time
+            logger.info(f"✅ [Specialists] Parallel run completed in {duration:.2f}s.")
+        except Exception as e:
+            logger.error(f"❌ [Specialists] Critical failure during parallel execution: {e}")
+
+    return final_state_updates
+
 
 async def synthesis_node(state: AgentState):
     """

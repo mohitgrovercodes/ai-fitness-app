@@ -14,9 +14,11 @@ class MediaMatcher:
         self.dataset_dir = self.root_dir / "Data" / "exercises-dataset"
         self.mapping_file = self.dataset_dir / "data" / "exercises (1).json"
         
-        # Two types of mappings
+        # Two types of mappings + text instructions
         self.gifs: Dict[str, str] = {}
         self.images: Dict[str, str] = {}
+        self.instructions: Dict[str, str] = {}
+        self.final_descriptions: Dict[str, str] = {}
         
         self.prefixes = [
             "metaburn", "holman", "rusin", "30 arms", "30 shoulders", 
@@ -55,9 +57,14 @@ class MediaMatcher:
                 name = item.get("name")
                 gif_rel = item.get("gif")
                 img_rel = item.get("image")
+                steps = item.get("steps", [])
                 
                 if not name: continue
                 norm_name = self._normalize(name)
+                
+                if steps and isinstance(steps, list):
+                    self.instructions[norm_name] = " ".join(steps)
+                    
 
                 # Verify and map GIF
                 if gif_rel and (self.dataset_dir / gif_rel).exists():
@@ -67,25 +74,46 @@ class MediaMatcher:
                 if img_rel and (self.dataset_dir / img_rel).exists():
                     self.images[norm_name] = img_rel
             
+            # Load final master dataset for fallback descriptions
+            final_master_file = self.root_dir / "data" / "final_master_exercises.json"
+            if final_master_file.exists():
+                with open(final_master_file, "r", encoding="utf-8") as f:
+                    master_data = json.load(f)
+                for item in master_data:
+                    name = item.get("name")
+                    if not name: continue
+                    norm = self._normalize(name)
+                    desc = item.get("description")
+                    prep = item.get("preparation")
+                    exec_ = item.get("execution")
+                    final_desc = ""
+                    if prep or exec_:
+                        final_desc = f"{prep or ''} {exec_ or ''}".strip()
+                    elif desc:
+                        final_desc = desc
+                    if final_desc:
+                        self.final_descriptions[norm] = final_desc
+
             logger.info(f"✅ [Media Matcher] Loaded {len(self.gifs)} GIFs and {len(self.images)} Images.")
         except Exception as e:
             logger.error(f"❌ [Media Matcher] Error: {e}")
 
     def get_media(self, exercise_name: str) -> Dict[str, Optional[str]]:
         """
-        Returns a dict with 'gif' and 'image' paths if found.
+        Returns a dict with 'gif', 'image', and 'instructions' paths/strings if found.
         """
         # LAZY LOAD on first call
         if not self.gifs and not self.images:
             self._load_mappings()
 
         norm_name = self._normalize(exercise_name)
-        result = {"gif": None, "image": None}
-        # ... (rest of method remains same but uses self._load_mappings checks)
+        result = {"gif": None, "image": None, "instructions": None}
+        
         result["gif"] = self.gifs.get(norm_name)
         result["image"] = self.images.get(norm_name)
+        result["instructions"] = self.instructions.get(norm_name) or self.final_descriptions.get(norm_name)
 
-        if not result["gif"] or not result["image"]:
+        if not result["gif"] or not result["image"] or not result["instructions"]:
             if not result["gif"]:
                 sorted_gif_keys = sorted(self.gifs.keys(), key=len, reverse=True)
                 for key in sorted_gif_keys:
@@ -175,6 +203,23 @@ class MediaMatcher:
                         result["gif"] = self.gifs[best_key]
                     if not result["image"] and best_key in self.images:
                         result["image"] = self.images[best_key]
+
+        if not result["instructions"] and result["gif"]:
+            # Attempt to pull instruction from the matched fuzzy key
+            for k, v in self.gifs.items():
+                if v == result["gif"]:
+                    result["instructions"] = self.instructions.get(k) or self.final_descriptions.get(k)
+                    if result["instructions"]:
+                        break
+                        
+        if not result["instructions"]:
+            # Last resort for instructions: fuzzy match over final_descriptions
+            # Sort keys so that longer, more specific keys are tested first.
+            sorted_keys = sorted(self.final_descriptions.keys(), key=len, reverse=True)
+            for k in sorted_keys:
+                if len(k) > 4 and (k in norm_name or norm_name in k):
+                    result["instructions"] = self.final_descriptions[k]
+                    break
 
         return result
 

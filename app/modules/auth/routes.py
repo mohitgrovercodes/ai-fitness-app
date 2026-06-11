@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.modules.auth.controller import register_user, login_user, logout_user, delete_account
-from app.modules.auth.schema import RegisterSchema, LoginSchema, DeleteAccountSchema
+from app.modules.auth.controller import register_user, login_user, logout_user, delete_account, forgot_password, reset_password
+from app.modules.auth.schema import RegisterSchema, LoginSchema, DeleteAccountSchema, ForgotPasswordSchema, ResetPasswordSchema
 from app.core.sql_db import get_db
 from app.core.security import get_current_user, oauth2_scheme
 
@@ -22,6 +22,14 @@ def login(payload: LoginSchema, db: Session = Depends(get_db)):
 @router.post("/logout")
 def logout(token: str = Depends(oauth2_scheme)):
     return logout_user(token)
+
+@router.post("/forgot-password")
+def forgot_password_route(payload: ForgotPasswordSchema, db: Session = Depends(get_db)):
+    return forgot_password(db, payload)
+
+@router.post("/reset-password")
+def reset_password_route(payload: ResetPasswordSchema, db: Session = Depends(get_db)):
+    return reset_password(db, payload)
 
 
 @router.delete(
